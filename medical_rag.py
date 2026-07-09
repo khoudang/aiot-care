@@ -448,7 +448,13 @@ def has_danger_signal(question: str) -> bool:
     return any(keyword in q for keyword in DANGER_KEYWORDS)
 
 
-def build_medical_prompt(question: str, contexts):
+# ================================================================== #
+#  Lịch sử trò chuyện (Memory)
+# ================================================================== #
+_CHAT_HISTORY = []
+MAX_HISTORY_PAIRS = 5
+
+def build_medical_prompt(question: str, contexts, history: list = None):
     used_chars = 0
     blocks = []
 
@@ -466,6 +472,13 @@ def build_medical_prompt(question: str, contexts):
         used_chars += len(text)
 
     context_text = "\n\n".join(blocks)
+
+    history_text = ""
+    if history:
+        h_blocks = []
+        for h in history:
+            h_blocks.append(f"Người dùng: {h['question']}\nAI: {h['answer']}")
+        history_text = "LỊCH SỬ TRÒ CHUYỆN GẦN ĐÂY:\n" + "\n\n".join(h_blocks) + "\n\n"
 
     danger_note = ""
     if has_danger_signal(question):
@@ -487,10 +500,11 @@ Vai trò:
 - Nếu có dấu hiệu nguy hiểm như đau ngực, khó thở, ngất, co giật, yếu liệt, sốt cao kéo dài hoặc chảy máu nhiều, hãy khuyên liên hệ cơ sở y tế ngay.
 {danger_note}
 
+{history_text}
 TÀI LIỆU THAM KHẢO:
 {context_text}
 
-CÂU HỎI:
+CÂU HỎI MỚI NHẤT:
 {question}
 
 Trả lời theo cấu trúc:
@@ -503,6 +517,7 @@ Không ghi tên file, số đoạn, citation hoặc danh sách tài liệu trong
 
 
 def answer_medical_question_sync(question: str):
+    global _CHAT_HISTORY
     contexts = retrieve_context(question)
 
     if not contexts:
@@ -514,8 +529,12 @@ def answer_medical_question_sync(question: str):
             "sources": [],
         }
 
-    prompt = build_medical_prompt(question, contexts)
+    prompt = build_medical_prompt(question, contexts, _CHAT_HISTORY)
     answer = call_gemini_generate(prompt)
+
+    _CHAT_HISTORY.append({"question": question, "answer": answer})
+    if len(_CHAT_HISTORY) > MAX_HISTORY_PAIRS:
+        _CHAT_HISTORY.pop(0)
 
     sources = [
         {
