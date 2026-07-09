@@ -220,7 +220,7 @@ def _api_key():
     return key
 
 
-def gemini_embed(text: str, task_type="RETRIEVAL_DOCUMENT"):
+def gemini_embed(text: str, task_type="RETRIEVAL_DOCUMENT", max_retries=3):
     url = (
         "https://generativelanguage.googleapis.com/v1beta/"
         f"models/{GEMINI_EMBEDDING_MODEL}:embedContent"
@@ -228,6 +228,7 @@ def gemini_embed(text: str, task_type="RETRIEVAL_DOCUMENT"):
     )
 
     payload = {
+        "model": f"models/{GEMINI_EMBEDDING_MODEL}",
         "content": {
             "parts": [
                 {"text": text}
@@ -236,21 +237,33 @@ def gemini_embed(text: str, task_type="RETRIEVAL_DOCUMENT"):
         "taskType": task_type,
     }
 
-    resp = requests.post(url, json=payload, timeout=MEDICAL_RAG_REQUEST_TIMEOUT)
-    data = resp.json() if resp.content else {}
+    for attempt in range(max_retries):
+        try:
+            resp = requests.post(url, json=payload, timeout=MEDICAL_RAG_REQUEST_TIMEOUT)
+            data = resp.json() if resp.content else {}
 
-    if resp.status_code >= 400:
-        message = data.get("error", {}).get("message", "Lỗi Gemini embedding API.")
-        raise RuntimeError(message)
+            if resp.status_code >= 400:
+                message = data.get("error", {}).get("message", "Lỗi Gemini embedding API.")
+                if "high demand" in message.lower() or resp.status_code in [429, 503, 500]:
+                    print(f"Server Gemini đang quá tải, thử lại lần {attempt + 1}/{max_retries} sau 5 giây...")
+                    time.sleep(5)
+                    continue
+                raise RuntimeError(message)
 
-    values = data.get("embedding", {}).get("values", [])
-    if not values:
-        raise RuntimeError("Gemini không trả về embedding.")
+            values = data.get("embedding", {}).get("values", [])
+            if not values:
+                raise RuntimeError("Gemini không trả về embedding.")
 
-    return [float(v) for v in values]
+            return [float(v) for v in values]
+        except requests.exceptions.RequestException as e:
+            if attempt == max_retries - 1:
+                raise RuntimeError(f"Lỗi mạng: {str(e)}")
+            time.sleep(5)
+            
+    raise RuntimeError("Gemini API liên tục báo quá tải. Vui lòng thử lại sau.")
 
 
-def call_gemini_generate(prompt: str):
+def call_gemini_generate(prompt: str, max_retries=3):
     url = (
         "https://generativelanguage.googleapis.com/v1beta/"
         f"models/{GEMINI_CHAT_MODEL}:generateContent"
@@ -271,24 +284,38 @@ def call_gemini_generate(prompt: str):
         },
     }
 
-    resp = requests.post(url, json=payload, timeout=MEDICAL_RAG_REQUEST_TIMEOUT)
-    data = resp.json() if resp.content else {}
+    for attempt in range(max_retries):
+        try:
+            resp = requests.post(url, json=payload, timeout=MEDICAL_RAG_REQUEST_TIMEOUT)
+            data = resp.json() if resp.content else {}
 
-    if resp.status_code >= 400:
-        message = data.get("error", {}).get("message", "Lỗi Gemini generateContent API.")
-        raise RuntimeError(message)
+            if resp.status_code >= 400:
+                message = data.get("error", {}).get("message", "Lỗi Gemini generateContent API.")
+                if "high demand" in message.lower() or resp.status_code in [429, 503, 500]:
+                    print(f"Server Gemini đang quá tải, thử lại lần {attempt + 1}/{max_retries} sau 5 giây...")
+                    import time
+                    time.sleep(5)
+                    continue
+                raise RuntimeError(message)
 
-    answer = (
-        data.get("candidates", [{}])[0]
-        .get("content", {})
-        .get("parts", [{}])[0]
-        .get("text", "")
-        .strip()
-    )
+            answer = (
+                data.get("candidates", [{}])[0]
+                .get("content", {})
+                .get("parts", [{}])[0]
+                .get("text", "")
+                .strip()
+            )
 
-    answer = strip_sources_from_answer(answer)
-
-    return answer or "Tôi chưa tạo được câu trả lời. Vui lòng thử lại."
+            answer = strip_sources_from_answer(answer)
+            return answer or "Tôi chưa tạo được câu trả lời. Vui lòng thử lại."
+            
+        except requests.exceptions.RequestException as e:
+            if attempt == max_retries - 1:
+                raise RuntimeError(f"Lỗi mạng: {str(e)}")
+            import time
+            time.sleep(5)
+            
+    raise RuntimeError("Gemini API liên tục báo quá tải. Vui lòng thử lại sau.")
 
 
 # ================================================================== #
