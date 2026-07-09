@@ -1,0 +1,1476 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0d1013">
+  <title>AIoT Care Station</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    :root{
+      --bg:#0d1013;--surface:#15191f;--surface-2:#1b2129;--surface-3:#222932;
+      --border:#262d37;--border-2:#2f3742;
+      --text:#e8ebf0;--muted:#8791a0;--faint:#5a6473;
+      --accent:#4c9be8;--accent-soft:rgba(76,155,232,.13);--accent-line:rgba(76,155,232,.35);
+      --amber:#e0a52e;--amber-soft:rgba(224,165,46,.13);
+      --ok:#3ba55d;--ok-soft:rgba(59,165,93,.13);
+      --warn:#d6982c;--warn-soft:rgba(214,152,44,.13);
+      --bad:#e05656;--bad-soft:rgba(224,86,86,.12);
+      --radius:14px;--r-sm:10px;
+      --sbw:250px;--topbar-h:56px;--botnav-h:60px;
+      --sab:env(safe-area-inset-bottom,0px);
+      --font:"Inter","Segoe UI",system-ui,Arial,sans-serif;
+    }
+    html,body{overflow-x:hidden}
+    body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;font-size:15px}
+    a{color:inherit;text-decoration:none}
+    ::-webkit-scrollbar{width:9px;height:9px}
+    ::-webkit-scrollbar-thumb{background:#2b333d;border-radius:8px}
+
+    .app{display:grid;grid-template-columns:var(--sbw) 1fr;min-height:100vh}
+
+    /* ---------- Sidebar (desktop) / Drawer (mobile) ---------- */
+    .sidebar{background:var(--surface);border-right:1px solid var(--border);padding:18px 14px;position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;z-index:200}
+    .brand{display:flex;align-items:center;gap:11px;padding:4px 6px 16px;margin-bottom:12px;border-bottom:1px solid var(--border)}
+    .brand-mark{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:var(--surface-3);border:1px solid var(--border-2);color:var(--accent);font-size:17px;flex-shrink:0}
+    .brand h1{font-size:.98rem;font-weight:650;letter-spacing:-.01em}
+    .brand span{color:var(--faint);font-size:.76rem}
+    .brand .drawer-close{display:none;margin-left:auto;background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:6px}
+
+    .nav-label{color:var(--faint);font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin:12px 8px 6px}
+    .nav{list-style:none;display:flex;flex-direction:column;gap:2px}
+    .nav li{display:flex;align-items:center;gap:11px;padding:11px;border-radius:var(--r-sm);color:var(--muted);cursor:pointer;font-size:.92rem;font-weight:500;transition:background .15s,color .15s;min-height:44px}
+    .nav li i{width:18px;text-align:center;font-size:.95rem}
+    .nav li:hover{background:var(--surface-2);color:var(--text)}
+    .nav li.active{background:var(--accent-soft);color:var(--text)}
+    .nav li.active i{color:var(--accent)}
+    .nav li .dot-alert{margin-left:auto;width:8px;height:8px;border-radius:50%;background:var(--bad);display:none}
+    .nav li .dot-alert.show{display:block}
+
+    .side-foot{margin-top:auto;padding-top:14px;border-top:1px solid var(--border)}
+    .user-row{display:flex;align-items:center;gap:10px;padding:8px 6px}
+    .user-av{width:34px;height:34px;border-radius:9px;background:var(--surface-3);border:1px solid var(--border-2);display:grid;place-items:center;color:var(--muted);flex-shrink:0}
+    .user-row .u-name{font-size:.88rem;font-weight:600}
+    .user-row .u-role{font-size:.74rem;color:var(--faint);text-transform:capitalize}
+    .logout{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px;padding:11px;border-radius:var(--r-sm);border:1px solid var(--border-2);color:var(--muted);font-size:.86rem;font-weight:600;background:transparent;cursor:pointer;transition:.15s;width:100%;min-height:44px}
+    .logout:hover{border-color:var(--bad);color:var(--bad);background:var(--bad-soft)}
+
+    .scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:150;opacity:0;transition:opacity .2s}
+    .scrim.show{display:block;opacity:1}
+
+    /* ---------- Mobile top bar ---------- */
+    .mtop{display:none;position:sticky;top:0;z-index:100;height:var(--topbar-h);align-items:center;gap:12px;padding:0 14px;background:rgba(13,16,19,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+    .mtop .burger{background:var(--surface-2);border:1px solid var(--border-2);color:var(--text);width:40px;height:40px;border-radius:10px;font-size:1.05rem;cursor:pointer;display:grid;place-items:center}
+    .mtop .mt-brand{display:flex;align-items:center;gap:9px;font-weight:650;font-size:.98rem}
+    .mtop .mt-brand i{color:var(--accent)}
+    .mtop .mt-conn{margin-left:auto;width:11px;height:11px;border-radius:50%;background:var(--faint);flex-shrink:0}
+    .mtop .mt-conn.ok{background:var(--ok)}
+    .mtop .mt-conn.bad{background:var(--bad)}
+
+    /* ---------- Main ---------- */
+    .main{padding:20px 24px 40px;max-width:1500px}
+    .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+    .page-title h2{font-size:1.4rem;font-weight:650;letter-spacing:-.01em}
+    .page-title p{color:var(--muted);font-size:.88rem;margin-top:3px}
+    .top-right{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+    .chip{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:8px;font-size:.82rem;font-weight:500;border:1px solid var(--border-2);background:var(--surface);color:var(--muted);white-space:nowrap}
+    .chip .fa-circle{font-size:.55rem}
+    .chip.ok{color:#9ad9b0;border-color:rgba(59,165,93,.3)}.chip.ok .fa-circle{color:var(--ok)}
+    .chip.bad{color:#f0a5a5;border-color:rgba(224,86,86,.35)}.chip.bad .fa-circle{color:var(--bad)}
+
+    .room{display:none;animation:fade .2s ease}
+    .room.active{display:block}
+    @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+    .sec{display:flex;align-items:center;gap:10px;margin:20px 2px 12px}
+    .sec:first-child{margin-top:2px}
+    .sec h3{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+    .sec .ln{flex:1;height:1px;background:var(--border)}
+    .sec .rt{color:var(--faint);font-size:.76rem}
+
+    .grid{display:grid;gap:14px}
+    .g-rooms{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+    .g-sensor{grid-template-columns:repeat(auto-fit,minmax(158px,1fr))}
+    .g-tiles{grid-template-columns:repeat(auto-fit,minmax(232px,1fr))}
+    .p-top{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px;align-items:start}
+    .p-right{display:flex;flex-direction:column;gap:14px;min-width:0}
+    /* Khi panel cử chỉ thu gọn: khối dữ liệu nằm ở cột phải, giãn lấp phần trống cạnh camera */
+    .p-top.data-right .p-right{align-self:stretch}
+    .p-top.data-right #data-slot-right{flex:1;display:flex;flex-direction:column}
+    .p-top.data-right #patient-data{flex:1}
+    #data-slot-bottom:empty{display:none}
+    #patient-data .sec:first-child{margin-top:0}
+
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+    .card-h{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:15px 17px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+    .card-h h3{font-size:.97rem;font-weight:600}
+    .card-h p{color:var(--muted);font-size:.8rem;margin-top:2px}
+
+    /* ---------- Device tile ---------- */
+    .tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:15px;display:flex;align-items:center;gap:13px;transition:border-color .18s,background .18s}
+    .tile .ic{width:44px;height:44px;border-radius:11px;display:grid;place-items:center;font-size:1.1rem;background:var(--surface-3);color:var(--muted);flex-shrink:0;transition:.18s}
+    .tile .meta{min-width:0;flex:1}
+    .tile .meta h4{font-size:.92rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .tile .meta p{color:var(--muted);font-size:.79rem;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .tile.on{border-color:var(--accent-line);background:var(--accent-soft)}
+    .tile.on .ic{background:var(--accent);color:#0d1013}
+    .tile.light.on{border-color:rgba(224,165,46,.4);background:var(--amber-soft)}
+    .tile.light.on .ic{background:var(--amber);color:#1a1408}
+    .tile.alarm{border-color:rgba(224,86,86,.45);background:var(--bad-soft)}
+    .tile.alarm .ic{background:var(--bad);color:#160808}
+    .tile-col{flex-direction:column;align-items:stretch;gap:0}
+    .tile-col .head{display:flex;align-items:center;gap:13px}
+    /* Ô chuyển động (PIR) phòng khách: căn nội dung lên trên cho đều hàng chữ với các ô cảm biến */
+    #lv-motion-tile{align-items:flex-start}
+    #lv-motion-tile .ic{width:38px;height:38px;border-radius:10px;font-size:.98rem}
+
+    .sw{position:relative;width:46px;height:26px;flex-shrink:0}
+    .sw input{opacity:0;width:0;height:0}
+    .sw .tr{position:absolute;inset:0;background:#39424d;border-radius:20px;cursor:pointer;transition:.2s}
+    .sw .tr:before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;background:#c8cfd8;border-radius:50%;transition:.2s}
+    .sw input:checked + .tr{background:var(--accent)}
+    .sw input:checked + .tr:before{transform:translateX(20px);background:#fff}
+
+    .slider-row{display:flex;align-items:center;gap:12px;margin-top:13px}
+    .slider-row .v{font-weight:650;font-size:.98rem;min-width:46px;text-align:right;color:var(--text)}
+    input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:20px;background:var(--surface-3);outline:none;touch-action:none}
+    input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid var(--surface)}
+    input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid var(--surface)}
+
+    /* ---------- Sensor ---------- */
+    .sensor{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:15px 16px}
+    .sensor .st{display:flex;align-items:center;gap:11px;margin-bottom:9px}
+    .sensor .si{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font-size:.98rem;flex-shrink:0;background:var(--surface-3);color:var(--muted)}
+    .sensor .sn{font-size:.85rem;color:var(--muted);font-weight:500}
+    .sensor .ss{font-size:.74rem;color:var(--faint)}
+    .sensor .sv{font-size:1.7rem;font-weight:680;letter-spacing:-.02em}
+    .sensor .sv small{font-size:.85rem;color:var(--muted);font-weight:500}
+    .sensor .spark{width:100%;height:34px;margin-top:6px;display:block}
+
+    /* ---------- Gauge ---------- */
+    .gauge-wrap{display:flex;align-items:center;gap:18px;padding:18px}
+    .gauge{width:112px;height:112px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;background:conic-gradient(var(--ok) 0deg,var(--surface-3) 0deg);transition:background .5s}
+    .gauge .gi{width:84px;height:84px;border-radius:50%;background:var(--surface);display:grid;place-items:center;text-align:center;border:1px solid var(--border)}
+    .gauge .gi b{font-size:1.3rem;font-weight:680}
+    .gauge .gi span{font-size:.68rem;color:var(--faint);display:block}
+    .gauge-info h4{font-size:.95rem;font-weight:600;margin-bottom:5px}
+    .gauge-info p{color:var(--muted);font-size:.82rem;line-height:1.5}
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:20px;font-size:.78rem;font-weight:600;margin-top:9px;border:1px solid}
+    .badge.ok{background:var(--ok-soft);color:#9ad9b0;border-color:rgba(59,165,93,.3)}
+    .badge.warn{background:var(--warn-soft);color:#e6c078;border-color:rgba(214,152,44,.3)}
+    .badge.bad{background:var(--bad-soft);color:#f0a5a5;border-color:rgba(224,86,86,.35)}
+
+    /* ---------- Camera ---------- */
+    .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--border-2);border-radius:9px;padding:3px;gap:2px}
+    .seg button{border:none;background:transparent;color:var(--muted);font-size:.82rem;font-weight:600;padding:7px 13px;border-radius:6px;cursor:pointer;font-family:inherit;transition:.15s;min-height:36px}
+    .seg button.on{background:var(--accent);color:#0d1013}
+    .video-box{position:relative;background:#0a0d11;overflow:hidden;border-radius:0 0 var(--radius) var(--radius);display:flex;align-items:center;justify-content:center;aspect-ratio:16/10}
+    #video-feed{width:100%;height:100%;object-fit:contain;display:none}
+    .video-ph{position:absolute;inset:0;text-align:center;color:var(--muted);padding:24px 22px;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+    @media(min-width:641px){.video-ph{padding-bottom:62px}}
+    @media(max-width:640px){.video-box{aspect-ratio:auto;min-height:300px}.video-ph{padding-bottom:78px}}
+    .video-ph i{display:block;width:100%;text-align:center;font-size:2.4rem;line-height:1;margin-bottom:10px;color:var(--faint)}
+    .video-ph h3{font-size:1rem;font-weight:600;color:var(--text)}
+    .cam-ov{position:absolute;left:12px;bottom:12px;right:12px;display:flex;gap:7px;flex-wrap:wrap;z-index:2}
+    .cam-ov .oc{background:rgba(8,11,15,.8);border:1px solid var(--border-2);padding:6px 10px;border-radius:8px;font-size:.78rem;color:var(--text)}
+    .cam-ov .oc.alarm{border-color:var(--bad);color:#f0a5a5}
+    .cam-ov .oc.metric{color:var(--muted)}
+    .cam-ov .oc.metric b{color:var(--text);font-weight:650}
+
+    .gt{width:100%;border-collapse:collapse}
+    .gt th,.gt td{padding:12px 16px;text-align:left;border-bottom:1px solid var(--border);font-size:.86rem}
+    .gt th{color:var(--faint);font-weight:600;font-size:.76rem;text-transform:uppercase;letter-spacing:.04em}
+    .gt td i{color:var(--muted);width:16px}
+    .gt tr:last-child td{border-bottom:none}
+    .gt tr.live td{color:var(--accent);font-weight:600}
+    .gt tr.live td i{color:var(--accent)}
+
+    /* ---------- Alert state strip ---------- */
+    .state-card{padding:17px}
+    .state-strip{display:flex;align-items:flex-start}
+    .step{flex:1 1 0;min-width:0;text-align:center;position:relative;padding:4px}
+    .step .d{width:40px;height:40px;border-radius:50%;margin:0 auto 8px;display:grid;place-items:center;background:var(--surface-2);border:1.5px solid var(--border-2);color:var(--faint);font-size:.95rem;position:relative;z-index:2;transition:.2s}
+    .step .t{font-size:.8rem;font-weight:600;color:var(--muted);white-space:nowrap}
+    .step .s{font-size:.7rem;color:var(--faint);margin-top:2px;white-space:nowrap}
+    .step:not(:last-child):after{content:"";position:absolute;top:24px;left:50%;width:100%;height:2px;background:var(--border);z-index:1}
+    .step.done .d{border-color:var(--faint);color:var(--muted)}
+    .step.active .t{color:var(--text)}
+    .step.sn.active .d{background:var(--ok);border-color:var(--ok);color:#0d1013}
+    .step.sl.active .d{background:var(--warn);border-color:var(--warn);color:#0d1013}
+    .step.se.active .d{background:var(--bad);border-color:var(--bad);color:#0d1013}
+    .step.sw.active .d{background:var(--accent);border-color:var(--accent);color:#0d1013}
+    .emg{margin-top:16px;border-top:1px solid var(--border);padding-top:14px;display:none}
+    .emg.show{display:block}
+    .emg h4{font-size:.84rem;color:#f0a5a5;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-weight:600}
+    .emg-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:9px}
+    .emg-i{display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:9px;font-size:.83rem;background:var(--surface-2);border:1px solid var(--border);color:var(--muted)}
+    .emg-i i{width:16px}
+    .emg-i.a i{color:var(--ok)}.emg-i.k i{color:var(--accent)}
+    .confirm-btn{margin-top:13px;display:none;width:100%;border:1px solid var(--ok);border-radius:10px;padding:13px;font-weight:650;color:#9ad9b0;background:var(--ok-soft);cursor:pointer;font-family:inherit;font-size:.9rem;min-height:46px}
+    .confirm-btn.show{display:block}
+
+    /* ---------- Node status ---------- */
+    .node-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;padding:15px 17px}
+    .node{display:flex;align-items:center;gap:11px;padding:12px 13px;border-radius:11px;background:var(--surface-2);border:1px solid var(--border)}
+    .node .nd{width:10px;height:10px;border-radius:50%;background:var(--ok);flex-shrink:0}
+    .node.off .nd{background:var(--faint)}
+    .node .nn{font-weight:600;font-size:.87rem}
+    .node .nsub{color:var(--faint);font-size:.75rem;margin-top:1px}
+    .node.off .nsub{color:#c88}
+
+    /* overview room cards */
+    .ovr{padding:15px 17px;cursor:pointer;transition:border-color .15s}
+    .ovr:active{border-color:var(--accent-line)}
+    .ovr .rt{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .ovr .rn{font-weight:650;font-size:.98rem;display:flex;align-items:center;gap:9px}
+    .ovr .rn i{color:var(--muted);font-size:.92rem}
+    .ovr .rm{display:flex;gap:18px;flex-wrap:wrap}
+    .ovr .m{font-size:.78rem;color:var(--faint)}
+    .ovr .m b{display:block;font-size:1.08rem;color:var(--text);font-weight:650;margin-top:2px}
+    .rb{font-size:.72rem;font-weight:600;padding:3px 9px;border-radius:20px;border:1px solid;white-space:nowrap}
+    .rb.ok{background:var(--ok-soft);color:#9ad9b0;border-color:rgba(59,165,93,.3)}
+    .rb.warn{background:var(--warn-soft);color:#e6c078;border-color:rgba(214,152,44,.3)}
+    .rb.bad{background:var(--bad-soft);color:#f0a5a5;border-color:rgba(224,86,86,.35)}
+
+
+    /* overview weather widget */
+    .weather-card{padding:16px 17px;margin-bottom:4px;overflow:hidden}
+    .weather-wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+    .weather-main{display:flex;align-items:center;gap:14px;min-width:220px}
+    .weather-ic{width:48px;height:48px;border-radius:13px;display:grid;place-items:center;background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--accent);font-size:1.2rem;flex-shrink:0}
+    .weather-title{font-size:.83rem;color:var(--muted);font-weight:600;margin-bottom:2px}
+    .weather-temp{font-size:1.85rem;font-weight:700;letter-spacing:-.03em;line-height:1.1}
+    .weather-temp small{font-size:.95rem;color:var(--muted);font-weight:500}
+    .weather-desc{font-size:.82rem;color:var(--faint);margin-top:3px}
+    .weather-stats{display:grid;grid-template-columns:repeat(2,minmax(130px,1fr));gap:10px;flex:1;min-width:260px}
+    .weather-stat{padding:12px 13px;border-radius:11px;background:var(--surface-2);border:1px solid var(--border)}
+    .weather-stat .l{display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--faint);font-weight:600;margin-bottom:5px}
+    .weather-stat .l i{color:var(--muted);width:15px;text-align:center}
+    .weather-stat b{display:block;font-size:1.03rem;color:var(--text);font-weight:650}
+    @media(max-width:640px){.weather-stats{grid-template-columns:1fr;min-width:100%}.weather-main{min-width:100%}}
+
+
+    /* ---------- Floating medical chatbot: Bác sĩ gia đình ---------- */
+    .family-doctor-toggle{
+      position:fixed;right:20px;bottom:22px;width:62px;height:62px;border-radius:50%;
+      border:1px solid rgba(76,155,232,.55);background:linear-gradient(135deg,var(--accent),#7bbcff);
+      color:#081018;display:grid;place-items:center;font-size:1.45rem;cursor:pointer;z-index:360;
+      box-shadow:0 16px 42px rgba(0,0,0,.42),0 0 0 8px rgba(76,155,232,.08);transition:transform .18s,filter .18s;
+    }
+    .family-doctor-toggle:hover{transform:translateY(-2px);filter:brightness(1.04)}
+    .family-doctor-toggle .fd-pulse{position:absolute;right:5px;top:5px;width:14px;height:14px;border-radius:50%;background:var(--ok);border:2px solid var(--surface)}
+    .family-doctor-panel{
+      position:fixed;right:20px;bottom:96px;width:min(390px,calc(100vw - 28px));height:min(590px,calc(100dvh - 130px));
+      display:none;flex-direction:column;overflow:hidden;border-radius:20px;background:var(--surface);
+      border:1px solid var(--border);box-shadow:0 22px 70px rgba(0,0,0,.55);z-index:360;min-height:0;
+    }
+    .family-doctor-panel.show{display:flex;animation:fdIn .18s ease}
+    @keyframes fdIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+    .fd-head{padding:14px 15px;background:linear-gradient(135deg,rgba(76,155,232,.22),rgba(59,165,93,.12));border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0}
+    .fd-avatar{width:42px;height:42px;border-radius:14px;background:var(--accent);color:#081018;display:grid;place-items:center;font-size:1.15rem;flex-shrink:0}
+    .fd-title{min-width:0;flex:1}.fd-title b{display:block;font-size:.98rem}.fd-title span{display:block;color:var(--muted);font-size:.76rem;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .fd-close{width:34px;height:34px;border-radius:10px;border:1px solid var(--border-2);background:var(--surface-2);color:var(--muted);cursor:pointer;font-size:1.05rem;flex-shrink:0}
+    .fd-notice{margin:12px 12px 0;padding:10px 11px;border-radius:12px;background:var(--warn-soft);border:1px solid rgba(214,152,44,.25);color:#e6c078;font-size:.76rem;line-height:1.45;flex-shrink:0}
+    .fd-messages{flex:1;min-height:0;padding:12px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+    .fd-msg{max-width:88%;padding:10px 12px;border-radius:15px;font-size:.86rem;line-height:1.48;white-space:pre-wrap;word-break:break-word}
+    .fd-msg.bot{align-self:flex-start;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:6px}
+    .fd-msg.user{align-self:flex-end;background:var(--accent);color:#081018;border-bottom-right-radius:6px;font-weight:500}
+    .fd-quick{padding:0 12px 10px;display:flex;gap:7px;overflow-x:auto;border-bottom:1px solid var(--border);flex-shrink:0;-webkit-overflow-scrolling:touch}
+    .fd-quick button{white-space:nowrap;border:1px solid var(--border-2);background:var(--surface-2);color:var(--muted);border-radius:999px;padding:7px 10px;font-size:.77rem;cursor:pointer;font-family:inherit}
+    .fd-quick button:hover{color:var(--text);border-color:var(--accent-line)}
+    .fd-form{display:flex;gap:8px;padding:11px;border-top:1px solid var(--border);background:var(--surface);flex-shrink:0}
+    .fd-form input{flex:1;min-width:0;border:1px solid var(--border-2);background:var(--surface-2);color:var(--text);border-radius:13px;padding:11px 12px;outline:none;font-family:inherit;font-size:.9rem}
+    .fd-form input:focus{border-color:var(--accent-line)}
+    .fd-form button{width:43px;border:none;border-radius:13px;background:var(--accent);color:#081018;cursor:pointer;font-size:1rem;flex-shrink:0}
+    .fd-form button:disabled{opacity:.55;cursor:not-allowed}
+
+    @media(max-width:640px){
+      body.fd-chat-open{overflow:hidden}
+      body.fd-chat-open .botnav{display:none}
+      body.fd-chat-open .family-doctor-toggle{display:none}
+
+      .family-doctor-toggle{
+        right:16px;
+        bottom:calc(var(--botnav-h) + var(--sab) + 16px);
+        width:58px;
+        height:58px;
+      }
+
+      .family-doctor-panel{
+        left:8px;
+        right:8px;
+        top:calc(env(safe-area-inset-top,0px) + 8px);
+        bottom:calc(env(safe-area-inset-bottom,0px) + 8px);
+        width:auto;
+        height:auto;
+        max-height:none;
+        border-radius:18px;
+      }
+
+      .fd-head{padding:11px 12px;gap:10px}
+      .fd-avatar{width:38px;height:38px;border-radius:13px;font-size:1.05rem}
+      .fd-title b{font-size:.94rem}
+      .fd-title span{font-size:.72rem}
+      .fd-close{width:36px;height:36px}
+      .fd-notice{margin:8px 10px 0;padding:8px 10px;font-size:.72rem;line-height:1.35}
+      .fd-messages{padding:10px;gap:8px}
+      .fd-msg{max-width:92%;padding:9px 11px;font-size:.86rem;line-height:1.42}
+      .fd-quick{padding:0 10px 8px;gap:6px}
+      .fd-quick button{padding:7px 10px;font-size:.75rem}
+      .fd-form{padding:9px 10px calc(9px + env(safe-area-inset-bottom,0px));gap:9px}
+      .fd-form input{
+        height:48px;
+        padding:0 13px;
+        border-radius:14px;
+        font-size:16px; /* tránh iOS tự zoom khi focus input */
+      }
+      .fd-form button{width:52px;height:48px;border-radius:14px;font-size:1.15rem}
+    }
+
+    @media(max-width:640px) and (max-height:700px){
+      .fd-notice{display:none}
+      .fd-head{padding:10px 12px}
+      .fd-quick{padding-bottom:7px}
+    }
+
+    /* system alert banner */
+    .sysbar{display:none;align-items:center;gap:11px;margin-bottom:16px;padding:13px 16px;border-radius:11px;border:1px solid rgba(224,86,86,.4);background:var(--bad-soft);color:#f0a5a5;font-weight:500;font-size:.88rem}
+    .sysbar.show{display:flex}
+    .sysbar.light{border-color:rgba(214,152,44,.4);background:var(--warn-soft);color:#e6c078}
+    .sysbar .x{margin-left:auto;cursor:pointer;opacity:.7;padding:4px;flex-shrink:0}
+
+    .chart-card{padding:16px 17px}
+    .chart-wrap{position:relative;height:220px}
+
+    .btn{border:1px solid var(--border-2);border-radius:9px;padding:9px 13px;color:var(--text);font-weight:600;cursor:pointer;font-family:inherit;font-size:.85rem;background:var(--surface-2);transition:.15s;min-height:40px;display:inline-flex;align-items:center;gap:7px}
+    .btn:hover{background:var(--surface-3)}
+    .btn.accent{background:var(--accent);border-color:var(--accent);color:#0d1013}
+    .btn.danger{color:#f0a5a5;border-color:rgba(224,86,86,.4)}
+    .btn.ok{color:#9ad9b0;border-color:rgba(59,165,93,.4)}
+    .btn.sm{padding:7px 11px;font-size:.8rem;min-height:36px}
+
+    /* admin */
+    .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:11px;-webkit-overflow-scrolling:touch}
+    .atable{width:100%;border-collapse:collapse;min-width:600px}
+    .atable th,.atable td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--border);vertical-align:middle;white-space:nowrap}
+    .atable th{background:var(--surface-2);color:var(--muted);font-size:.8rem;font-weight:600}
+    .atable td{font-size:.86rem;color:var(--text)}
+    .pill{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:20px;font-size:.76rem;font-weight:600;border:1px solid var(--border-2);background:var(--surface-2)}
+    .pill.admin{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+    .pill.member{color:var(--muted)}
+    .pill.on{color:#9ad9b0;border-color:rgba(59,165,93,.3);background:var(--ok-soft)}
+    .pill.off{color:#f0a5a5;border-color:rgba(224,86,86,.35);background:var(--bad-soft)}
+    .act-group{display:flex;gap:7px;flex-wrap:wrap}
+    .warn-row td{background:var(--bad-soft)}
+    .warn-txt{color:#f0a5a5;font-weight:600;white-space:normal}
+    .empty{padding:16px;border-radius:10px;border:1px dashed var(--border-2);color:var(--faint);text-align:center;background:var(--surface-2);font-size:.86rem}
+    .dim{opacity:.55}
+    .logs-grid{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);gap:14px;align-items:start}
+    .form-grid{display:grid;gap:14px;max-width:560px}
+    .fld{display:flex;flex-direction:column;gap:7px}
+    .fld label{color:var(--muted);font-size:.85rem;font-weight:600}
+    .fld input{width:100%;border:1px solid var(--border-2);background:var(--surface-2);color:var(--text);border-radius:9px;padding:12px 13px;outline:none;font-size:.9rem;font-family:inherit;min-height:44px}
+    .fld input:focus{border-color:var(--accent-line)}
+
+    .foot{margin-top:22px;padding:14px 17px;border-radius:11px;background:var(--surface);border:1px solid var(--border);color:var(--muted);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:.82rem}
+
+    /* ---------- Bottom nav (phones) ---------- */
+    .botnav{display:none;position:fixed;left:0;right:0;bottom:0;z-index:120;height:calc(var(--botnav-h) + var(--sab));padding-bottom:var(--sab);background:rgba(21,25,31,.96);backdrop-filter:blur(10px);border-top:1px solid var(--border);grid-template-columns:repeat(4,1fr)}
+    .botnav button{background:none;border:none;color:var(--faint);font-family:inherit;font-size:.68rem;font-weight:600;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;padding:6px 2px;position:relative}
+    .botnav button i{font-size:1.15rem}
+    .botnav button.active{color:var(--accent)}
+    .botnav button .bn-dot{position:absolute;top:8px;right:calc(50% - 16px);width:7px;height:7px;border-radius:50%;background:var(--bad);display:none}
+    .botnav button .bn-dot.show{display:block}
+
+    /* ---------- Health widget (Yêu cầu 1) ---------- */
+    .health-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:14px;position:relative;overflow:hidden}
+    .health-card.warn{border-color:rgba(214,152,44,.45)}
+    .health-card.critical{border-color:rgba(224,86,86,.5);background:var(--bad-soft)}
+    .health-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+    .health-head h3{font-size:.97rem;font-weight:600;display:flex;align-items:center;gap:8px}
+    .health-head h3 i{color:#e0576f}
+    .health-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+    .hm{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:12px;background:var(--surface-2);border:1px solid var(--border)}
+    .hm .hm-ic{width:48px;height:48px;border-radius:12px;display:grid;place-items:center;font-size:1.3rem;flex-shrink:0}
+    .hm.hr .hm-ic{background:rgba(224,87,111,.14);color:#e0576f}
+    .hm.spo2 .hm-ic{background:rgba(76,155,232,.14);color:var(--accent)}
+    .hm .hm-info .hm-label{font-size:.8rem;color:var(--muted)}
+    .hm .hm-info .hm-val{font-size:1.9rem;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+    .hm .hm-info .hm-val small{font-size:.85rem;color:var(--muted);font-weight:500}
+    .hstatus{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:20px;font-size:.82rem;font-weight:600;border:1px solid}
+    .hstatus.ok{background:var(--ok-soft);color:#9ad9b0;border-color:rgba(59,165,93,.3)}
+    .hstatus.warn{background:var(--warn-soft);color:#e6c078;border-color:rgba(214,152,44,.35)}
+    .hstatus.bad{background:var(--bad-soft);color:#f0a5a5;border-color:rgba(224,86,86,.4)}
+
+    /* ---------- Gesture mapping panel (Yêu cầu 2) ---------- */
+    select{font-family:inherit;font-size:.86rem;color:var(--text);background:var(--surface-2);border:1px solid var(--border-2);border-radius:9px;padding:9px 11px;outline:none;min-height:40px;cursor:pointer;width:100%}
+    select:focus{border-color:var(--accent-line)}
+    .gmap-form{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:9px;padding:15px 17px;border-bottom:1px solid var(--border);align-items:end}
+    .gmap-form .gf label{display:block;font-size:.72rem;color:var(--faint);font-weight:600;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+    .gmap-add{border:none;border-radius:9px;background:var(--accent);color:#0d1013;font-weight:700;cursor:pointer;height:40px;padding:0 14px;font-family:inherit;display:flex;align-items:center;gap:6px}
+    .gmap-list{padding:12px 17px;display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto}
+    .gmap-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border)}
+    .gmap-item .gi-gesture{font-weight:600;font-size:.88rem;min-width:110px}
+    .gmap-item .gi-arrow{color:var(--faint)}
+    .gmap-item .gi-target{font-size:.85rem;color:var(--muted);flex:1}
+    .gmap-item .gi-target b{color:var(--accent);font-weight:600}
+    .gmap-item .gi-del{margin-left:auto;background:none;border:1px solid var(--border-2);color:#f0a5a5;border-radius:8px;width:32px;height:32px;cursor:pointer;flex-shrink:0}
+    .gmap-item .gi-del:hover{background:var(--bad-soft)}
+    .gmap-hint{padding:0 17px 15px;color:var(--faint);font-size:.8rem;line-height:1.5}
+    /* Panel cử chỉ có thể thu gọn (tránh ấn nhầm) */
+    .gcard .card-h{cursor:pointer;user-select:none}
+    .gcard-count{font-size:.74rem;color:var(--faint);background:var(--surface-2);border:1px solid var(--border-2);padding:2px 9px;border-radius:20px;margin-left:2px}
+    .gcard-toggle{background:var(--surface-2);border:1px solid var(--border-2);color:var(--muted);width:34px;height:34px;border-radius:9px;display:grid;place-items:center;cursor:pointer;flex-shrink:0;transition:.18s}
+    .gcard-toggle:hover{color:var(--text);background:var(--surface-3)}
+    .gcard-toggle i{transition:transform .2s}
+    .gcard.collapsed .gcard-toggle i{transform:rotate(-90deg)}
+    .gcard.collapsed .gmap-form,.gcard.collapsed .gmap-list,.gcard.collapsed .gmap-hint{display:none}
+    .gcard-collapsed-hint{display:none;padding:13px 17px 16px;color:var(--faint);font-size:.83rem;line-height:1.5}
+    .gcard.collapsed .gcard-collapsed-hint{display:block}
+
+    /* Ô cảm biến / thiết bị phòng người bệnh: nhỏ gọn, tự trải đều theo bề rộng khung chứa */
+    #patient-data .pd-grid{gap:10px}
+    #patient-data .g-sensor{grid-template-columns:repeat(auto-fit,minmax(148px,1fr))}
+    #patient-data .g-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+    #patient-data #pt-fan-tile{grid-column:1 / -1}
+    #patient-data .sensor{padding:12px 13px}
+    #patient-data .sensor .st{margin-bottom:6px;gap:9px}
+    #patient-data .sensor .si{width:32px;height:32px;font-size:.9rem}
+    #patient-data .sensor .sn{font-size:.82rem}
+    #patient-data .sensor .sv{font-size:1.35rem}
+    #patient-data .sensor .spark{height:22px;margin-top:4px}
+    #patient-data .tile{padding:12px 13px;gap:11px}
+    #patient-data .tile .ic{width:38px;height:38px;font-size:1rem;border-radius:10px}
+    #patient-data .tile .meta h4{font-size:.88rem}
+    #patient-data .tile .meta p{font-size:.75rem}
+    #patient-data .tile .slider-row{margin-top:11px}
+
+    /* ---------- Kitchen gauge+chart & cards (Yêu cầu 4) ---------- */
+    .k-trend{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:14px}
+    /* Card nồng độ gas đơn: gọn trên laptop, full-width trên điện thoại */
+    .k-gas-single{max-width:480px}
+    @media(max-width:640px){.k-gas-single{max-width:none}}
+    .gauge-sm .gauge-wrap{gap:14px}
+    .gauge-sm .gauge{width:96px;height:96px}
+    .gauge-sm .gauge .gi{width:70px;height:70px}
+    .gauge-sm .gauge .gi b{font-size:1.1rem}
+    .k-safety{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+    .alert-list{padding:10px 17px 16px;display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto}
+    .alert-item{display:flex;gap:11px;align-items:flex-start;padding:10px 12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--warn)}
+    .alert-item .ai-ic{color:var(--warn);margin-top:1px}
+    .alert-item .ai-body{flex:1;min-width:0}
+    .alert-item .ai-act{font-size:.85rem;color:var(--text)}
+    .alert-item .ai-time{font-size:.74rem;color:var(--faint);margin-top:2px}
+    .tips{padding:12px 17px 16px;display:flex;flex-direction:column;gap:10px}
+    .tip{display:flex;gap:11px;align-items:flex-start;font-size:.86rem;color:var(--dim);line-height:1.5}
+    .tip i{color:var(--ok);margin-top:2px;width:16px;flex-shrink:0}
+    .more-row{padding:10px 0 0;text-align:center}
+
+    /* ==================== RESPONSIVE ==================== */
+    /* Tablet landscape & down: sidebar -> drawer */
+    @media(max-width:1023px){
+      .app{grid-template-columns:1fr}
+      .mtop{display:flex}
+      .sidebar{position:fixed;top:0;left:0;bottom:0;width:284px;height:100%;transform:translateX(-100%);transition:transform .25s ease;box-shadow:0 0 40px rgba(0,0,0,.5)}
+      .sidebar.open{transform:none}
+      .brand .drawer-close{display:block}
+      .topbar .top-right .chip.clock,.topbar .top-right .chip.nodes{display:none}
+      .main{padding:16px 16px 40px}
+      .page-title h2{font-size:1.25rem}
+    }
+    /* Tablet portrait grids */
+    @media(max-width:900px){
+      .p-top{grid-template-columns:1fr}
+      .p-top.data-right .p-right{align-self:auto}
+      .p-top.data-right #data-slot-right{flex:none}
+      .logs-grid{grid-template-columns:1fr}
+    }
+    /* Phones: bottom nav + single column + bigger touch */
+    @media(max-width:640px){
+      .botnav{display:grid}
+      .main{padding:14px 13px calc(var(--botnav-h) + var(--sab) + 20px)}
+      .topbar{margin-bottom:14px}
+      .topbar .top-right{display:none}
+      .g-sensor{grid-template-columns:repeat(2,1fr)}
+      .g-tiles{grid-template-columns:1fr}
+      #patient-data .g-tiles{grid-template-columns:1fr}
+      .g-rooms{grid-template-columns:1fr}
+      .k-tiles{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+      .gmap-form{grid-template-columns:1fr 1fr}
+      .k-trend{grid-template-columns:1fr}
+      .gmap-add{grid-column:1 / -1;justify-content:center}
+      .gauge-wrap{flex-direction:column;text-align:center}
+      .step .s{display:none}
+      .step .t{font-size:.72rem}
+      .step .d{width:36px;height:36px}
+      .step:not(:last-child):after{top:22px}
+      .sw{width:50px;height:29px}
+      .sw .tr:before{width:23px;height:23px}
+      .sw input:checked + .tr:before{transform:translateX(21px)}
+      input[type=range]{height:8px}
+      input[type=range]::-webkit-slider-thumb{width:22px;height:22px}
+      input[type=range]::-moz-range-thumb{width:20px;height:20px}
+      .foot{font-size:.78rem}
+      .page-title h2{font-size:1.18rem}
+      .card-h{padding:14px}
+    }
+    @media(max-width:380px){
+      .g-sensor{grid-template-columns:1fr}
+      .k-tiles{grid-template-columns:1fr!important}
+      .seg button{padding:7px 10px;font-size:.78rem}
+    }
+    @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+  </style>
+</head>
+<body data-username="{{ username }}" data-role="{{ role }}">
+  <div class="app">
+    <!-- ============ SIDEBAR / DRAWER ============ -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark"><i class="fas fa-house-medical"></i></div>
+        <div>
+          <h1>AIoT Care Station</h1>
+          <span>Giám sát chăm sóc người bệnh</span>
+        </div>
+        <button class="drawer-close" id="drawer-close" aria-label="Đóng menu"><i class="fas fa-xmark"></i></button>
+      </div>
+
+      <div class="nav-label">Giám sát</div>
+      <ul class="nav">
+        <li class="active" data-room="overview"><i class="fas fa-gauge-high"></i> Tổng quan</li>
+        <li data-room="patient"><i class="fas fa-bed-pulse"></i> Phòng người bệnh</li>
+        <li data-room="living"><i class="fas fa-couch"></i> Phòng khách</li>
+        <li data-room="kitchen"><i class="fas fa-kitchen-set"></i> Phòng bếp <span class="dot-alert" id="kitchen-dot"></span></li>
+      </ul>
+
+      {% if role == 'admin' %}
+      <div class="nav-label">Quản trị</div>
+      <ul class="nav">
+        <li data-room="admin-users"><i class="fas fa-users-gear"></i> Quản lý tài khoản</li>
+        <li data-room="admin-logs"><i class="fas fa-clipboard-list"></i> Nhật ký &amp; cảnh báo</li>
+        <li data-room="admin-settings"><i class="fas fa-sliders"></i> Cấu hình hệ thống</li>
+      </ul>
+      {% endif %}
+
+      <div class="side-foot">
+        <div class="user-row">
+          <div class="user-av"><i class="fas fa-user"></i></div>
+          <div>
+            <div class="u-name" id="side-username">{{ username }}</div>
+            <div class="u-role" id="side-role">{{ role }}</div>
+          </div>
+        </div>
+        <a class="logout" href="{{ url_for('logout') }}"><i class="fas fa-right-from-bracket"></i> Đăng xuất</a>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+
+    <!-- ============ CONTENT ============ -->
+    <div>
+      <!-- Mobile top bar -->
+      <header class="mtop">
+        <button class="burger" id="burger" aria-label="Mở menu"><i class="fas fa-bars"></i></button>
+        <div class="mt-brand"><i class="fas fa-house-medical"></i> AIoT Care</div>
+        <span class="mt-conn" id="mt-conn" title="Kết nối"></span>
+      </header>
+
+      <main class="main">
+        <div class="topbar">
+          <div class="page-title">
+            <h2 id="pt-title">Tổng quan hệ thống</h2> 
+          </div>
+          <div class="top-right">
+            <span class="chip" id="conn-chip"><i class="fas fa-circle"></i> Đang kết nối…</span>
+            <span class="chip nodes" id="node-chip"><i class="fas fa-diagram-project"></i> BLE 0/3</span>
+            <span class="chip clock" id="clock-chip"><i class="fas fa-clock"></i> <span id="clock">--:--:--</span></span>
+          </div>
+        </div>
+
+        <div class="sysbar" id="sysbar">
+          <i class="fas fa-triangle-exclamation"></i>
+          <span id="sysbar-text">Cảnh báo</span>
+          <i class="fas fa-xmark x" id="sysbar-x"></i>
+        </div>
+
+
+        <!-- ========== OVERVIEW ========== -->
+        <section id="overview" class="room active">
+          <div class="sec"><h3>DỰ BÁO THỜI TIẾT</h3><span class="ln"></span></div>
+          <div class="card weather-card" id="weather-card" aria-live="polite">
+            <div class="weather-wrap">
+              <div class="weather-main">
+                <div class="weather-ic"><i class="fas fa-cloud-sun"></i></div>
+                <div>
+                  <div class="weather-title">Khu vực TPHCM</div>
+                  <div class="weather-temp"><span id="weather-temp">--</span><small>°C</small></div>
+                  <div class="weather-desc" id="weather-desc">Đang tải dữ liệu thời tiết...</div>
+                </div>
+              </div>
+              <div class="weather-stats">
+                <div class="weather-stat">
+                  <div class="l"><i class="fas fa-droplet"></i>Độ ẩm</div>
+                  <b><span id="weather-humidity">--</span>%</b>
+                </div>
+                <div class="weather-stat">
+                  <div class="l"><i class="fas fa-cloud"></i>Trạng thái</div>
+                  <b id="weather-code-label">--</b>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="health-card" id="health-card">
+            <div class="health-head">
+              <h3><i class="fas fa-heart-pulse"></i> Sức khỏe người bệnh (vòng đeo)</h3>
+              <span class="hstatus ok" id="health-status"><i class="fas fa-circle-check"></i> Bình thường</span>
+            </div>
+            <div class="health-metrics">
+              <div class="hm hr">
+                <div class="hm-ic"><i class="fas fa-heart-pulse"></i></div>
+                <div class="hm-info"><div class="hm-label">Nhịp tim</div><div class="hm-val"><span id="hm-hr">--</span> <small>bpm</small></div></div>
+              </div>
+              <div class="hm spo2">
+                <div class="hm-ic"><i class="fas fa-lungs"></i></div>
+                <div class="hm-info"><div class="hm-label">Nồng độ oxy (SpO₂)</div><div class="hm-val"><span id="hm-spo2">--</span> <small>%</small></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="card state-card" id="state-card">
+            <div class="card-h" style="border:none;padding:0 0 14px">
+              <div><h3><i class="fas fa-shield-heart" style="color:var(--accent);margin-right:6px"></i>Trạng thái an toàn</h3>
+                <p id="state-desc">Hệ thống đang ở trạng thái bình thường</p></div>
+              <span class="chip ok" id="state-chip"><i class="fas fa-circle"></i> Bình thường</span>
+            </div>
+            <div class="state-strip">
+              <div class="step sn active" id="st-normal"><div class="d"><i class="fas fa-check"></i></div><div class="t">Bình thường</div><div class="s"></div></div>
+              <div class="step sl" id="st-light"><div class="d"><i class="fas fa-wind"></i></div><div class="t">Cảnh báo nhẹ</div><div class="s"></div></div>
+              <div class="step se" id="st-emg"><div class="d"><i class="fas fa-fire"></i></div><div class="t">Khẩn cấp</div><div class="s"></div></div>
+              <div class="step sw" id="st-wait"><div class="d"><i class="fas fa-hourglass-half"></i></div><div class="t">Chờ xác nhận</div><div class="s"></div></div>
+            </div>
+            <div class="emg" id="emg">
+              <h4><i class="fas fa-list-check"></i> Hành động khẩn cấp đang thực thi</h4>
+              <div class="emg-list">
+                <div class="emg-i a"><i class="fas fa-fan"></i> Bật quạt hút thông gió</div>
+                <div class="emg-i a"><i class="fas fa-window-maximize"></i> Mở cửa sổ (servo)</div>
+                <div class="emg-i a"><i class="fas fa-volume-high"></i> Buzzer báo động</div>
+                <div class="emg-i k"><i class="fas fa-lightbulb"></i> Giữ đèn sáng để sơ tán</div>
+                <div class="emg-i k"><i class="fas fa-video"></i> Giữ camera quan sát</div>
+                <div class="emg-i"><i class="fas fa-paper-plane"></i> Đã gửi Telegram &amp; log</div>
+              </div>
+              <button class="confirm-btn" id="confirm-btn"><i class="fas fa-circle-check"></i> Đã kiểm tra an toàn — khôi phục thiết bị</button>
+            </div>
+          </div>
+
+          <div class="sec"><h3>Kết nối node (BLE)</h3><span class="ln"></span><span class="rt">heartbeat</span></div>
+          <div class="card">
+            <div class="node-row">
+              <div class="node" id="node-patient"><span class="nd"></span><div><div class="nn">Phòng người bệnh</div><div class="nsub">online</div></div></div>
+              <div class="node" id="node-living"><span class="nd"></span><div><div class="nn">Phòng khách</div><div class="nsub">online</div></div></div>
+              <div class="node" id="node-kitchen"><span class="nd"></span><div><div class="nn">Phòng bếp</div><div class="nsub">online</div></div></div>
+              <div class="node" id="node-wearable"><span class="nd"></span><div><div class="nn">Vòng đeo sức khỏe</div><div class="nsub">online</div></div></div>
+            </div>
+          </div>
+
+          <div class="sec"><h3>Các phòng</h3><span class="ln"></span><span class="rt">chạm để mở chi tiết</span></div>
+          <div class="grid g-rooms">
+            <div class="card ovr" data-goto="patient">
+              <div class="rt"><div class="rn"><i class="fas fa-bed-pulse"></i> Người bệnh</div><span class="rb ok" id="ov-patient-badge">An toàn</span></div>
+              <div class="rm">
+                <div class="m">Nhiệt độ<b><span id="ov-patient-temp">--</span>°C</b></div>
+                <div class="m">Độ ẩm<b><span id="ov-patient-humi">--</span>%</b></div>
+                <div class="m">Té ngã<b id="ov-patient-fall">Bình thường</b></div>
+              </div>
+            </div>
+            <div class="card ovr" data-goto="living">
+              <div class="rt"><div class="rn"><i class="fas fa-couch"></i> Phòng khách</div><span class="rb ok" id="ov-living-badge">Bình thường</span></div>
+              <div class="rm">
+                <div class="m">Nhiệt độ<b><span id="ov-living-temp">--</span>°C</b></div>
+                <div class="m">Chuyển động<b id="ov-living-motion">--</b></div>
+                <div class="m">Đèn<b id="ov-living-light">--</b></div>
+              </div>
+            </div>
+            <div class="card ovr" data-goto="kitchen">
+              <div class="rt"><div class="rn"><i class="fas fa-kitchen-set"></i> Phòng bếp</div><span class="rb ok" id="ov-kitchen-badge">An toàn</span></div>
+              <div class="rm">
+                <div class="m">Khí gas<b><span id="ov-kitchen-gas">--</span></b></div>
+                <div class="m">Khói<b id="ov-kitchen-smoke">--</b></div>
+                <div class="m">Lửa<b id="ov-kitchen-flame">--</b></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== PATIENT ========== -->
+        <section id="patient" class="room">
+          <div class="p-top data-right">
+            <div class="card p-cam">
+              <div class="card-h">
+                <div><h3>Camera nhận diện</h3><p>Bám người · phát hiện té ngã · cử chỉ</p></div>
+                <div class="seg" id="cam-seg">
+                  <button data-mode="auto" class="on">Tự động</button>
+                  <button data-mode="on">Bật</button>
+                  <button data-mode="off">Tắt</button>
+                </div>
+              </div>
+              <div class="video-box">
+                <img id="video-feed" src="/video_feed" alt="stream">
+                <div class="video-ph" id="video-ph">
+                  <i class="fas fa-camera"></i>
+                  <h3>Camera đang tắt</h3>
+                  <p style="margin-top:6px;font-size:.84rem;color:var(--faint)">Chế độ tự động: bật khi PIR phát hiện chuyển động</p>
+                </div>
+                <div class="cam-ov">
+                  <div class="oc metric" id="oc-fps"><i class="fas fa-gauge"></i> <b id="ai-fps">--</b> FPS · <b id="ai-latency">--</b> ms</div>
+                  <div class="oc" id="oc-pir"><i class="fas fa-person-walking"></i> PIR: --</div>
+                  <div class="oc" id="oc-gesture">Cử chỉ: —</div>
+                  <div class="oc" id="oc-fall">Bình thường</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-right">
+            <div class="card gcard collapsed" id="gesture-card">
+              <div class="card-h" id="gcard-head" role="button" tabindex="0" aria-expanded="false" aria-controls="gm-list">
+                <div><h3>Tùy chỉnh cử chỉ <span class="gcard-count" id="gcard-count">0</span></h3><p>Gán cử chỉ tay cho thiết bị phòng bệnh</p></div>
+                <button class="gcard-toggle" id="gcard-toggle" type="button" aria-label="Thu gọn / mở rộng"><i class="fas fa-chevron-down"></i></button>
+              </div>
+              <div class="gcard-collapsed-hint"><i class="fas fa-circle-info"></i> Nhấn để mở rộng và chỉnh sửa các cử chỉ đã gán. Panel được thu gọn để tránh chạm nhầm.</div>
+              <div class="gmap-form">
+                <div class="gf"><label>Cử chỉ</label><select id="gm-gesture"></select></div>
+                <div class="gf"><label>Thiết bị</label><select id="gm-device"></select></div>
+                <div class="gf"><label>Hành động</label><select id="gm-action"></select></div>
+                <button class="gmap-add" id="gm-add"><i class="fas fa-plus"></i> Lưu</button>
+              </div>
+              <div class="gmap-list" id="gm-list"><div class="empty">Đang tải…</div></div>
+              <div class="gmap-hint"><i class="fas fa-circle-info"></i> Hỗ trợ nhận diện 1–2 bàn tay. Cử chỉ đã gán sẽ điều khiển thiết bị ngay khi camera nhận diện.</div>
+            </div>
+
+            <div id="data-slot-right">
+              <div id="patient-data">
+                <div class="sec"><h3>Cảm biến</h3><span class="ln"></span><span class="rt"></span></div>
+                <div class="grid g-sensor pd-grid">
+                  <div class="sensor"><div class="st"><div class="si"><i class="fas fa-temperature-half"></i></div><div><div class="sn">Nhiệt độ</div><div class="ss">SHT30</div></div></div><div class="sv"><span id="pt-temp">--</span><small>°C</small></div><canvas class="spark" id="sp-pt-temp"></canvas></div>
+                  <div class="sensor"><div class="st"><div class="si"><i class="fas fa-droplet"></i></div><div><div class="sn">Độ ẩm</div><div class="ss">SHT30</div></div></div><div class="sv"><span id="pt-humi">--</span><small>%</small></div><canvas class="spark" id="sp-pt-humi"></canvas></div>
+                </div>
+
+                <div class="sec"><h3>Thiết bị</h3><span class="ln"></span><span class="rt"></span></div>
+                <div class="grid g-tiles pd-grid">
+                  <div class="tile light" id="pt-light-tile">
+                    <div class="ic"><i class="fas fa-lightbulb"></i></div>
+                    <div class="meta"><h4>Đèn</h4><p id="pt-light-status">Đang tắt</p></div>
+                    <label class="sw"><input type="checkbox" id="pt-light-toggle"><span class="tr"></span></label>
+                  </div>
+                  <div class="tile" id="pt-buzzer-tile">
+                    <div class="ic"><i class="fas fa-bell"></i></div>
+                    <div class="meta"><h4>Buzzer cảnh báo</h4><p id="pt-buzzer-status">Im lặng</p></div>
+                    <label class="sw"><input type="checkbox" id="pt-buzzer-toggle"><span class="tr"></span></label>
+                  </div>
+                  <div class="tile tile-col" id="pt-fan-tile">
+                    <div class="head">
+                      <div class="ic"><i class="fas fa-fan"></i></div>
+                      <div class="meta"><h4>Quạt</h4><p id="pt-fan-status">Đang tắt</p></div>
+                      <label class="sw"><input type="checkbox" id="pt-fan-toggle"><span class="tr"></span></label>
+                    </div>
+                    <div class="slider-row"><input type="range" id="pt-fan-range" min="0" max="100" value="0"><span class="v"><span id="pt-fan-val">0</span>%</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            </div>
+          </div>
+          <div id="data-slot-bottom"></div>
+        </section>
+
+        <!-- ========== LIVING ========== -->
+        <section id="living" class="room">
+          <div class="sec"><h3>Cảm biến</h3><span class="ln"></span><span class="rt"></span></div>
+          <div class="grid g-sensor">
+            <div class="sensor"><div class="st"><div class="si"><i class="fas fa-temperature-half"></i></div><div><div class="sn">Nhiệt độ</div><div class="ss">SHT30</div></div></div><div class="sv"><span id="lv-temp">--</span><small>°C</small></div><canvas class="spark" id="sp-lv-temp"></canvas></div>
+            <div class="sensor"><div class="st"><div class="si"><i class="fas fa-droplet"></i></div><div><div class="sn">Độ ẩm</div><div class="ss">SHT30</div></div></div><div class="sv"><span id="lv-humi">--</span><small>%</small></div><canvas class="spark" id="sp-lv-humi"></canvas></div>
+            <div class="tile" id="lv-motion-tile"><div class="ic"><i class="fas fa-person-walking"></i></div><div class="meta"><h4>Chuyển động</h4><p id="lv-motion-status">Không có người</p></div></div>
+            <div class="sensor"><div class="st"><div class="si"><i class="fas fa-sun"></i></div><div><div class="sn">Ánh sáng</div><div class="ss">LDR</div></div></div><div class="sv"><span id="lv-lux">--</span></div><canvas class="spark" id="sp-lv-lux"></canvas></div>
+          </div>
+
+          <div class="sec"><h3>Thiết bị</h3><span class="ln"></span><span class="rt"></span></div>
+          <div class="grid g-tiles">
+            <div class="tile light tile-col" id="lv-light-tile">
+              <div class="head">
+                <div class="ic"><i class="fas fa-lightbulb"></i></div>
+                <div class="meta"><h4>Đèn</h4><p id="lv-light-status">Đang tắt</p></div>
+                <label class="sw"><input type="checkbox" id="lv-light-toggle"><span class="tr"></span></label>
+              </div>
+              <div class="slider-row"><input type="range" id="lv-light-range" min="0" max="100" value="0"><span class="v"><span id="lv-light-val">0</span>%</span></div>
+            </div>
+            <div class="tile tile-col" id="lv-fan-tile">
+              <div class="head">
+                <div class="ic"><i class="fas fa-fan"></i></div>
+                <div class="meta"><h4>Quạt</h4><p id="lv-fan-status">Đang tắt</p></div>
+                <label class="sw"><input type="checkbox" id="lv-fan-toggle"><span class="tr"></span></label>
+              </div>
+              <div class="slider-row"><input type="range" id="lv-fan-range" min="0" max="100" value="0"><span class="v"><span id="lv-fan-val">0</span>%</span></div>
+            </div>
+            <div class="tile on" id="lv-auto-tile">
+              <div class="ic"><i class="fas fa-robot"></i></div>
+              <div class="meta"><h4>Chế độ tự động</h4><p id="lv-auto-status">Bật đèn khi có người buổi tối</p></div>
+              <label class="sw"><input type="checkbox" id="lv-auto-toggle" checked><span class="tr"></span></label>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== KITCHEN ========== -->
+        <section id="kitchen" class="room">
+          <div class="sec"><h3>Giám sát an toàn</h3><span class="ln"></span><span class="rt"></span></div>
+          <div class="grid g-tiles k-tiles">
+            <div class="tile" id="kt-smoke-tile"><div class="ic"><i class="fas fa-smog"></i></div><div class="meta"><h4>Khói (MP-2)</h4><p id="kt-smoke-status">Không phát hiện</p></div></div>
+            <div class="tile" id="kt-flame-tile"><div class="ic"><i class="fas fa-fire"></i></div><div class="meta"><h4>Lửa (IR)</h4><p id="kt-flame-status">Không phát hiện</p></div></div>
+            <div class="tile" id="kt-window-tile"><div class="ic"><i class="fas fa-window-maximize"></i></div><div class="meta"><h4>Cửa sổ</h4><p id="kt-window-status">Đang đóng</p></div>
+              <label class="sw"><input type="checkbox" id="kt-window-toggle"><span class="tr"></span></label></div>
+            <div class="tile" id="kt-exhaust-tile"><div class="ic"><i class="fas fa-fan"></i></div><div class="meta"><h4>Quạt hút</h4><p id="kt-exhaust-status">Đang tắt</p></div>
+              <label class="sw"><input type="checkbox" id="kt-exhaust-toggle"><span class="tr"></span></label></div>
+          </div>
+
+          <div class="sec"><h3>Nồng độ khí gas</h3><span class="ln"></span><span class="rt"></span></div>
+          <div class="card gauge-sm k-gas-single" id="kt-gas-card">
+            <div class="gauge-wrap">
+              <div class="gauge" id="kt-gauge"><div class="gi"><b id="kt-gas">--</b><span>ADC</span></div></div>
+              <div class="gauge-info"><h4>Nồng độ khí gas</h4>
+                <span class="badge ok" id="kt-gas-state"><i class="fas fa-circle-check"></i> An toàn</span></div>
+            </div>
+          </div>
+        </section>
+
+        {% if role == 'admin' %}
+        <!-- ========== ADMIN: USERS ========== -->
+        <section id="admin-users" class="room">
+          <div class="card" style="padding:17px">
+            <div class="card-h" style="border:none;padding:0 0 14px">
+              <div><h3>Quản lý tài khoản thành viên</h3><p>Thêm, sửa, khóa hoặc xóa tài khoản truy cập</p></div>
+              <button class="btn sm" id="reload-users"><i class="fas fa-rotate"></i> Tải lại</button>
+            </div>
+            <div class="table-wrap">
+              <table class="atable">
+                <thead><tr><th>ID</th><th>Tên đăng nhập</th><th>Vai trò</th><th>Trạng thái</th><th>Ngày tạo</th><th>Thao tác</th></tr></thead>
+                <tbody id="users-body"><tr><td colspan="6"><div class="empty">Đang tải…</div></td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== ADMIN: LOGS ========== -->
+        <section id="admin-logs" class="room">
+          <div class="logs-grid">
+            <div class="card" style="padding:17px">
+              <div class="card-h" style="border:none;padding:0 0 14px">
+                <div><h3>Lịch sử đăng nhập</h3><p>Ai đã truy cập hệ thống và khi nào</p></div>
+                <div class="act-group"><button class="btn sm" id="reload-logs"><i class="fas fa-rotate"></i> Tải lại</button>
+                <button class="btn sm danger" id="clear-login"><i class="fas fa-trash"></i> Xóa lịch sử</button></div>
+              </div>
+              <div class="table-wrap"><table class="atable">
+                <thead><tr><th>ID</th><th>User</th><th>IP</th><th>Thời gian</th></tr></thead>
+                <tbody id="login-body"><tr><td colspan="4"><div class="empty">Chưa có dữ liệu.</div></td></tr></tbody>
+              </table></div>
+              <div class="more-row"><button class="btn sm" id="login-more" style="display:none"></button></div>
+            </div>
+            <div class="card" style="padding:17px">
+              <div class="card-h" style="border:none;padding:0 0 14px">
+                <div><h3>Hoạt động &amp; cảnh báo</h3><p>Lệnh điều khiển và các sự kiện cảnh báo</p></div>
+                <div class="act-group"><button class="btn sm" id="reload-audit"><i class="fas fa-rotate"></i> Tải lại</button>
+                <button class="btn sm danger" id="clear-audit"><i class="fas fa-trash"></i> Xóa lịch sử</button></div>
+              </div>
+              <div class="table-wrap"><table class="atable">
+                <thead><tr><th>ID</th><th>User</th><th>Hành động</th><th>Thời gian</th></tr></thead>
+                <tbody id="audit-body"><tr><td colspan="4"><div class="empty">Chưa có dữ liệu.</div></td></tr></tbody>
+              </table></div>
+              <div class="more-row"><button class="btn sm" id="audit-more" style="display:none"></button></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== ADMIN: SETTINGS ========== -->
+        <section id="admin-settings" class="room">
+          <div class="card" style="padding:17px">
+            <div class="card-h" style="border:none;padding:0 0 14px"><div><h3>Cấu hình hệ thống</h3><p>Mã đăng ký nội bộ và tích hợp cảnh báo Telegram</p></div></div>
+            <form id="config-form" class="form-grid">
+              <div class="fld"><label for="cfg-code">Mã đăng ký tài khoản (mã nội bộ)</label><input type="text" id="cfg-code" placeholder="Ví dụ: FAMILY2026"></div>
+              <div class="fld"><label for="cfg-token">Telegram Bot Token</label><input type="text" id="cfg-token" placeholder="Nhập bot token"></div>
+              <div class="fld"><label for="cfg-chat">Telegram Chat ID</label><input type="text" id="cfg-chat" placeholder="Nhập chat id"></div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <button type="submit" class="btn accent"><i class="fas fa-floppy-disk"></i> Lưu cấu hình</button>
+                <button type="button" class="btn" id="reload-config"><i class="fas fa-rotate"></i> Nạp lại</button>
+              </div>
+            </form>
+          </div>
+        </section>
+        {% endif %}
+
+        <div class="foot">
+          <span><i class="fas fa-clock"></i> Cập nhật gần nhất: <span id="last-update">--:--:--</span></span>
+          <span><i class="fas fa-microchip"></i> Raspberry Pi 4 · ESP32 ×3 · BLE · UART</span>
+        </div>
+      </main>
+    </div>
+  </div>
+
+
+  <!-- ============ FLOATING CHATBOT: BÁC SĨ GIA ĐÌNH ============ -->
+  <button class="family-doctor-toggle" id="family-doctor-toggle" type="button" aria-label="Mở chatbot Bác sĩ gia đình">
+    <i class="fas fa-user-doctor"></i>
+    <span class="fd-pulse"></span>
+  </button>
+
+  <section class="family-doctor-panel" id="family-doctor-panel" aria-live="polite" aria-label="Chatbot Bác sĩ gia đình">
+    <div class="fd-head">
+      <div class="fd-avatar"><i class="fas fa-user-doctor"></i></div>
+      <div class="fd-title">
+        <b>Bác quản gia</b>
+        <span>Hỗ trợ hỏi đáp sức khỏe, gia đình</span>
+      </div>
+      <button class="fd-close" id="family-doctor-close" type="button" aria-label="Đóng chatbot"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="fd-notice">
+      <i class="fas fa-circle-info"></i>
+      Thông tin chỉ để tham khảo
+    </div>
+    <div class="fd-messages" id="family-doctor-messages">
+      <div class="fd-msg bot">Xin chào, tôi là Bác quản gia. Bạn có thể hỏi các câu cơ bản.</div>
+    </div>
+    <div class="fd-quick" aria-label="Câu hỏi gợi ý">
+      <button type="button" data-fd-question="Dấu hiệu cảm lạnh thường gặp là gì?">Cảm lạnh</button>
+      <button type="button" data-fd-question="Sốt xuất huyết có dấu hiệu cảnh báo nào cần đi khám?">Sốt xuất huyết</button>
+      <button type="button" data-fd-question="Huyết áp cao cần lưu ý điều gì?">Huyết áp cao</button>
+      <button type="button" data-fd-question="Người bệnh tiểu đường nên theo dõi gì hằng ngày?">Tiểu đường</button>
+    </div>
+    <form class="fd-form" id="family-doctor-form">
+      <input id="family-doctor-input" type="text" placeholder="Nhập câu hỏi sức khỏe..." autocomplete="off" enterkeyhint="send" inputmode="text">
+      <button id="family-doctor-send" type="submit" aria-label="Gửi câu hỏi"><i class="fas fa-paper-plane"></i></button>
+    </form>
+  </section>
+
+  <!-- ============ BOTTOM NAV (phones) ============ -->
+  <nav class="botnav" id="botnav">
+    <button class="active" data-room="overview"><i class="fas fa-gauge-high"></i>Tổng quan</button>
+    <button data-room="patient"><i class="fas fa-bed-pulse"></i>Người bệnh</button>
+    <button data-room="living"><i class="fas fa-couch"></i>Khách</button>
+    <button data-room="kitchen"><i class="fas fa-kitchen-set"></i>Bếp<span class="bn-dot" id="bn-kitchen-dot"></span></button>
+  </nav>
+
+  <script>
+  /* ================= AIoT Care Station — client (BLE, không MQTT) ================= */
+  const socket = (typeof io !== 'undefined') ? io() : null;
+
+  (function(){
+    const b=document.body;
+    document.getElementById('side-username').textContent=b.dataset.username||'Người dùng';
+    document.getElementById('side-role').textContent='Vai trò: '+(b.dataset.role||'member');
+  })();
+
+  /* ---- Drawer / navigation ---- */
+  const sidebar=document.getElementById('sidebar'), scrim=document.getElementById('scrim');
+  function openDrawer(){sidebar.classList.add('open');scrim.classList.add('show')}
+  function closeDrawer(){sidebar.classList.remove('open');scrim.classList.remove('show')}
+  document.getElementById('burger').addEventListener('click',openDrawer);
+  document.getElementById('drawer-close').addEventListener('click',closeDrawer);
+  scrim.addEventListener('click',closeDrawer);
+
+  const rooms=document.querySelectorAll('.room');
+  const titles={
+    overview:['Tổng quan hệ thống'],
+    patient:['Phòng người bệnh','Camera bám người, cảm biến và thiết bị chăm sóc'],
+    living:['Phòng khách','Cảm biến hiện diện, ánh sáng và thiết bị'],
+    kitchen:['Phòng bếp','Giám sát gas – khói – lửa và thông gió khẩn cấp'],
+    'admin-users':['Quản lý tài khoản','Tài khoản truy cập hệ thống'],
+    'admin-logs':['Nhật ký & cảnh báo','Lịch sử đăng nhập, hoạt động và cảnh báo'],
+    'admin-settings':['Cấu hình hệ thống','Mã nội bộ và cấu hình Telegram'],
+  };
+  function goTo(room){
+    document.querySelectorAll('[data-room]').forEach(i=>i.classList.toggle('active',i.dataset.room===room));
+    rooms.forEach(r=>r.classList.toggle('active',r.id===room));
+    const t=titles[room];if(t){document.getElementById('pt-title').textContent=t[0];document.getElementById('pt-sub').textContent=t[1];}
+    closeDrawer();
+    if(room==='kitchen'&&typeof loadKitchenAlerts==='function')loadKitchenAlerts();
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  document.querySelectorAll('[data-room]').forEach(i=>i.addEventListener('click',()=>goTo(i.dataset.room)));
+  document.querySelectorAll('[data-goto]').forEach(el=>el.addEventListener('click',()=>goTo(el.dataset.goto)));
+
+  /* ---- clock ---- */
+  setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocaleTimeString('vi-VN');},1000);
+  function touch(){document.getElementById('last-update').textContent=new Date().toLocaleTimeString('vi-VN');}
+
+
+  /* ---- Open-Meteo weather widget (TP. Hồ Chí Minh) ---- */
+  const WEATHER_REFRESH_MS = 1800000; // 30 phút
+  const WEATHER_API_URL = 'https://api.open-meteo.com/v1/forecast?latitude=10.823&longitude=106.6296&current=temperature_2m,relative_humidity_2m,weather_code&timezone=Asia%2FHo_Chi_Minh';
+  let hasWeatherData = false;
+
+  function weatherCodeText(code){
+    const n = Number(code);
+    if(n === 0) return 'Trời quang';
+    if([1,2,3].includes(n)) return ['Ít mây','Mây rải rác','Nhiều mây'][n-1];
+    if([45,48].includes(n)) return 'Sương mù';
+    if([51,53,55].includes(n)) return 'Mưa phùn';
+    if([56,57].includes(n)) return 'Mưa phùn lạnh';
+    if([61,63,65].includes(n)) return 'Mưa';
+    if([66,67].includes(n)) return 'Mưa lạnh';
+    if([71,73,75,77].includes(n)) return 'Tuyết rơi';
+    if([80,81,82].includes(n)) return 'Mưa rào';
+    if([85,86].includes(n)) return 'Mưa tuyết';
+    if(n === 95) return 'Dông';
+    if([96,99].includes(n)) return 'Dông kèm mưa đá';
+    return 'Không xác định';
+  }
+
+  async function loadWeather(){
+    try{
+      const res = await fetch(WEATHER_API_URL, {cache:'no-store'});
+      if(!res.ok) throw new Error('Open-Meteo HTTP '+res.status);
+      const data = await res.json();
+      const current = data.current || data.current_weather || {};
+      const temp = current.temperature_2m ?? current.temperature;
+      const hum = current.relative_humidity_2m ?? current.relativehumidity_2m;
+      const code = current.weather_code ?? current.weathercode;
+      if(temp == null || hum == null || code == null) throw new Error('Thiếu dữ liệu thời tiết hiện tại');
+
+      document.getElementById('weather-temp').textContent = Math.round(Number(temp));
+      document.getElementById('weather-humidity').textContent = Math.round(Number(hum));
+      const label = weatherCodeText(code);
+      document.getElementById('weather-code-label').textContent = label;
+      document.getElementById('weather-desc').textContent = label;
+      hasWeatherData = true;
+    }catch(err){
+      console.warn('[weather] Không thể cập nhật thời tiết:', err);
+      if(!hasWeatherData){
+        const desc = document.getElementById('weather-desc');
+        if(desc) desc.textContent = 'Không tải được dữ liệu thời tiết. Hệ thống sẽ tự thử lại sau.';
+      }
+    }
+  }
+  loadWeather();
+  setInterval(loadWeather, WEATHER_REFRESH_MS);
+
+
+  /* ---- Floating chatbot: Bác sĩ gia đình ---- */
+  (function(){
+    const panel = document.getElementById('family-doctor-panel');
+    const toggle = document.getElementById('family-doctor-toggle');
+    const close = document.getElementById('family-doctor-close');
+    const form = document.getElementById('family-doctor-form');
+    const input = document.getElementById('family-doctor-input');
+    const send = document.getElementById('family-doctor-send');
+    const messages = document.getElementById('family-doctor-messages');
+    const quickButtons = document.querySelectorAll('[data-fd-question]');
+
+    if(!panel || !toggle || !form || !input || !messages) return;
+
+    function openChat(){
+      panel.classList.add('show');
+      document.body.classList.add('fd-chat-open');
+      setTimeout(()=>{input.focus();messages.scrollTop=messages.scrollHeight;},120);
+    }
+    function closeChat(){
+      panel.classList.remove('show');
+      document.body.classList.remove('fd-chat-open');
+      input.blur();
+    }
+    function addMessage(text, type){
+      const div = document.createElement('div');
+      div.className = 'fd-msg ' + (type === 'user' ? 'user' : 'bot');
+      div.textContent = text;
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+      return div;
+    }
+
+    function sleep(ms){return new Promise(resolve=>setTimeout(resolve, ms));}
+
+    async function pollDoctorJob(jobId, loading){
+      const maxTries = 75; // khoảng 2 phút nếu mỗi lần cách 1.6s
+
+      for(let i = 0; i < maxTries; i++){
+        await sleep(1600);
+
+        const res = await fetch('/api/medical_chat/result/' + encodeURIComponent(jobId), {
+          method: 'GET',
+          cache: 'no-store'
+        });
+        const data = await res.json().catch(()=>({}));
+
+        if(!res.ok || data.ok === false){
+          throw new Error(data.message || 'Chatbot y tế xử lý thất bại.');
+        }
+
+        if(data.status === 'done'){
+          return data;
+        }
+
+        if(data.status === 'queued'){
+          loading.textContent = 'Câu hỏi đã vào hàng đợi. Bác sĩ gia đình sẽ xử lý ngay sau tác vụ hiện tại...';
+        }else{
+          loading.textContent = 'Đang tra cứu tài liệu y tế và tạo câu trả lời...';
+        }
+      }
+
+      throw new Error('Chatbot phản hồi quá lâu. Vui lòng thử lại sau.');
+    }
+
+    function buildDoctorAnswer(data){
+      return data.answer || 'Tôi chưa có đủ dữ liệu trong tài liệu để trả lời chắc chắn.';
+    }
+
+    async function askDoctor(question){
+      addMessage(question, 'user');
+      const loading = addMessage('Đang đưa câu hỏi vào hàng đợi...', 'bot');
+      if(send) send.disabled = true;
+
+      try{
+        const res = await fetch('/api/medical_chat', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({message: question})
+        });
+        const data = await res.json().catch(()=>({}));
+
+        if(!res.ok || data.ok === false){
+          throw new Error(data.message || 'Chatbot y tế chưa sẵn sàng.');
+        }
+
+        let finalData = data;
+        if(data.status === 'queued' && data.job_id){
+          loading.textContent = 'Bác sĩ gia đình đang tra cứu tài liệu y tế...';
+          finalData = await pollDoctorJob(data.job_id, loading);
+        }
+
+        loading.textContent = buildDoctorAnswer(finalData);
+      }catch(err){
+        loading.textContent = (err && err.message) ? err.message : 'Không kết nối được chatbot. Vui lòng kiểm tra backend /api/medical_chat.';
+      }finally{
+        if(send) send.disabled = false;
+      }
+    }
+
+    toggle.addEventListener('click',()=>panel.classList.contains('show') ? closeChat() : openChat());
+    if(close) close.addEventListener('click',closeChat);
+    quickButtons.forEach(btn=>btn.addEventListener('click',()=>{openChat();askDoctor(btn.dataset.fdQuestion || btn.textContent.trim());}));
+    input.addEventListener('keydown',e=>{
+      if(e.key === 'Enter' && !e.shiftKey && !e.isComposing){
+        e.preventDefault();
+        if(form.requestSubmit) form.requestSubmit();
+        else if(send) send.click();
+      }
+    });
+
+    form.addEventListener('submit',e=>{
+      e.preventDefault();
+      const question = input.value.trim();
+      if(!question || (send && send.disabled)) return;
+      input.value = '';
+      askDoctor(question);
+    });
+  })();
+
+  /* ---- sparklines ---- */
+  const sparks={};
+  function spark(id,val,color){
+    const c=document.getElementById(id);if(!c||val==null)return;
+    if(!sparks[id])sparks[id]={data:[]};
+    const s=sparks[id];s.data.push(+val);if(s.data.length>30)s.data.shift();
+    const ctx=c.getContext('2d'),w=c.width=c.clientWidth*2,h=c.height=c.clientHeight*2;
+    ctx.clearRect(0,0,w,h);const d=s.data;if(d.length<2)return;
+    const mn=Math.min(...d),mx=Math.max(...d),rg=(mx-mn)||1;
+    ctx.lineWidth=2.5;ctx.strokeStyle=color;ctx.beginPath();
+    d.forEach((v,i)=>{const x=i/(d.length-1)*w,y=h-7-((v-mn)/rg)*(h-14);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+    ctx.stroke();const g=ctx.createLinearGradient(0,0,0,h);g.addColorStop(0,color+'33');g.addColorStop(1,color+'00');
+    ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();ctx.fillStyle=g;ctx.fill();
+  }
+
+  /* ---- gauge ---- */
+  function setGauge(v){
+    const pct=Math.max(0,Math.min(100,v/3000*100));
+    let col='var(--ok)';if(v>=2500)col='var(--bad)';else if(v>=1500)col='var(--warn)';
+    const cs=getComputedStyle(document.documentElement);
+    const hex=cs.getPropertyValue(col.replace('var(','').replace(')','')).trim()||col;
+    document.getElementById('kt-gauge').style.background=`conic-gradient(${hex} ${pct*3.6}deg, #222932 0deg)`;
+  }
+
+  /* ---- camera ---- */
+  const videoFeed=document.getElementById('video-feed'),videoPh=document.getElementById('video-ph');
+  let camActive=false,camMode='auto';
+  function setCameraUI(active,mode){
+    camActive=active;if(mode)camMode=mode;
+    videoFeed.style.display=active?'block':'none';
+    videoPh.style.display=active?'none':'block';
+    document.querySelectorAll('#cam-seg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===camMode));
+    if(active){const want='/video_feed';if(!videoFeed.src.includes(want)||videoFeed.style.display==='none')videoFeed.src=want+'?'+Date.now();}
+    if(!active){videoFeed.parentElement.style.aspectRatio='';document.getElementById('oc-gesture').textContent='Cử chỉ: — (camera tắt)';}
+  }
+  document.querySelectorAll('#cam-seg button').forEach(b=>b.addEventListener('click',()=>{
+    const m=b.dataset.mode;camMode=m;
+    document.querySelectorAll('#cam-seg button').forEach(x=>x.classList.toggle('on',x===b));
+    if(socket)socket.emit('set_camera_mode',{mode:m});
+  }));
+  videoFeed.addEventListener('load',()=>{if(camActive&&videoFeed.naturalWidth&&videoFeed.naturalHeight)videoFeed.parentElement.style.aspectRatio=videoFeed.naturalWidth+' / '+videoFeed.naturalHeight;});
+  videoFeed.addEventListener('error',()=>{videoFeed.style.display='none';videoPh.style.display='block';videoFeed.parentElement.style.aspectRatio='';});
+
+  /* ---- device control ---- */
+  function emitSet(room,device,payload){if(socket)socket.emit('set_device',Object.assign({room,device},payload));}
+  function bindToggle(id,tileId,onTxt,offTxt,cb){
+    const el=document.getElementById(id),tile=document.getElementById(tileId);
+    el.addEventListener('change',()=>{tile.classList.toggle('on',el.checked);const st=document.getElementById(id.replace('-toggle','-status'));if(st)st.textContent=el.checked?onTxt:offTxt;cb&&cb(el.checked);});
+  }
+  function bindRange(id,valId,cb){const el=document.getElementById(id),v=document.getElementById(valId);el.addEventListener('input',()=>{v.textContent=el.value;cb&&cb(+el.value);});}
+  bindToggle('pt-light-toggle','pt-light-tile','Đang bật','Đang tắt',on=>emitSet('patient','light',{state:on}));
+  bindToggle('pt-buzzer-toggle','pt-buzzer-tile','Đang kêu','Im lặng',on=>emitSet('patient','buzzer',{state:on}));
+  bindToggle('pt-fan-toggle','pt-fan-tile','Đang chạy','Đang tắt',on=>{const r=document.getElementById('pt-fan-range');if(!on){r.value=0;document.getElementById('pt-fan-val').textContent=0;}emitSet('patient','fan',{state:on,value:+r.value});});
+  bindRange('pt-fan-range','pt-fan-val',v=>{const t=document.getElementById('pt-fan-toggle');t.checked=v>0;document.getElementById('pt-fan-tile').classList.toggle('on',v>0);document.getElementById('pt-fan-status').textContent=v>0?'Đang chạy':'Đang tắt';emitSet('patient','fan',{state:v>0,value:v});});
+  bindToggle('lv-light-toggle','lv-light-tile','Đang bật','Đang tắt',on=>{const r=document.getElementById('lv-light-range');if(!on){r.value=0;document.getElementById('lv-light-val').textContent=0;}emitSet('living','light',{state:on,value:+r.value});});
+  bindRange('lv-light-range','lv-light-val',v=>{const t=document.getElementById('lv-light-toggle');t.checked=v>0;document.getElementById('lv-light-tile').classList.toggle('on',v>0);document.getElementById('lv-light-status').textContent=v>0?('Độ sáng '+v+'%'):'Đang tắt';emitSet('living','light',{state:v>0,value:v});});
+  bindToggle('lv-fan-toggle','lv-fan-tile','Đang chạy','Đang tắt',on=>{const r=document.getElementById('lv-fan-range');if(!on){r.value=0;document.getElementById('lv-fan-val').textContent=0;}emitSet('living','fan',{state:on,value:+r.value});});
+  bindRange('lv-fan-range','lv-fan-val',v=>{const t=document.getElementById('lv-fan-toggle');t.checked=v>0;document.getElementById('lv-fan-tile').classList.toggle('on',v>0);document.getElementById('lv-fan-status').textContent=v>0?('Tốc độ '+v+'%'):'Đang tắt';emitSet('living','fan',{state:v>0,value:v});});
+  bindToggle('lv-auto-toggle','lv-auto-tile','Bật đèn khi có người buổi tối','Đã tắt tự động',on=>emitSet('living','auto',{state:on}));
+  bindToggle('kt-window-toggle','kt-window-tile','Đang mở','Đang đóng',on=>emitSet('kitchen','window',{state:on}));
+  bindToggle('kt-exhaust-toggle','kt-exhaust-tile','Đang hút','Đang tắt',on=>emitSet('kitchen','exhaust',{state:on}));
+
+  /* ---- apply data ---- */
+  function badge(el,cls,txt){el.className='rb '+cls;el.textContent=txt;}
+  function setToggle(id,tileId,on,onTxt,offTxt){const el=document.getElementById(id);el.checked=!!on;document.getElementById(tileId).classList.toggle('on',!!on);const st=document.getElementById(id.replace('-toggle','-status'));if(st)st.textContent=on?onTxt:offTxt;}
+
+  function applyPatient(d){
+    if(d.temp!=null){document.getElementById('pt-temp').textContent=d.temp;document.getElementById('ov-patient-temp').textContent=d.temp;spark('sp-pt-temp',d.temp,'#4c9be8');}
+    if(d.hum!=null){document.getElementById('pt-humi').textContent=d.hum;document.getElementById('ov-patient-humi').textContent=d.hum;spark('sp-pt-humi',d.hum,'#3ba55d');}
+    if(d.motion!=null)document.getElementById('oc-pir').innerHTML='<i class="fas fa-person-walking"></i> PIR: '+(d.motion?'có chuyển động':'yên tĩnh');
+    if(d.light!=null)setToggle('pt-light-toggle','pt-light-tile',d.light,'Đang bật','Đang tắt');
+    if(d.buzzer!=null){document.getElementById('pt-buzzer-toggle').checked=!!d.buzzer;document.getElementById('pt-buzzer-tile').classList.toggle('alarm',!!d.buzzer);document.getElementById('pt-buzzer-status').textContent=d.buzzer?'Đang kêu':'Im lặng';}
+    if(d.fan_speed!=null){const r=document.getElementById('pt-fan-range');r.value=d.fan_speed;document.getElementById('pt-fan-val').textContent=d.fan_speed;const on=d.fan_speed>0;document.getElementById('pt-fan-toggle').checked=on;document.getElementById('pt-fan-tile').classList.toggle('on',on);document.getElementById('pt-fan-status').textContent=on?'Đang chạy':'Đang tắt';}
+    touch();
+  }
+  function applyLiving(d){
+    if(d.temp!=null){document.getElementById('lv-temp').textContent=d.temp;document.getElementById('ov-living-temp').textContent=d.temp;spark('sp-lv-temp',d.temp,'#4c9be8');}
+    if(d.hum!=null){document.getElementById('lv-humi').textContent=d.hum;spark('sp-lv-humi',d.hum,'#3ba55d');}
+    if(d.lux!=null){document.getElementById('lv-lux').textContent=Math.round(d.lux);spark('sp-lv-lux',d.lux,'#e0a52e');}
+    if(d.motion!=null){const t=d.motion?'Có người':'Không có người';document.getElementById('lv-motion-status').textContent=t;document.getElementById('lv-motion-tile').classList.toggle('on',!!d.motion);document.getElementById('ov-living-motion').textContent=t;}
+    if(d.light_level!=null){const r=document.getElementById('lv-light-range');r.value=d.light_level;document.getElementById('lv-light-val').textContent=d.light_level;const on=d.light_level>0;document.getElementById('lv-light-toggle').checked=on;document.getElementById('lv-light-tile').classList.toggle('on',on);document.getElementById('lv-light-status').textContent=on?('Độ sáng '+d.light_level+'%'):'Đang tắt';document.getElementById('ov-living-light').textContent=on?(d.light_level+'%'):'Tắt';}
+    if(d.fan_speed!=null){const r=document.getElementById('lv-fan-range');r.value=d.fan_speed;document.getElementById('lv-fan-val').textContent=d.fan_speed;const on=d.fan_speed>0;document.getElementById('lv-fan-toggle').checked=on;document.getElementById('lv-fan-tile').classList.toggle('on',on);document.getElementById('lv-fan-status').textContent=on?('Tốc độ '+d.fan_speed+'%'):'Đang tắt';}
+    if(d.auto!=null){document.getElementById('lv-auto-toggle').checked=!!d.auto;document.getElementById('lv-auto-tile').classList.toggle('on',!!d.auto);}
+    touch();
+  }
+  let gasChart;
+  function applyKitchen(d){
+    if(d.gas!=null){const g=Math.round(d.gas);document.getElementById('kt-gas').textContent=g;document.getElementById('ov-kitchen-gas').textContent=g;setGauge(d.gas);
+      const st=document.getElementById('kt-gas-state'),card=document.getElementById('kt-gas-card');
+      if(d.gas>=2500){st.className='badge bad';st.innerHTML='<i class="fas fa-triangle-exclamation"></i> Nguy hiểm';card.classList.add('alarm');}
+      else if(d.gas>=1500){st.className='badge warn';st.innerHTML='<i class="fas fa-circle-exclamation"></i> Tăng cao';card.classList.remove('alarm');}
+      else{st.className='badge ok';st.innerHTML='<i class="fas fa-circle-check"></i> An toàn';card.classList.remove('alarm');}
+      if(gasChart){gasChart.data.labels.push(new Date().toLocaleTimeString('vi-VN'));gasChart.data.datasets[0].data.push(g);if(gasChart.data.labels.length>20){gasChart.data.labels.shift();gasChart.data.datasets[0].data.shift();}gasChart.update();}}
+    if(d.smoke!=null){document.getElementById('kt-smoke-status').textContent=d.smoke?'PHÁT HIỆN KHÓI':'Không phát hiện';document.getElementById('kt-smoke-tile').classList.toggle('alarm',!!d.smoke);document.getElementById('ov-kitchen-smoke').textContent=d.smoke?'Có':'Không';}
+    if(d.flame!=null){document.getElementById('kt-flame-status').textContent=d.flame?'PHÁT HIỆN LỬA':'Không phát hiện';document.getElementById('kt-flame-tile').classList.toggle('alarm',!!d.flame);document.getElementById('ov-kitchen-flame').textContent=d.flame?'Có':'Không';}
+    if(d.window!=null)setToggle('kt-window-toggle','kt-window-tile',d.window,'Đang mở','Đang đóng');
+    if(d.exhaust!=null)setToggle('kt-exhaust-toggle','kt-exhaust-tile',d.exhaust,'Đang hút','Đang tắt');
+    const danger=d.flame||d.smoke||(d.gas!=null&&d.gas>=2500),warn=(d.gas!=null&&d.gas>=1500);
+    badge(document.getElementById('ov-kitchen-badge'),danger?'bad':(warn?'warn':'ok'),danger?'Nguy hiểm':(warn?'Cảnh báo':'An toàn'));
+    touch();
+  }
+  function applyAI(a){
+    if(a.gesture!=null){document.getElementById('oc-gesture').textContent='Cử chỉ: '+(a.gesture||'—');document.querySelectorAll('#gesture-table tr[data-g]').forEach(r=>r.classList.toggle('live',r.dataset.g===a.gesture));}
+    if(a.fps!=null)document.getElementById('ai-fps').textContent=a.fps;
+    if(a.latency!=null)document.getElementById('ai-latency').textContent=a.latency;
+    if(a.fall!=null){const oc=document.getElementById('oc-fall');oc.innerHTML=a.fall?'<i class="fas fa-person-falling"></i> TÉ NGÃ':'Bình thường';oc.classList.toggle('alarm',!!a.fall);
+      document.getElementById('ov-patient-fall').textContent=a.fall?'TÉ NGÃ':'Bình thường';badge(document.getElementById('ov-patient-badge'),a.fall?'bad':'ok',a.fall?'Té ngã':'An toàn');}
+  }
+
+  /* ---- wearable / sức khỏe (Yêu cầu 1) ---- */
+  function applyWearable(d){
+    if(d.heart_rate!=null)document.getElementById('hm-hr').textContent=Math.round(d.heart_rate);
+    if(d.spo2!=null)document.getElementById('hm-spo2').textContent=Math.round(d.spo2);
+    if(d.status!=null){
+      const card=document.getElementById('health-card'),st=document.getElementById('health-status');
+      card.classList.remove('warn','critical');
+      if(d.status==='critical'){card.classList.add('critical');st.className='hstatus bad';st.innerHTML='<i class="fas fa-triangle-exclamation"></i> Nguy hiểm';}
+      else if(d.status==='warn'){card.classList.add('warn');st.className='hstatus warn';st.innerHTML='<i class="fas fa-circle-exclamation"></i> Bất ổn';}
+      else{st.className='hstatus ok';st.innerHTML='<i class="fas fa-circle-check"></i> Bình thường';}
+    }
+    touch();
+  }
+  /* ---- lịch sử cảnh báo bếp (Yêu cầu 4) ---- */
+  function fmtT(v){if(!v)return'--';const d=new Date(String(v).replace(' ','T'));return isNaN(d)?v:d.toLocaleString('vi-VN');}
+  async function loadKitchenAlerts(){
+    const list=document.getElementById('kt-alert-list');if(!list)return;
+    try{
+      const r=await fetch('/api/kitchen_alerts');const d=await r.json();const a=(d&&d.alerts)||[];
+      if(!a.length){list.innerHTML='<div class="empty">Chưa có cảnh báo nào.</div>';return;}
+      list.innerHTML=a.map(x=>`<div class="alert-item"><i class="fas fa-triangle-exclamation ai-ic"></i><div class="ai-body"><div class="ai-act">${x.action}</div><div class="ai-time">${fmtT(x.timestamp)}</div></div></div>`).join('');
+    }catch(e){}
+  }
+  const ktReload=document.getElementById('kt-alerts-reload');
+  if(ktReload)ktReload.addEventListener('click',loadKitchenAlerts);
+
+  /* ---- alert state machine ---- */
+  const STEPS=['normal','light','emergency','awaiting'];
+  function setAlert(level,msg){
+    const idx=STEPS.indexOf(level);if(idx<0)return;
+    ['st-normal','st-light','st-emg','st-wait'].forEach((id,i)=>{const el=document.getElementById(id);el.classList.toggle('active',i===idx);el.classList.toggle('done',i<idx);});
+    const chip=document.getElementById('state-chip'),desc=document.getElementById('state-desc');
+    const map={normal:['ok','Bình thường','Hệ thống đang ở trạng thái bình thường'],light:['bad','Cảnh báo nhẹ','Khí gas tăng cao hơn mức bình thường'],emergency:['bad','Khẩn cấp','Phát hiện khói/lửa hoặc gas rất cao — đang xử lý'],awaiting:['bad','Chờ xác nhận','Điều kiện đã an toàn — cần xác nhận để khôi phục']};
+    const m=map[level];chip.className='chip '+(level==='normal'?'ok':'bad');chip.innerHTML='<i class="fas fa-circle"></i> '+m[1];desc.textContent=m[2];
+    document.getElementById('emg').classList.toggle('show',level==='emergency'||level==='awaiting');
+    document.getElementById('confirm-btn').classList.toggle('show',level==='awaiting');
+    if(msg)showSys(msg,level==='light'?'light':'');
+  }
+  document.getElementById('confirm-btn').addEventListener('click',()=>{if(socket)socket.emit('confirm_safe',{});});
+  document.getElementById('sysbar-x').addEventListener('click',()=>document.getElementById('sysbar').classList.remove('show'));
+  function showSys(msg,lvl){const box=document.getElementById('sysbar');document.getElementById('sysbar-text').textContent=msg;box.className='sysbar show'+(lvl==='light'?' light':'');clearTimeout(showSys._t);showSys._t=setTimeout(()=>box.classList.remove('show'),9000);}
+
+  /* ---- node status ---- */
+  const nodeState={patient:false,living:false,kitchen:false,wearable:false};
+  function setNode(room,online){
+    const el=document.getElementById('node-'+room);if(!el)return;
+    el.classList.toggle('off',!online);
+    const sub=el.querySelector('.nsub');sub.textContent=sub.textContent.replace(/online|offline/,online?'online':'offline');
+    if(room==='kitchen'){document.getElementById('kitchen-dot').classList.toggle('show',!online);document.getElementById('bn-kitchen-dot').classList.toggle('show',!online);}
+    nodeState[room]=online;updateNodeChip();
+  }
+  function updateNodeChip(){
+    const n=Object.values(nodeState).filter(Boolean).length;
+    const c=document.getElementById('node-chip');c.innerHTML='<i class="fas fa-diagram-project"></i> BLE '+n+'/'+Object.keys(nodeState).length;
+    c.className='chip nodes'+(n===3?' ok':(n===0?' bad':''));
+  }
+  function setConn(ok){
+    const c=document.getElementById('conn-chip'),m=document.getElementById('mt-conn');
+    c.className='chip '+(ok?'ok':'bad');c.innerHTML='<i class="fas fa-circle"></i> '+(ok?'Đã kết nối':'Mất kết nối');
+    m.className='mt-conn '+(ok?'ok':'bad');
+  }
+
+  /* ---- chart (đã gỡ biểu đồ xu hướng gas — chỉ khởi tạo nếu canvas tồn tại) ---- */
+  (function(){const el=document.getElementById('gasChart');if(el&&window.Chart){
+    gasChart=new Chart(el,{type:'line',
+      data:{labels:[],datasets:[{label:'Khí gas (ADC)',data:[],borderColor:'#d6982c',backgroundColor:'rgba(214,152,44,.12)',fill:true,tension:.35,pointRadius:1.5}]},
+      options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{labels:{color:'#8791a0'}}},scales:{x:{ticks:{color:'#5a6473',maxTicksLimit:6},grid:{color:'#1b2129'}},y:{ticks:{color:'#5a6473'},grid:{color:'#1b2129'}}}}});
+  }})();
+
+  /* ================= SOCKET ================= */
+  if(socket){
+    socket.on('connect',()=>{setConn(true);socket.emit('request_initial_state');loadKitchenAlerts();});
+    socket.on('disconnect',()=>setConn(false));
+    socket.on('bootstrap',s=>{
+      if(s.rooms){applyPatient(s.rooms.patient||{});applyLiving(s.rooms.living||{});applyKitchen(s.rooms.kitchen||{});applyWearable(s.rooms.wearable||{});}
+      if(s.nodes){['patient','living','kitchen','wearable'].forEach(r=>setNode(r,!!s.nodes[r]));}
+      if(s.ai)applyAI(s.ai);
+      if(s.camera){setCameraUI(!!s.camera.active,s.camera.mode);}
+      if(s.alert)setAlert(s.alert.level);
+    });
+    socket.on('room_update',m=>{if(m.room==='patient')applyPatient(m.data);else if(m.room==='living')applyLiving(m.data);else if(m.room==='kitchen')applyKitchen(m.data);else if(m.room==='wearable')applyWearable(m.data);});
+    socket.on('node_status',n=>{['patient','living','kitchen','wearable'].forEach(r=>{if(n[r]!=null)setNode(r,n[r]===true||n[r]==='online');});});
+    socket.on('camera_sync',c=>{setCameraUI(!!c.active,c.mode);});
+    socket.on('ai_status',applyAI);
+    socket.on('alert_state',a=>{setAlert(a.level,a.message);if(typeof loadKitchenAlerts==='function')loadKitchenAlerts();});
+    socket.on('system_alert',a=>{showSys(a.message||'Có cảnh báo mới.',(a.type==='gas'||a.type==='health')?'light':'');if(typeof loadKitchenAlerts==='function')loadKitchenAlerts();});
+  }
+  
+  /* ---- panel tùy chỉnh cử chỉ (Yêu cầu 2) ---- */
+  (function gesturePanel(){
+    const gEl=document.getElementById('gm-gesture'),dEl=document.getElementById('gm-device'),aEl=document.getElementById('gm-action'),list=document.getElementById('gm-list');
+    if(!gEl)return;
+    const labels={gesture:{},device:{},action:{}};
+    async function fj(url,opt={}){const r=await fetch(url,{headers:{'Content-Type':'application/json'},...opt});const d=await r.json().catch(()=>({}));if(!r.ok||d.ok===false)throw new Error(d.message||'Lỗi máy chủ.');return d;}
+    function fillSelect(sel,arr){sel.innerHTML=arr.map(o=>`<option value="${o.key}">${o.label}</option>`).join('');}
+    function renderList(ms){
+      const cnt=document.getElementById('gcard-count');if(cnt)cnt.textContent=(ms&&ms.length)||0;
+      if(!ms||!ms.length){list.innerHTML='<div class="empty">Chưa có ánh xạ nào — thêm ở trên.</div>';return;}
+      list.innerHTML=ms.map(m=>{
+        const gl=labels.gesture[m.gesture_name]||m.gesture_name,dl=labels.device[m.target_device]||m.target_device,al=labels.action[m.action]||m.action;
+        return `<div class="gmap-item"><span class="gi-gesture">${gl}</span><i class="fas fa-arrow-right gi-arrow"></i><span class="gi-target"><b>${dl}</b> · ${al}</span><button class="gi-del" onclick="delGesture('${m.gesture_name}')"><i class="fas fa-xmark"></i></button></div>`;
+      }).join('');
+    }
+    async function load(){
+      const d=await fj('/api/gesture_mappings');const o=d.options;
+      o.gestures.forEach(x=>labels.gesture[x.key]=x.label);
+      o.devices.forEach(x=>labels.device[x.key]=x.label);
+      o.actions.forEach(x=>labels.action[x.key]=x.label);
+      fillSelect(gEl,o.gestures);fillSelect(dEl,o.devices);fillSelect(aEl,o.actions);
+      renderList(d.mappings);
+    }
+    document.getElementById('gm-add').addEventListener('click',async()=>{
+      try{const d=await fj('/api/gesture_mappings',{method:'POST',body:JSON.stringify({gesture_name:gEl.value,target_device:dEl.value,action:aEl.value})});renderList(d.mappings);}catch(e){alert(e.message);}
+    });
+    window.delGesture=async g=>{if(!confirm('Xóa ánh xạ cử chỉ này?'))return;try{const d=await fj(`/api/gesture_mappings/${g}`,{method:'DELETE'});renderList(d.mappings);}catch(e){alert(e.message);}};
+    /* Thu gọn / mở rộng panel cử chỉ + di chuyển khối dữ liệu (mặc định thu gọn để tránh chạm nhầm) */
+    (function(){
+      const card=document.getElementById('gesture-card'),head=document.getElementById('gcard-head');
+      if(!card||!head)return;
+      const ptop=document.querySelector('#patient .p-top'),
+            data=document.getElementById('patient-data'),
+            slotR=document.getElementById('data-slot-right'),
+            slotB=document.getElementById('data-slot-bottom');
+      function syncData(){
+        const collapsed=card.classList.contains('collapsed');
+        if(ptop)ptop.classList.toggle('data-right',collapsed);
+        if(data&&slotR&&slotB){const dest=collapsed?slotR:slotB;if(data.parentElement!==dest)dest.appendChild(data);}
+      }
+      function toggle(){const open=!card.classList.toggle('collapsed');head.setAttribute('aria-expanded',open?'true':'false');syncData();}
+      head.addEventListener('click',toggle);
+      head.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggle();}});
+      syncData();
+    })();
+    load().catch(()=>{list.innerHTML='<div class="empty">Không tải được ánh xạ cử chỉ.</div>';});
+  })();
+  </script>
+
+  {% if role == 'admin' %}
+  <script>
+  /* ================= ADMIN ================= */
+  (function(){
+    const $=id=>document.getElementById(id);
+    const usersBody=$('users-body'),loginBody=$('login-body'),auditBody=$('audit-body');
+    let loginAll=[],auditAll=[],loginExp=false,auditExp=false;const LIMIT=10;
+    async function fj(url,opt={}){const r=await fetch(url,{headers:{'Content-Type':'application/json'},...opt});const d=await r.json().catch(()=>({}));if(!r.ok||d.ok===false)throw new Error(d.message||'Lỗi máy chủ.');return d;}
+    function fmtSql(v){if(!v)return'--';const d=new Date(String(v).replace(' ','T'));return isNaN(d)?v:d.toLocaleString('vi-VN');}
+    function renderUsers(us){
+      if(!us||!us.length){usersBody.innerHTML='<tr><td colspan="6"><div class="empty">Chưa có tài khoản nào.</div></td></tr>';return;}
+      usersBody.innerHTML=us.map(u=>{
+        const rb=u.role==='admin'?'<span class="pill admin"><i class="fas fa-crown"></i> admin</span>':'<span class="pill member"><i class="fas fa-user"></i> member</span>';
+        const sus=Number(u.is_suspended)===1;
+        const sb=sus?'<span class="pill off"><i class="fas fa-lock"></i> Đã khóa</span>':'<span class="pill on"><i class="fas fa-lock-open"></i> Hoạt động</span>';
+        const un=String(u.username).replace(/'/g,"\\'");
+        return `<tr class="${sus?'dim':''}"><td>${u.id}</td><td>${u.username}</td><td>${rb}</td><td>${sb}</td><td>${fmtSql(u.created_at)}</td>
+          <td><div class="act-group">
+            <button class="btn sm" onclick="editUser(${u.id},'${un}')"><i class="fas fa-pen"></i></button>
+            <button class="btn sm ${sus?'ok':''}" onclick="toggleSuspend(${u.id})"><i class="fas fa-user-lock"></i> ${sus?'Mở':'Khóa'}</button>
+            <button class="btn sm danger" onclick="delUser(${u.id},'${un}')"><i class="fas fa-trash"></i></button>
+          </div></td></tr>`;}).join('');
+    }
+    const loginRow=l=>`<tr><td>${l.id}</td><td>${l.username||('user #'+(l.user_id??''))}</td><td>${l.ip_address||'--'}</td><td>${fmtSql(l.timestamp)}</td></tr>`;
+    function paintLogin(){const more=$('login-more');
+      if(!loginAll.length){loginBody.innerHTML='<tr><td colspan="4"><div class="empty">Chưa có dữ liệu.</div></td></tr>';more.style.display='none';return;}
+      loginBody.innerHTML=(loginExp?loginAll:loginAll.slice(0,LIMIT)).map(loginRow).join('');
+      if(loginAll.length>LIMIT){more.style.display='';more.innerHTML=loginExp?'<i class="fas fa-chevron-up"></i> Thu gọn':`<i class="fas fa-chevron-down"></i> Xem thêm (${loginAll.length-LIMIT})`;}else more.style.display='none';}
+    function renderLogin(ls){loginAll=ls||[];paintLogin();}
+    function isWarn(a){const t=String(a||'').toLowerCase();return t.includes('cảnh báo')||t.includes('gas')||t.includes('cháy')||t.includes('té ngã')||t.includes('khẩn')||t.includes('sức khỏe');}
+    const auditRow=l=>{const w=isWarn(l.action);const a=w?`<span class="warn-txt"><i class="fas fa-triangle-exclamation"></i> ${l.action}</span>`:l.action;return `<tr class="${w?'warn-row':''}"><td>${l.id}</td><td>${l.username||(l.user_id?('user #'+l.user_id):'hệ thống')}</td><td>${a}</td><td>${fmtSql(l.timestamp)}</td></tr>`;};
+    function paintAudit(){const more=$('audit-more');
+      if(!auditAll.length){auditBody.innerHTML='<tr><td colspan="4"><div class="empty">Chưa có dữ liệu.</div></td></tr>';more.style.display='none';return;}
+      auditBody.innerHTML=(auditExp?auditAll:auditAll.slice(0,LIMIT)).map(auditRow).join('');
+      if(auditAll.length>LIMIT){more.style.display='';more.innerHTML=auditExp?'<i class="fas fa-chevron-up"></i> Thu gọn':`<i class="fas fa-chevron-down"></i> Xem thêm (${auditAll.length-LIMIT})`;}else more.style.display='none';}
+    function renderAudit(ls){auditAll=ls||[];paintAudit();}
+    async function loadUsers(){usersBody.innerHTML='<tr><td colspan="6"><div class="empty">Đang tải…</div></td></tr>';renderUsers((await fj('/api/admin/users')).users||[]);}
+    async function loadLogs(){const d=await fj('/api/admin/logs');renderLogin(d.login_logs||[]);renderAudit(d.audit_logs||[]);}
+    async function loadConfig(){const c=(await fj('/api/admin/configs')).configs||{};$('cfg-code').value=c.admin_register_code||'';$('cfg-token').value=c.telegram_bot_token||'';$('cfg-chat').value=c.telegram_chat_id||'';}
+    window.editUser=async(id,cur)=>{const u=prompt('Username mới:',cur);if(u===null)return;const un=u.trim();if(!un){alert('Không được để trống.');return;}const p=prompt('Mật khẩu mới (trống nếu giữ nguyên):','');if(p===null)return;try{const d=await fj(`/api/admin/users/${id}/edit`,{method:'POST',body:JSON.stringify({username:un,password:p.trim()})});renderUsers(d.users||[]);loadLogs();alert(d.message||'Đã cập nhật.');}catch(e){alert(e.message);}};
+    window.toggleSuspend=async id=>{try{const d=await fj(`/api/admin/users/${id}/suspend`,{method:'POST'});renderUsers(d.users||[]);loadLogs();alert(d.message||'Đã cập nhật.');}catch(e){alert(e.message);}};
+    window.delUser=async(id,n)=>{if(!confirm(`Xóa vĩnh viễn tài khoản "${n}"?`))return;try{const d=await fj(`/api/admin/users/${id}`,{method:'DELETE'});renderUsers(d.users||[]);loadLogs();alert(d.message||'Đã xóa.');}catch(e){alert(e.message);}};
+    $('reload-users').addEventListener('click',()=>loadUsers().catch(e=>alert(e.message)));
+    $('reload-logs').addEventListener('click',()=>loadLogs().catch(e=>alert(e.message)));
+    $('reload-audit').addEventListener('click',()=>loadLogs().catch(e=>alert(e.message)));
+    $('login-more').addEventListener('click',()=>{loginExp=!loginExp;paintLogin();});
+    $('audit-more').addEventListener('click',()=>{auditExp=!auditExp;paintAudit();});
+    $('clear-login').addEventListener('click',async()=>{if(!confirm('Xóa toàn bộ lịch sử đăng nhập?'))return;try{const d=await fj('/api/admin/logs',{method:'DELETE',body:JSON.stringify({target:'login'})});loginExp=false;renderLogin(d.login_logs||[]);renderAudit(d.audit_logs||[]);}catch(e){alert(e.message);}});
+    $('clear-audit').addEventListener('click',async()=>{if(!confirm('Xóa toàn bộ lịch sử hoạt động & cảnh báo?'))return;try{const d=await fj('/api/admin/logs',{method:'DELETE',body:JSON.stringify({target:'audit'})});auditExp=false;renderAudit(d.audit_logs||[]);renderLogin(d.login_logs||[]);}catch(e){alert(e.message);}});
+    $('reload-config').addEventListener('click',()=>loadConfig().catch(e=>alert(e.message)));
+    $('config-form').addEventListener('submit',async e=>{e.preventDefault();try{const d=await fj('/api/admin/configs',{method:'POST',body:JSON.stringify({admin_register_code:$('cfg-code').value.trim(),telegram_bot_token:$('cfg-token').value.trim(),telegram_chat_id:$('cfg-chat').value.trim()})});alert(d.message||'Đã lưu.');loadLogs();}catch(err){alert(err.message);}});
+    Promise.all([loadUsers(),loadLogs(),loadConfig()]).catch(()=>{usersBody.innerHTML='<tr><td colspan="6"><div class="empty">Không tải được dữ liệu — kiểm tra kết nối máy chủ.</div></td></tr>';});
+  })();
+  </script>
+  {% endif %}
+</body>
+</html>

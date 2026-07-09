@@ -1,0 +1,103 @@
+# HUYẾT ÁP CAO / TĂNG HUYẾT ÁP - TÀI LIỆU RAG CHO CHATBOT
+
+## Mục đích
+Tài liệu này giúp chatbot trả lời câu hỏi cơ bản về tăng huyết áp: khái niệm, cách đo, yếu tố nguy cơ, biến chứng, thay đổi lối sống, điều trị y khoa và dấu hiệu cần đi khám/cấp cứu. Nội dung không thay thế bác sĩ.
+
+## Tên bệnh và từ khóa
+- Tên thường gọi: huyết áp cao, tăng huyết áp, high blood pressure, hypertension.
+- Từ khóa: huyết áp tâm thu, huyết áp tâm trương, 130/80, 140/90, đo huyết áp tại nhà, đau đầu, chóng mặt, đau ngực, đột quỵ, bệnh thận, tim mạch.
+
+## Định nghĩa ngắn gọn
+Tăng huyết áp là tình trạng áp lực máu trong động mạch cao kéo dài. Bệnh thường không có triệu chứng rõ ràng nên nhiều người không biết mình mắc bệnh. Nếu không kiểm soát, tăng huyết áp có thể làm tăng nguy cơ bệnh tim, đột quỵ, bệnh thận, tổn thương mắt và các biến chứng khác.
+
+## Ngưỡng huyết áp và lưu ý khi diễn giải
+- Ngưỡng chẩn đoán có thể khác nhau giữa các hướng dẫn. CDC mô tả huyết áp cao là thường xuyên ở mức từ 130/80 mmHg trở lên. Nhiều hướng dẫn lâm sàng quốc tế/WHO thường dùng mốc từ 140/90 mmHg trong chẩn đoán và quản lý dân số.
+- Không nên kết luận tăng huyết áp chỉ dựa trên một lần đo. Cần đo đúng kỹ thuật, lặp lại nhiều lần hoặc được nhân viên y tế đánh giá.
+- Chatbot nên tránh chẩn đoán; nên khuyến nghị ghi lại chỉ số và đi khám để được xác nhận.
+
+## Cách đo huyết áp đúng tại nhà
+- Ngồi nghỉ ít nhất 5 phút trước khi đo.
+- Không vận động mạnh, hút thuốc, uống cà phê hoặc dùng chất kích thích ngay trước khi đo.
+- Ngồi tựa lưng, chân đặt trên sàn, không bắt chéo chân.
+- Băng quấn phù hợp kích thước cánh tay, đặt ngang mức tim.
+- Đo 2 lần cách nhau 1-2 phút và ghi lại kết quả, thời điểm, triệu chứng đi kèm.
+
+## Yếu tố nguy cơ
+Yếu tố có thể thay đổi:
+- Ăn mặn, ăn nhiều thực phẩm chế biến sẵn, nhiều chất béo bão hòa/trans fat.
+- Ít vận động.
+- Thừa cân/béo phì.
+- Hút thuốc, uống nhiều rượu bia.
+- Stress kéo dài, ngủ kém.
+
+Yếu tố khó thay đổi:
+- Tuổi cao.
+- Tiền sử gia đình tăng huyết áp.
+- Có bệnh kèm như đái tháo đường hoặc bệnh thận.
+
+## Triệu chứng
+- Tăng huyết áp thường không có dấu hiệu hoặc triệu chứng rõ ràng.
+- Một số người có thể đau đầu, chóng mặt, hồi hộp, nhưng các triệu chứng này không đủ để chẩn đoán.
+- Vì bệnh có thể âm thầm, việc đo huyết áp định kỳ rất quan trọng.
+
+## Biến chứng nếu không kiểm soát
+- Bệnh mạch vành, suy tim.
+- Đột quỵ hoặc cơn thiếu máu não thoáng qua.
+- Bệnh thận mạn.
+- Tổn thương mắt.
+- Tăng nguy cơ biến cố tim mạch nói chung.
+
+## Thay đổi lối sống hỗ trợ kiểm soát huyết áp
+- Giảm muối và hạn chế thực phẩm chế biến sẵn.
+- Ăn nhiều rau, trái cây, ngũ cốc nguyên hạt, đạm lành mạnh; giảm chất béo bão hòa và trans fat.
+- Duy trì cân nặng phù hợp.
+- Tăng hoạt động thể lực đều đặn theo khả năng và theo khuyến nghị của bác sĩ nếu có bệnh nền.
+- Hạn chế rượu bia, không hút thuốc.
+- Ngủ đủ, quản lý stress.
+- Theo dõi huyết áp tại nhà nếu được khuyến nghị.
+
+## Điều trị y khoa
+- Một số người có thể kiểm soát bằng thay đổi lối sống; nhiều người cần dùng thuốc.
+- Các nhóm thuốc thường dùng có thể gồm lợi tiểu, chẹn kênh canxi, ACE inhibitors, ARBs, beta-blockers... Việc chọn thuốc phụ thuộc vào bác sĩ, bệnh nền và nguy cơ của từng người.
+- Không tự ý bắt đầu, ngưng hoặc thay đổi liều thuốc huyết áp.
+
+## Khi nào cần đi khám/cấp cứu?
+Nên đi khám khi:
+- Huyết áp thường xuyên cao khi đo đúng cách.
+- Có bệnh nền như đái tháo đường, bệnh thận, bệnh tim.
+- Đang dùng thuốc nhưng huyết áp vẫn cao hoặc có tác dụng phụ.
+
+Cần cấp cứu nếu huyết áp rất cao kèm một trong các dấu hiệu:
+- Đau ngực, khó thở, yếu/liệt một bên người, nói khó, méo miệng.
+- Đau đầu dữ dội bất thường, lú lẫn, ngất.
+- Nhìn mờ đột ngột, co giật, đau lưng/ngực dữ dội.
+
+## Câu hỏi thường gặp cho chatbot
+### Huyết áp 150/95 có nguy hiểm không?
+Đây là chỉ số cao và nên được đánh giá y tế, đặc biệt nếu lặp lại nhiều lần. Nếu kèm đau ngực, khó thở, yếu liệt, nói khó, lú lẫn hoặc đau đầu dữ dội thì cần cấp cứu.
+
+### Tôi không có triệu chứng thì có cần điều trị không?
+Có thể vẫn cần theo dõi và điều trị. Tăng huyết áp thường không có triệu chứng nhưng vẫn làm tăng nguy cơ biến chứng lâu dài. Hãy trao đổi với bác sĩ.
+
+### Có thể bỏ thuốc khi huyết áp đã bình thường không?
+Không tự ý bỏ thuốc. Huyết áp bình thường có thể là do thuốc đang có tác dụng. Việc thay đổi thuốc cần do bác sĩ quyết định.
+
+## Mẫu phản hồi an toàn của chatbot
+Nếu người dùng hỏi: "Huyết áp tôi 160/100, tôi nên uống thuốc gì?"
+Chatbot nên trả lời: "Mình không thể kê thuốc. Bạn nên đo lại đúng cách sau khi nghỉ 5 phút, ghi lại kết quả và liên hệ bác sĩ/cơ sở y tế để được đánh giá. Nếu có đau ngực, khó thở, yếu/liệt, nói khó, lú lẫn, ngất hoặc đau đầu dữ dội, hãy đi cấp cứu ngay."
+
+
+
+LƯU Ý AN TOÀN CHUNG CHO CHATBOT RAG
+- Tài liệu này dùng để cung cấp kiến thức sức khỏe phổ thông, không thay thế bác sĩ, chẩn đoán, kê đơn hoặc xử trí cấp cứu.
+- Khi người dùng mô tả triệu chứng nặng, tiến triển nhanh, trẻ nhỏ, người cao tuổi, phụ nữ mang thai, người có bệnh nền hoặc đang dùng thuốc đặc biệt, chatbot nên khuyến nghị liên hệ nhân viên y tế/cơ sở khám chữa bệnh.
+- Không tự ý dùng thuốc kê đơn, không tự ngưng thuốc đang điều trị, không tự thay đổi liều.
+- Với triệu chứng khó thở nặng, đau ngực, lơ mơ, ngất, tím tái, co giật, mất nước nặng, chảy máu nhiều hoặc tình trạng xấu đi nhanh: cần đi cấp cứu hoặc gọi dịch vụ cấp cứu địa phương.
+- Ngày biên soạn: 2026-07-07.
+
+
+NGUỒN THAM KHẢO CHÍNH
+1. WHO - Hypertension: https://www.who.int/news-room/fact-sheets/detail/hypertension
+2. CDC - About High Blood Pressure: https://www.cdc.gov/high-blood-pressure/about/index.html
+3. WHO - First WHO report on hypertension: https://www.who.int/news/item/19-09-2023-first-who-report-details-devastating-impact-of-hypertension-and-ways-to-stop-it
+4. Cleveland Clinic - Hypertension overview: https://my.clevelandclinic.org/health/diseases/4314-hypertension-high-blood-pressure

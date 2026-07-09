@@ -1,0 +1,86 @@
+# CẢM LẠNH THÔNG THƯỜNG - TÀI LIỆU RAG CHO CHATBOT
+
+## Mục đích
+Tài liệu này giúp chatbot trả lời câu hỏi cơ bản về cảm lạnh: nguyên nhân, triệu chứng, chăm sóc tại nhà, phòng lây lan, khi nào cần đi khám và phân biệt sơ bộ với cúm/COVID-19. Nội dung chỉ dùng cho giáo dục sức khỏe.
+
+## Tên bệnh và từ khóa
+- Tên thường gọi: cảm lạnh, cảm thường, cảm cúm nhẹ, common cold.
+- Từ khóa triệu chứng: sổ mũi, nghẹt mũi, đau họng, ho, hắt hơi, sốt nhẹ, mệt, đau đầu nhẹ, đau nhức nhẹ.
+- Từ khóa chăm sóc: nghỉ ngơi, uống nước, rửa mũi bằng nước muối sinh lý, súc họng, thuốc giảm đau/hạ sốt không kê đơn theo hướng dẫn.
+
+## Định nghĩa ngắn gọn
+Cảm lạnh là nhiễm virus đường hô hấp trên, thường gây sổ mũi, nghẹt mũi, đau họng, ho và hắt hơi. Bệnh thường nhẹ và tự cải thiện. Kháng sinh không có tác dụng với virus cảm lạnh.
+
+## Nguyên nhân và lây truyền
+- Cảm lạnh do nhiều loại virus hô hấp gây ra.
+- Lây qua giọt bắn khi người bệnh ho/hắt hơi/nói chuyện, hoặc qua tay và bề mặt nhiễm virus rồi chạm vào mắt, mũi, miệng.
+- Người bệnh thường dễ lây trong những ngày đầu có triệu chứng.
+
+## Triệu chứng thường gặp
+- Sổ mũi hoặc nghẹt mũi.
+- Đau hoặc rát họng.
+- Ho.
+- Hắt hơi.
+- Mệt nhẹ, đau đầu nhẹ, đau nhức cơ nhẹ.
+- Sốt nhẹ có thể gặp, đặc biệt ở trẻ em.
+- Dịch mũi có thể chuyển đặc hoặc vàng/xanh trong quá trình bệnh; điều này không nhất thiết nghĩa là nhiễm khuẩn.
+
+## Chăm sóc tại nhà
+- Nghỉ ngơi và uống đủ nước.
+- Có thể dùng nước muối sinh lý để nhỏ/rửa mũi.
+- Súc họng nước muối ấm có thể giúp dễ chịu hơn.
+- Dùng thuốc hạ sốt/giảm đau không kê đơn theo đúng hướng dẫn độ tuổi, cân nặng và chống chỉ định.
+- Tránh tự ý dùng kháng sinh. Kháng sinh không giúp khỏi cảm lạnh do virus.
+- Trẻ nhỏ, phụ nữ mang thai, người có bệnh gan/thận, người đang dùng thuốc chống đông hoặc có bệnh nền nên hỏi nhân viên y tế trước khi dùng thuốc.
+
+## Khi nào cần đi khám?
+Chatbot nên khuyến nghị đi khám nếu:
+- Khó thở, thở nhanh, đau ngực, tím môi/tím đầu ngón.
+- Sốt cao, sốt kéo dài, hoặc sốt tái phát sau khi đã đỡ.
+- Mất nước, lơ mơ, li bì.
+- Đau họng dữ dội, khó nuốt, phát ban, đau tai nhiều.
+- Triệu chứng kéo dài bất thường hoặc ngày càng nặng.
+- Người bệnh là trẻ nhỏ, người cao tuổi, phụ nữ mang thai, người suy giảm miễn dịch hoặc có bệnh nền tim/phổi.
+
+## Phân biệt sơ bộ với cúm hoặc COVID-19
+- Cảm lạnh thường khởi phát từ từ, triệu chứng chủ yếu ở mũi/họng.
+- Cúm thường khởi phát đột ngột hơn, sốt cao, đau mỏi toàn thân, mệt nhiều.
+- COVID-19 có thể giống cảm lạnh hoặc cúm; nếu có nguy cơ, tiếp xúc gần hoặc triệu chứng nghi ngờ, nên xét nghiệm theo hướng dẫn y tế địa phương.
+- Chatbot không nên kết luận chắc chắn chỉ dựa trên triệu chứng; nên khuyên xét nghiệm/đi khám khi có nguy cơ hoặc triệu chứng nặng.
+
+## Phòng lây lan
+- Rửa tay thường xuyên bằng xà phòng hoặc dung dịch sát khuẩn tay.
+- Che miệng/mũi khi ho/hắt hơi, bỏ khăn giấy đã dùng đúng nơi.
+- Tránh chạm tay lên mắt, mũi, miệng.
+- Hạn chế tiếp xúc gần khi đang bệnh, đặc biệt với người dễ bị nặng.
+- Vệ sinh bề mặt thường chạm như tay nắm cửa, điện thoại, bàn phím.
+
+## Câu hỏi thường gặp cho chatbot
+### Cảm lạnh có cần uống kháng sinh không?
+Thông thường không. Cảm lạnh do virus nên kháng sinh không giúp khỏi bệnh và có thể gây tác dụng phụ hoặc tăng kháng thuốc. Chỉ dùng kháng sinh khi bác sĩ xác định có nhiễm khuẩn.
+
+### Cảm lạnh bao lâu thì khỏi?
+Nhiều trường hợp cải thiện trong vài ngày và hồi phục dần trong khoảng 1-2 tuần. Ho có thể kéo dài hơn. Nếu triệu chứng nặng lên hoặc kéo dài bất thường, nên đi khám.
+
+### Dịch mũi vàng/xanh có phải cần kháng sinh không?
+Không nhất thiết. Dịch mũi đặc hoặc đổi màu có thể xảy ra trong cảm lạnh do virus. Cần đi khám nếu có sốt cao kéo dài, đau xoang nhiều, khó thở hoặc triệu chứng xấu đi.
+
+## Mẫu phản hồi an toàn của chatbot
+Nếu người dùng hỏi: "Tôi bị sổ mũi, đau họng, ho nhẹ, nên uống gì?"
+Chatbot nên trả lời: "Triệu chứng của bạn có thể phù hợp với cảm lạnh thông thường, nhưng mình không thể chẩn đoán. Bạn có thể nghỉ ngơi, uống đủ nước, rửa mũi bằng nước muối sinh lý và dùng thuốc không kê đơn theo đúng hướng dẫn nếu cần. Không tự ý dùng kháng sinh. Nếu khó thở, đau ngực, sốt cao kéo dài, li bì hoặc triệu chứng nặng lên, hãy đi khám."
+
+
+
+LƯU Ý AN TOÀN CHUNG CHO CHATBOT RAG
+- Tài liệu này dùng để cung cấp kiến thức sức khỏe phổ thông, không thay thế bác sĩ, chẩn đoán, kê đơn hoặc xử trí cấp cứu.
+- Khi người dùng mô tả triệu chứng nặng, tiến triển nhanh, trẻ nhỏ, người cao tuổi, phụ nữ mang thai, người có bệnh nền hoặc đang dùng thuốc đặc biệt, chatbot nên khuyến nghị liên hệ nhân viên y tế/cơ sở khám chữa bệnh.
+- Không tự ý dùng thuốc kê đơn, không tự ngưng thuốc đang điều trị, không tự thay đổi liều.
+- Với triệu chứng khó thở nặng, đau ngực, lơ mơ, ngất, tím tái, co giật, mất nước nặng, chảy máu nhiều hoặc tình trạng xấu đi nhanh: cần đi cấp cứu hoặc gọi dịch vụ cấp cứu địa phương.
+- Ngày biên soạn: 2026-07-07.
+
+
+NGUỒN THAM KHẢO CHÍNH
+1. CDC - Manage Common Cold: https://www.cdc.gov/common-cold/treatment/index.html
+2. CDC - About Common Cold: https://www.cdc.gov/common-cold/about/index.html
+3. NHS - Common cold: https://www.nhs.uk/conditions/common-cold/
+4. Mayo Clinic - Common cold symptoms and causes: https://www.mayoclinic.org/diseases-conditions/common-cold/symptoms-causes/syc-20351605

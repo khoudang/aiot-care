@@ -1,0 +1,86 @@
+# SỐT XUẤT HUYẾT DENGUE - TÀI LIỆU RAG CHO CHATBOT
+
+## Mục đích
+Tài liệu này giúp chatbot trả lời các câu hỏi cơ bản về sốt xuất huyết Dengue: bệnh là gì, lây truyền ra sao, triệu chứng thường gặp, dấu hiệu cảnh báo, chăm sóc ban đầu, phòng bệnh và khi nào cần đi khám/cấp cứu. Nội dung dùng cho giáo dục sức khỏe, không thay thế chẩn đoán hoặc điều trị của bác sĩ.
+
+## Tên bệnh và từ khóa
+- Tên thường gọi: sốt xuất huyết, sốt xuất huyết Dengue, Dengue fever.
+- Từ khóa triệu chứng: sốt cao, đau đầu, đau sau hốc mắt, đau mỏi cơ, đau khớp, phát ban, buồn nôn, nôn, chảy máu cam, chảy máu chân răng, đau bụng, lừ đừ, vật vã.
+- Từ khóa phòng bệnh: muỗi Aedes, muỗi vằn, diệt lăng quăng/bọ gậy, loại bỏ nước đọng, ngủ màn, kem chống muỗi.
+
+## Định nghĩa ngắn gọn
+Sốt xuất huyết Dengue là bệnh do virus Dengue gây ra, lây sang người chủ yếu qua vết đốt của muỗi Aedes nhiễm virus. Bệnh gặp nhiều ở vùng nhiệt đới và cận nhiệt đới. Phần lớn người mắc có thể hồi phục sau khoảng 1-2 tuần, nhưng một số trường hợp tiến triển thành sốt xuất huyết nặng và cần chăm sóc y tế kịp thời.
+
+## Bệnh lây như thế nào?
+- Virus Dengue không lây trực tiếp như cảm lạnh qua ho/hắt hơi.
+- Đường lây chính là muỗi Aedes đốt người đang có virus trong máu rồi tiếp tục đốt người khác.
+- Muỗi Aedes thường sinh sản ở nơi nước đọng quanh nhà như chậu, xô, lọ hoa, lốp xe cũ, máng nước, vật chứa nước không đậy kín.
+
+## Triệu chứng thường gặp
+Người mắc có thể không có triệu chứng hoặc có triệu chứng từ nhẹ đến nặng. Triệu chứng thường gặp gồm:
+- Sốt cao đột ngột.
+- Đau đầu, đau sau hốc mắt.
+- Đau cơ, đau khớp, đau mỏi người.
+- Buồn nôn hoặc nôn.
+- Phát ban.
+- Có thể có chấm xuất huyết dưới da, chảy máu cam hoặc chảy máu chân răng.
+
+## Dấu hiệu cảnh báo cần đi khám ngay
+Chatbot nên khuyến nghị người dùng đi khám/cấp cứu nếu có một hoặc nhiều dấu hiệu sau, đặc biệt sau khi sốt giảm:
+- Đau bụng nhiều hoặc đau tăng.
+- Nôn nhiều, nôn liên tục hoặc không uống được.
+- Chảy máu cam, chảy máu chân răng, nôn ra máu, đi ngoài phân đen hoặc có máu.
+- Lừ đừ, bứt rứt, vật vã, mệt lả bất thường.
+- Tay chân lạnh, da ẩm, chóng mặt, ngất.
+- Tiểu ít, khát nhiều, dấu hiệu mất nước.
+- Khó thở, tức ngực hoặc tình trạng xấu đi nhanh.
+
+## Chăm sóc ban đầu khi nghi sốt xuất huyết nhẹ
+- Nghỉ ngơi, uống đủ nước. Có thể dùng dung dịch oresol theo hướng dẫn trên gói nếu có dấu hiệu mất nước nhẹ.
+- Theo dõi nhiệt độ, lượng nước uống, lượng nước tiểu, mức tỉnh táo và các dấu hiệu chảy máu.
+- Dùng thuốc hạ sốt theo hướng dẫn của nhân viên y tế. Không tự ý dùng quá liều.
+- Tránh tự ý dùng aspirin hoặc ibuprofen khi nghi sốt xuất huyết vì có thể làm tăng nguy cơ chảy máu.
+- Không tự truyền dịch tại nhà. Truyền dịch cần được chỉ định và theo dõi bởi nhân viên y tế.
+
+## Khi nào nên xét nghiệm/đi khám?
+- Sốt cao ở vùng đang có dịch hoặc sau khi bị muỗi đốt nhiều nên đi khám để được đánh giá.
+- Cần xét nghiệm máu theo chỉ định để hỗ trợ chẩn đoán và theo dõi tiểu cầu, hematocrit và các dấu hiệu nặng.
+- Người có bệnh nền, phụ nữ mang thai, trẻ nhỏ, người cao tuổi cần thận trọng hơn.
+
+## Phòng bệnh
+- Loại bỏ nơi muỗi sinh sản: đổ nước đọng, đậy kín dụng cụ chứa nước, thay nước bình hoa, vệ sinh máng nước.
+- Tránh muỗi đốt: mặc quần áo dài, ngủ màn, dùng kem/xịt chống muỗi đúng hướng dẫn, lắp lưới chống muỗi.
+- Khi trong nhà có người bệnh, cần tăng cường chống muỗi đốt để giảm nguy cơ muỗi truyền virus cho người khác.
+
+## Câu hỏi thường gặp cho chatbot
+### Sốt xuất huyết có tự khỏi không?
+Nhiều trường hợp hồi phục sau khoảng 1-2 tuần, nhưng bệnh có thể trở nặng. Cần theo dõi dấu hiệu cảnh báo và đi khám nếu có triệu chứng nặng hoặc không chắc chắn.
+
+### Sốt xuất huyết có uống kháng sinh không?
+Sốt xuất huyết do virus Dengue gây ra, kháng sinh không diệt được virus. Chỉ dùng kháng sinh khi bác sĩ xác định có nhiễm khuẩn kèm theo.
+
+### Hết sốt có phải đã an toàn chưa?
+Không luôn luôn. Giai đoạn sau khi sốt giảm có thể là thời điểm xuất hiện dấu hiệu cảnh báo. Cần tiếp tục theo dõi đau bụng, nôn nhiều, chảy máu, lừ đừ, tay chân lạnh, tiểu ít.
+
+### Có nên tự uống aspirin hoặc ibuprofen để hạ sốt không?
+Không nên tự dùng aspirin hoặc ibuprofen khi nghi sốt xuất huyết vì có thể tăng nguy cơ chảy máu. Người bệnh nên hỏi nhân viên y tế về thuốc hạ sốt phù hợp.
+
+## Mẫu phản hồi an toàn của chatbot
+Nếu người dùng hỏi: "Tôi sốt cao, đau người, nghi sốt xuất huyết, nên làm gì?"
+Chatbot nên trả lời: "Bạn nên nghỉ ngơi, uống đủ nước và đi khám để được đánh giá, nhất là nếu đang ở vùng có dịch. Nếu có đau bụng nhiều, nôn liên tục, chảy máu, lừ đừ, tay chân lạnh, tiểu ít hoặc khó thở thì cần đi cấp cứu ngay. Không tự ý dùng aspirin/ibuprofen hoặc tự truyền dịch tại nhà."
+
+
+
+LƯU Ý AN TOÀN CHUNG CHO CHATBOT RAG
+- Tài liệu này dùng để cung cấp kiến thức sức khỏe phổ thông, không thay thế bác sĩ, chẩn đoán, kê đơn hoặc xử trí cấp cứu.
+- Khi người dùng mô tả triệu chứng nặng, tiến triển nhanh, trẻ nhỏ, người cao tuổi, phụ nữ mang thai, người có bệnh nền hoặc đang dùng thuốc đặc biệt, chatbot nên khuyến nghị liên hệ nhân viên y tế/cơ sở khám chữa bệnh.
+- Không tự ý dùng thuốc kê đơn, không tự ngưng thuốc đang điều trị, không tự thay đổi liều.
+- Với triệu chứng khó thở nặng, đau ngực, lơ mơ, ngất, tím tái, co giật, mất nước nặng, chảy máu nhiều hoặc tình trạng xấu đi nhanh: cần đi cấp cứu hoặc gọi dịch vụ cấp cứu địa phương.
+- Ngày biên soạn: 2026-07-07.
+
+
+NGUỒN THAM KHẢO CHÍNH
+1. WHO - Dengue and severe dengue: https://www.who.int/news-room/fact-sheets/detail/dengue-and-severe-dengue
+2. CDC - Symptoms of Dengue and Testing: https://www.cdc.gov/dengue/signs-symptoms/index.html
+3. CDC - Clinical Care of Dengue: https://www.cdc.gov/dengue/hcp/clinical-care/index.html
+4. Bộ Y tế Việt Nam - Quyết định 2760/QĐ-BYT năm 2023, Hướng dẫn chẩn đoán, điều trị Sốt xuất huyết Dengue.

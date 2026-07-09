@@ -1,0 +1,53 @@
+Node,Thiết bị,Chân thiết bị,Loại tín hiệu,ESP32
+Phòng bệnh,SHT30,VCC,Nguồn,3V3
+,,GND,GND,GND
+,,SDA,I2C,GPIO8
+,,SCL,I2C,GPIO9
+,Buzzer,GND,GND,GND
+,,VCC,Digital/PWM,GPIO0
+,Driver quạt,IN1,Digital/PWM,GPIO1
+,,GND,GND,GND
+,,IN2,Digital/PWM,GPIO2
+,UART Pi,RX,UART,GPIO20
+,,TX,UART,GPIO21
+,Servo tracking,VCC,Nguồn,5V
+,,GND,GND,GND
+,,Signal,PWM Output,GPIO6
+,PIR HC-SR501,VCC,Nguồn,5V
+,,GND,GND,GND
+,,OUT,Digital Input,GPIO5
+,,,,
+Phòng bếp ,MQ-2,VCC,Nguồn,5V
+,,GND,GND,GND
+,,AO,Analog (ADC),GPIO0
+,,DO,Digital ,GPIO1
+,Flame Sensor,VCC,Nguồn,3V3
+,,GND,GND,GND
+,,DO,Digital Input,GPIO2
+,Relay đèn,IN,Digital Output,GPIO4
+,,VCC,Nguồn,5V
+,,GND,GND,GND
+,Servo SG90,VCC,Nguồn,5V
+,,GND,GND,GND
+,,Signal,PWM Output,GPIO3
+,Driver quạt hút,IN1,Digital/PWM,GPIO7
+,,GND,GND,GND
+,,IN2,Digital/PWM,GPIO8
+,,,,
+Phòng khách,PIR HC-SR501,VCC,Nguồn,5V
+,,GND,GND,GND
+,,OUT,Digital Input,GPIO10
+,BH1750,VCC,Nguồn,3V3
+,,GND,GND,GND
+,,SDA,I2C,GPIO8
+,,SCL,I2C,GPIO9
+,SHT30,VCC,Nguồn,3V3
+,,GND,GND,GND
+,,SDA,I2C,GPIO8
+,,SCL,I2C,GPIO9
+,Relay đèn,IN,Digital Output,GPIO7
+,,VCC,Nguồn,5V
+,,GND,GND,GND
+,Driver quạt,IN1,Digital/PWM,GPIO1
+,,GND,GND,GND
+,,IN2,Digital/PWM,GPIO2

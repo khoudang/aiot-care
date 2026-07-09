@@ -199,7 +199,7 @@ def _api_key():
     return key
 
 
-def gemini_embed(text: str, task_type="RETRIEVAL_DOCUMENT", max_retries=3):
+def gemini_embed(text: str, task_type="RETRIEVAL_DOCUMENT"):
     url = (
         "https://generativelanguage.googleapis.com/v1beta/"
         f"models/{GEMINI_EMBEDDING_MODEL}:embedContent"
@@ -207,7 +207,6 @@ def gemini_embed(text: str, task_type="RETRIEVAL_DOCUMENT", max_retries=3):
     )
 
     payload = {
-        "model": f"models/{GEMINI_EMBEDDING_MODEL}",
         "content": {
             "parts": [
                 {"text": text}
@@ -216,31 +215,18 @@ def gemini_embed(text: str, task_type="RETRIEVAL_DOCUMENT", max_retries=3):
         "taskType": task_type,
     }
 
-    import time
-    for attempt in range(max_retries):
-        try:
-            resp = requests.post(url, json=payload, timeout=MEDICAL_RAG_REQUEST_TIMEOUT)
-            data = resp.json() if resp.content else {}
+    resp = requests.post(url, json=payload, timeout=MEDICAL_RAG_REQUEST_TIMEOUT)
+    data = resp.json() if resp.content else {}
 
-            if resp.status_code >= 400:
-                message = data.get("error", {}).get("message", "Lỗi Gemini embedding API.")
-                if _is_retryable_gemini_error(resp.status_code, message):
-                    print(f"Server Gemini đang quá tải, thử lại lần {attempt + 1}/{max_retries} sau 5 giây...")
-                    time.sleep(5)
-                    continue
-                raise RuntimeError(message)
+    if resp.status_code >= 400:
+        message = data.get("error", {}).get("message", "Lỗi Gemini embedding API.")
+        raise RuntimeError(message)
 
-            values = data.get("embedding", {}).get("values", [])
-            if not values:
-                raise RuntimeError("Gemini không trả về embedding.")
+    values = data.get("embedding", {}).get("values", [])
+    if not values:
+        raise RuntimeError("Gemini không trả về embedding.")
 
-            return [float(v) for v in values]
-        except requests.exceptions.RequestException as e:
-            if attempt == max_retries - 1:
-                raise RuntimeError(f"Lỗi mạng: {str(e)}")
-            time.sleep(5)
-            
-    raise RuntimeError("Gemini API liên tục báo quá tải. Vui lòng thử lại sau.")
+    return [float(v) for v in values]
 
 
 def _is_retryable_gemini_error(status_code: int, message: str) -> bool:
