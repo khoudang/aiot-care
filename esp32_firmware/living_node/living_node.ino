@@ -3,6 +3,9 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 #include <ArduinoJson.h>
+#include <Wire.h>
+#include <Adafruit_SHT31.h>
+#include <BH1750.h>
 
 #define SERVICE_UUID           "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define NOTIFY_CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
@@ -12,12 +15,16 @@ BLEServer* pServer = NULL;
 BLECharacteristic* pNotifyChar = NULL;
 bool deviceConnected = false;
 
-const int PIN_DHT = 2;
-const int PIN_PIR = 3;
-const int PIN_LDR = 4;
+// Pinout theo sơ đồ Excel
+const int PIN_SDA = 8;
+const int PIN_SCL = 9;
+const int PIN_PIR = 10;
+const int PIN_LIGHT_RELAY = 7;
+const int PIN_FAN_IN1 = 1;
+const int PIN_FAN_IN2 = 2;
 
-const int PIN_LIGHT = 5;
-const int PIN_FAN = 6;
+Adafruit_SHT31 sht31 = Adafruit_SHT31();
+BH1750 lightMeter;
 
 bool auto_mode = true;
 
@@ -35,9 +42,17 @@ class MyCommandCallbacks: public BLECharacteristicCallbacks {
       if (value.length() > 0) {
         StaticJsonDocument<200> doc;
         if (!deserializeJson(doc, value)) {
-          if (doc.containsKey("light")) digitalWrite(PIN_LIGHT, doc["light"] ? HIGH : LOW);
-          if (doc.containsKey("fan")) digitalWrite(PIN_FAN, doc["fan"] ? HIGH : LOW);
-          if (doc.containsKey("auto")) auto_mode = doc["auto"];
+          if (doc.containsKey("light")) {
+            digitalWrite(PIN_LIGHT_RELAY, doc["light"] ? HIGH : LOW);
+          }
+          if (doc.containsKey("fan")) {
+            bool on = doc["fan"];
+            digitalWrite(PIN_FAN_IN1, on ? HIGH : LOW);
+            digitalWrite(PIN_FAN_IN2, LOW); // Quay 1 chiều
+          }
+          if (doc.containsKey("auto")) {
+            auto_mode = doc["auto"];
+          }
         }
       }
     }
@@ -45,10 +60,25 @@ class MyCommandCallbacks: public BLECharacteristicCallbacks {
 
 void setup() {
   Serial.begin(115200);
-  pinMode(PIN_LIGHT, OUTPUT);
-  pinMode(PIN_FAN, OUTPUT);
-  pinMode(PIN_PIR, INPUT);
   
+  pinMode(PIN_PIR, INPUT);
+  pinMode(PIN_LIGHT_RELAY, OUTPUT);
+  pinMode(PIN_FAN_IN1, OUTPUT);
+  pinMode(PIN_FAN_IN2, OUTPUT);
+  
+  digitalWrite(PIN_LIGHT_RELAY, LOW);
+  digitalWrite(PIN_FAN_IN1, LOW);
+  digitalWrite(PIN_FAN_IN2, LOW);
+
+  Wire.begin(PIN_SDA, PIN_SCL);
+  if (!sht31.begin(0x44)) {
+    Serial.println("Couldn't find SHT31");
+  }
+  if (!lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x23, &Wire)) {
+    Serial.println("Couldn't find BH1750");
+  }
+
+  // Khởi tạo BLE
   BLEDevice::init("AIoT_Living_Node");
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
@@ -69,19 +99,24 @@ void setup() {
 }
 
 void loop() {
-  if (deviceConnected) {
-    float temp = 26.0 + random(0, 10)/10.0;
-    float hum = 55.0 + random(0, 5);
-    int lux = analogRead(PIN_LDR);
+  static unsigned long lastSend = 0;
+  if (deviceConnected && millis() - lastSend > 1000) {
+    lastSend = millis();
+    
+    float t = sht31.readTemperature();
+    float h = sht31.readHumidity();
+    float lux = lightMeter.readLightLevel();
     bool motion = digitalRead(PIN_PIR) == HIGH;
+
+    if (isnan(t)) t = 0.0;
+    if (isnan(h)) h = 0.0;
 
     char payload[150];
     snprintf(payload, sizeof(payload), 
       "{\"room\":\"living\",\"temp\":%.1f,\"hum\":%.1f,\"lux\":%d,\"motion\":%s}", 
-      temp, hum, lux, motion ? "true" : "false");
+      t, h, (int)lux, motion ? "true" : "false");
 
     pNotifyChar->setValue(payload);
     pNotifyChar->notify();
   }
-  delay(1000);
 }

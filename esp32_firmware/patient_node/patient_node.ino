@@ -2,9 +2,11 @@
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
-#include <ArduinoJson.h> // Cần cài đặt thư viện ArduinoJson trong Arduino IDE
+#include <ArduinoJson.h>
+#include <Wire.h>
+#include <Adafruit_SHT31.h>
+#include <ESP32Servo.h>
 
-// Định nghĩa các UUID (Khớp với config.py trên Pi)
 #define SERVICE_UUID           "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define NOTIFY_CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 #define COMMAND_CHARACTERISTIC_UUID "1c95d5e3-d03b-4c71-b54d-172fa5545a74"
@@ -13,55 +15,42 @@ BLEServer* pServer = NULL;
 BLECharacteristic* pNotifyChar = NULL;
 bool deviceConnected = false;
 
-// Khai báo chân (Tuỳ chỉnh theo ESP32-C3 Super Mini của bạn)
-const int PIN_DHT = 2; // Ví dụ chân DHT
-const int PIN_MQ2 = 3;
-const int PIN_PIR = 4;
+// Pinout theo sơ đồ Excel
+const int PIN_SDA = 8;
+const int PIN_SCL = 9;
+const int PIN_BUZZER = 0;
+const int PIN_FAN_IN1 = 1;
+const int PIN_FAN_IN2 = 2;
+const int PIN_UART_RX = 20;
+const int PIN_UART_TX = 21;
+const int PIN_SERVO = 6;
+const int PIN_PIR = 5;
 
-const int PIN_LIGHT = 5;
-const int PIN_FAN = 6;
-const int PIN_BUZZER = 7;
+Adafruit_SHT31 sht31 = Adafruit_SHT31();
+Servo trackingServo;
 
-// Callback xử lý khi Pi kết nối/ngắt kết nối
 class MyServerCallbacks: public BLEServerCallbacks {
-    void onConnect(BLEServer* pServer) {
-      deviceConnected = true;
-      Serial.println("Pi Connected!");
-    };
+    void onConnect(BLEServer* pServer) { deviceConnected = true; }
     void onDisconnect(BLEServer* pServer) {
       deviceConnected = false;
-      Serial.println("Pi Disconnected!");
-      // Bật lại quảng bá để Pi có thể kết nối lại
       BLEDevice::startAdvertising();
     }
 };
 
-// Callback xử lý khi Pi gửi lệnh (command) xuống Node
 class MyCommandCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
       String value = pCharacteristic->getValue().c_str();
       if (value.length() > 0) {
-        Serial.print("Received command: ");
-        Serial.println(value);
-        
         StaticJsonDocument<200> doc;
-        DeserializationError error = deserializeJson(doc, value);
-        if (error) {
-          Serial.println("Failed to parse JSON");
-          return;
-        }
-
-        if (doc.containsKey("light")) {
-          bool state = doc["light"];
-          digitalWrite(PIN_LIGHT, state ? HIGH : LOW);
-        }
-        if (doc.containsKey("fan")) {
-          bool state = doc["fan"];
-          digitalWrite(PIN_FAN, state ? HIGH : LOW);
-        }
-        if (doc.containsKey("buzzer")) {
-          bool state = doc["buzzer"];
-          digitalWrite(PIN_BUZZER, state ? HIGH : LOW);
+        if (!deserializeJson(doc, value)) {
+          if (doc.containsKey("buzzer")) {
+            digitalWrite(PIN_BUZZER, doc["buzzer"] ? HIGH : LOW);
+          }
+          if (doc.containsKey("fan")) {
+            bool on = doc["fan"];
+            digitalWrite(PIN_FAN_IN1, on ? HIGH : LOW);
+            digitalWrite(PIN_FAN_IN2, LOW); // Quay 1 chiều
+          }
         }
       }
     }
@@ -69,66 +58,79 @@ class MyCommandCallbacks: public BLECharacteristicCallbacks {
 
 void setup() {
   Serial.begin(115200);
-
-  // Setup I/O
-  pinMode(PIN_LIGHT, OUTPUT);
-  pinMode(PIN_FAN, OUTPUT);
+  
+  // Khởi tạo UART cho Pi (Giao tiếp Serial gửi góc quay)
+  Serial1.begin(115200, SERIAL_8N1, PIN_UART_RX, PIN_UART_TX);
+  
+  // Cấu hình chân
   pinMode(PIN_BUZZER, OUTPUT);
+  pinMode(PIN_FAN_IN1, OUTPUT);
+  pinMode(PIN_FAN_IN2, OUTPUT);
   pinMode(PIN_PIR, INPUT);
   
+  digitalWrite(PIN_BUZZER, LOW);
+  digitalWrite(PIN_FAN_IN1, LOW);
+  digitalWrite(PIN_FAN_IN2, LOW);
+
+  trackingServo.attach(PIN_SERVO);
+  trackingServo.write(90); // Mặc định ở giữa
+  
+  Wire.begin(PIN_SDA, PIN_SCL);
+  if (!sht31.begin(0x44)) {
+    Serial.println("Couldn't find SHT31");
+  }
+
   // Khởi tạo BLE
   BLEDevice::init("AIoT_Patient_Node");
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
 
   BLEService *pService = pServer->createService(SERVICE_UUID);
-
-  // Đặc tính gửi dữ liệu (Notify)
-  pNotifyChar = pService->createCharacteristic(
-                      NOTIFY_CHARACTERISTIC_UUID,
-                      BLECharacteristic::PROPERTY_NOTIFY
-                    );
+  pNotifyChar = pService->createCharacteristic(NOTIFY_CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_NOTIFY);
   pNotifyChar->addDescriptor(new BLE2902());
 
-  // Đặc tính nhận lệnh (Write)
-  BLECharacteristic *pCommandChar = pService->createCharacteristic(
-                                         COMMAND_CHARACTERISTIC_UUID,
-                                         BLECharacteristic::PROPERTY_WRITE | 
-                                         BLECharacteristic::PROPERTY_WRITE_NR
-                                       );
+  BLECharacteristic *pCommandChar = pService->createCharacteristic(COMMAND_CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
   pCommandChar->setCallbacks(new MyCommandCallbacks());
 
   pService->start();
-
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
   pAdvertising->setScanResponse(true);
   pAdvertising->setMinPreferred(0x06);
-  pAdvertising->setMinPreferred(0x12);
   BLEDevice::startAdvertising();
-  Serial.println("BLE Started. Waiting for Pi to connect...");
 }
 
 void loop() {
-  if (deviceConnected) {
-    // Đọc cảm biến (Giả lập giá trị hoặc dùng hàm thư viện DHT thực tế)
-    float temp = 25.0 + random(0, 10)/10.0; 
-    float hum = 60.0 + random(0, 5);
-    int gas = analogRead(PIN_MQ2);
+  // Xử lý lệnh UART từ Pi để quay Servo
+  if (Serial1.available()) {
+    String cmd = Serial1.readStringUntil('\n');
+    cmd.trim();
+    if (cmd.startsWith("A")) {
+      int angle = cmd.substring(1).toInt();
+      if (angle >= 0 && angle <= 180) {
+        trackingServo.write(angle);
+      }
+    }
+  }
+
+  // Gửi BLE định kỳ (1s/lần)
+  static unsigned long lastSend = 0;
+  if (deviceConnected && millis() - lastSend > 1000) {
+    lastSend = millis();
+    
+    float t = sht31.readTemperature();
+    float h = sht31.readHumidity();
     bool motion = digitalRead(PIN_PIR) == HIGH;
 
-    // Đóng gói JSON
+    if (isnan(t)) t = 0.0;
+    if (isnan(h)) h = 0.0;
+
     char payload[150];
     snprintf(payload, sizeof(payload), 
-      "{\"room\":\"patient\",\"temp\":%.1f,\"hum\":%.1f,\"gas\":%d,\"motion\":%s}", 
-      temp, hum, gas, motion ? "true" : "false");
+      "{\"room\":\"patient\",\"temp\":%.1f,\"hum\":%.1f,\"motion\":%s}", 
+      t, h, motion ? "true" : "false");
 
-    // Gửi lên Pi
     pNotifyChar->setValue(payload);
     pNotifyChar->notify();
-    Serial.print("Sent: ");
-    Serial.println(payload);
   }
-  
-  delay(1000); // Gửi dữ liệu mỗi 1 giây
 }

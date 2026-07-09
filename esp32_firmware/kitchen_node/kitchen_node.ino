@@ -13,12 +13,14 @@ BLEServer* pServer = NULL;
 BLECharacteristic* pNotifyChar = NULL;
 bool deviceConnected = false;
 
-const int PIN_MQ2 = 2;
-const int PIN_SMOKE = 3;
-const int PIN_FLAME = 4;
-
-const int PIN_WINDOW_SERVO = 5;
-const int PIN_EXHAUST = 6;
+// Pinout theo sơ đồ Excel
+const int PIN_MQ2_AO = 0;
+const int PIN_MQ2_DO = 1;
+const int PIN_FLAME_DO = 2;
+const int PIN_WINDOW_SERVO = 3;
+const int PIN_LIGHT_RELAY = 4;
+const int PIN_EXHAUST_IN1 = 7;
+const int PIN_EXHAUST_IN2 = 8;
 
 Servo windowServo;
 
@@ -41,7 +43,12 @@ class MyCommandCallbacks: public BLECharacteristicCallbacks {
             windowServo.write(open ? 90 : 0);
           }
           if (doc.containsKey("exhaust")) {
-            digitalWrite(PIN_EXHAUST, doc["exhaust"] ? HIGH : LOW);
+            bool on = doc["exhaust"];
+            digitalWrite(PIN_EXHAUST_IN1, on ? HIGH : LOW);
+            digitalWrite(PIN_EXHAUST_IN2, LOW);
+          }
+          if (doc.containsKey("light")) {
+            digitalWrite(PIN_LIGHT_RELAY, doc["light"] ? HIGH : LOW);
           }
         }
       }
@@ -50,10 +57,18 @@ class MyCommandCallbacks: public BLECharacteristicCallbacks {
 
 void setup() {
   Serial.begin(115200);
-  pinMode(PIN_EXHAUST, OUTPUT);
-  pinMode(PIN_SMOKE, INPUT);
-  pinMode(PIN_FLAME, INPUT);
   
+  pinMode(PIN_MQ2_AO, INPUT);
+  pinMode(PIN_MQ2_DO, INPUT);
+  pinMode(PIN_FLAME_DO, INPUT);
+  pinMode(PIN_LIGHT_RELAY, OUTPUT);
+  pinMode(PIN_EXHAUST_IN1, OUTPUT);
+  pinMode(PIN_EXHAUST_IN2, OUTPUT);
+  
+  digitalWrite(PIN_LIGHT_RELAY, LOW);
+  digitalWrite(PIN_EXHAUST_IN1, LOW);
+  digitalWrite(PIN_EXHAUST_IN2, LOW);
+
   windowServo.attach(PIN_WINDOW_SERVO);
   windowServo.write(0); // Đóng mặc định
   
@@ -77,10 +92,13 @@ void setup() {
 }
 
 void loop() {
-  if (deviceConnected) {
-    int gas = analogRead(PIN_MQ2);
-    bool smoke = digitalRead(PIN_SMOKE) == HIGH;
-    bool flame = digitalRead(PIN_FLAME) == LOW; // Cảm biến lửa thường kéo xuống LOW khi có lửa
+  static unsigned long lastSend = 0;
+  if (deviceConnected && millis() - lastSend > 1000) {
+    lastSend = millis();
+    
+    int gas = analogRead(PIN_MQ2_AO);
+    bool smoke = (digitalRead(PIN_MQ2_DO) == HIGH); 
+    bool flame = (digitalRead(PIN_FLAME_DO) == LOW); // LOW nghĩa là có lửa
 
     char payload[150];
     snprintf(payload, sizeof(payload), 
@@ -90,5 +108,4 @@ void loop() {
     pNotifyChar->setValue(payload);
     pNotifyChar->notify();
   }
-  delay(1000);
 }
