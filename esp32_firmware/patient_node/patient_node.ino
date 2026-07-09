@@ -91,6 +91,8 @@ void setup() {
   // Khởi tạo BLE
   Serial.println("[5] Init BLE...");
   BLEDevice::init("AIoT_Patient_Node");
+  Serial.printf("    => MAC ADDRESS: %s\n", BLEDevice::getAddress().toString().c_str());
+  
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
 

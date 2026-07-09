@@ -88,6 +88,8 @@ void setup() {
 
   Serial.println("[3] Init BLE...");
   BLEDevice::init("AIoT_Living_Node");
+  Serial.printf("    => MAC ADDRESS: %s\n", BLEDevice::getAddress().toString().c_str());
+  
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
 
