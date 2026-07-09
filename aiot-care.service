@@ -1,0 +1,15 @@
+[Unit]
+Description=AIoT Care Station
+After=network.target
+
+[Service]
+Type=simple
+User=khoi
+WorkingDirectory=/home/khoi/aiot-care
+ExecStart=/home/khoi/aiot-care/venv311/bin/python3 app.py
+Restart=always
+RestartSec=10
+Environment=PATH=/home/khoi/aiot-care/venv311/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=multi-user.target
