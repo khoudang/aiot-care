@@ -1,0 +1,107 @@
+# TIỂU ĐƯỜNG / ĐÁI THÁO ĐƯỜNG - TÀI LIỆU RAG CHO CHATBOT
+
+## Mục đích
+Tài liệu này giúp chatbot trả lời câu hỏi cơ bản về đái tháo đường: bệnh là gì, triệu chứng, xét nghiệm, phân loại, biến chứng, quản lý hằng ngày, phòng ngừa type 2 và khi nào cần đi khám/cấp cứu. Nội dung không thay thế bác sĩ.
+
+## Tên bệnh và từ khóa
+- Tên thường gọi: tiểu đường, đái tháo đường, diabetes, diabetes mellitus.
+- Từ khóa triệu chứng: khát nhiều, tiểu nhiều, đói nhiều, sụt cân, mệt mỏi, nhìn mờ, vết thương lâu lành, nhiễm trùng tái phát, tê bì tay chân.
+- Từ khóa xét nghiệm: đường huyết đói, HbA1c/A1C, nghiệm pháp dung nạp glucose, đường huyết bất kỳ.
+
+## Định nghĩa ngắn gọn
+Đái tháo đường là bệnh mạn tính xảy ra khi đường huyết cao kéo dài do cơ thể không sản xuất đủ insulin, không sử dụng insulin hiệu quả, hoặc cả hai. Nếu không kiểm soát, đường huyết cao có thể gây tổn thương tim mạch, thận, mắt, thần kinh và nhiều cơ quan khác.
+
+## Các loại thường gặp
+- Type 1: thường do cơ thể thiếu insulin nghiêm trọng; người bệnh thường cần insulin. Triệu chứng có thể xuất hiện nhanh.
+- Type 2: thường liên quan đến đề kháng insulin và giảm chức năng tiết insulin; phổ biến hơn, có thể diễn tiến âm thầm nhiều năm.
+- Đái tháo đường thai kỳ: xuất hiện trong thai kỳ và cần theo dõi chặt chẽ cho mẹ và thai nhi.
+
+## Triệu chứng thường gặp
+- Đi tiểu nhiều, đặc biệt tiểu đêm.
+- Khát nhiều, uống nước nhiều.
+- Đói nhiều.
+- Sụt cân không rõ lý do.
+- Mệt mỏi, dễ cáu gắt.
+- Nhìn mờ.
+- Vết thương lâu lành.
+- Nhiễm trùng da, tiết niệu hoặc nấm tái phát.
+- Tê, châm chích, đau rát bàn chân/bàn tay.
+
+## Xét nghiệm và ngưỡng tham khảo
+Chatbot không được chẩn đoán, nhưng có thể giải thích ý nghĩa xét nghiệm theo nguồn tham khảo uy tín. Kết quả cần được bác sĩ xác nhận, đôi khi cần lặp lại xét nghiệm.
+
+Một số ngưỡng thường dùng:
+- A1C dưới 5,7%: thường được xem là bình thường.
+- A1C 5,7%-6,4%: tiền đái tháo đường.
+- A1C từ 6,5% trở lên: phù hợp tiêu chuẩn chẩn đoán đái tháo đường nếu được xác nhận theo quy trình y tế.
+- Đường huyết đói dưới 100 mg/dL: bình thường.
+- Đường huyết đói 100-125 mg/dL: tiền đái tháo đường.
+- Đường huyết đói từ 126 mg/dL trở lên: phù hợp tiêu chuẩn chẩn đoán đái tháo đường nếu được xác nhận.
+- Nghiệm pháp dung nạp glucose sau 2 giờ từ 200 mg/dL trở lên: phù hợp tiêu chuẩn chẩn đoán đái tháo đường.
+- Đường huyết bất kỳ từ 200 mg/dL trở lên kèm triệu chứng điển hình cần được đánh giá y tế.
+
+## Biến chứng lâu dài
+- Bệnh tim mạch và đột quỵ.
+- Bệnh thận mạn.
+- Bệnh võng mạc, giảm thị lực.
+- Tổn thương thần kinh, tê bì/đau rát chân tay.
+- Vết thương bàn chân lâu lành, nguy cơ nhiễm trùng.
+- Tăng nguy cơ nhiễm trùng.
+
+## Quản lý hằng ngày
+- Ăn uống cân bằng, kiểm soát khẩu phần tinh bột/đường theo hướng dẫn cá nhân hóa.
+- Hoạt động thể lực đều đặn theo khả năng và theo tư vấn y tế.
+- Dùng thuốc/insulin đúng chỉ định nếu đã được kê.
+- Theo dõi đường huyết nếu bác sĩ yêu cầu.
+- Khám định kỳ để kiểm tra mắt, thận, bàn chân, huyết áp, mỡ máu và biến chứng.
+- Không tự ý ngưng thuốc khi đường huyết đã ổn.
+
+## Phòng ngừa hoặc trì hoãn type 2
+- Duy trì cân nặng phù hợp.
+- Ăn uống lành mạnh, tăng rau, chất xơ, hạn chế đồ uống nhiều đường và thực phẩm siêu chế biến.
+- Vận động thường xuyên.
+- Không hút thuốc.
+- Kiểm tra sức khỏe định kỳ nếu có yếu tố nguy cơ như thừa cân, tiền sử gia đình, tăng huyết áp, rối loạn mỡ máu, tiền sử đái tháo đường thai kỳ.
+
+## Dấu hiệu cần đi khám/cấp cứu
+Nên đi khám khi:
+- Có triệu chứng khát nhiều, tiểu nhiều, sụt cân, mệt kéo dài hoặc nhìn mờ.
+- Kết quả A1C/đường huyết cao hoặc nghi ngờ tiền đái tháo đường.
+- Người đã mắc đái tháo đường có đường huyết thường xuyên ngoài mục tiêu, vết thương lâu lành, đau/tê chân, nhìn mờ.
+
+Cần cấp cứu hoặc liên hệ y tế khẩn nếu:
+- Lơ mơ, ngất, co giật.
+- Nôn nhiều, đau bụng, thở nhanh/sâu bất thường, hơi thở mùi trái cây, mất nước nặng.
+- Đường huyết rất thấp kèm lú lẫn, không uống/ăn được hoặc không tỉnh táo.
+
+## Câu hỏi thường gặp cho chatbot
+### A1C 6,7% có phải tiểu đường không?
+A1C từ 6,5% trở lên phù hợp tiêu chuẩn chẩn đoán đái tháo đường, nhưng cần được bác sĩ xác nhận và đánh giá toàn diện. Bạn nên mang kết quả đi khám.
+
+### Tiểu đường type 2 có chữa khỏi hoàn toàn không?
+Type 2 là bệnh mạn tính nhưng có thể kiểm soát rất tốt. Một số người có thể đạt lui bệnh/kiểm soát đường huyết tốt nhờ giảm cân, ăn uống, vận động và/hoặc thuốc, nhưng vẫn cần theo dõi lâu dài.
+
+### Có phải cứ ăn đường là bị tiểu đường không?
+Không đơn giản như vậy. Nguy cơ type 2 liên quan đến nhiều yếu tố như di truyền, cân nặng, đề kháng insulin, chế độ ăn, vận động, tuổi và bệnh nền. Tuy nhiên hạn chế đồ uống nhiều đường và ăn uống lành mạnh giúp giảm nguy cơ.
+
+## Mẫu phản hồi an toàn của chatbot
+Nếu người dùng hỏi: "Tôi khát nhiều, tiểu nhiều và sụt cân, có phải bị tiểu đường không?"
+Chatbot nên trả lời: "Các triệu chứng này có thể gặp trong đái tháo đường nhưng cũng có thể do nguyên nhân khác. Bạn nên đi khám và làm xét nghiệm đường huyết/A1C để được xác nhận. Nếu có lơ mơ, nôn nhiều, đau bụng, thở bất thường hoặc mất nước nặng, hãy đi cấp cứu."
+
+
+
+LƯU Ý AN TOÀN CHUNG CHO CHATBOT RAG
+- Tài liệu này dùng để cung cấp kiến thức sức khỏe phổ thông, không thay thế bác sĩ, chẩn đoán, kê đơn hoặc xử trí cấp cứu.
+- Khi người dùng mô tả triệu chứng nặng, tiến triển nhanh, trẻ nhỏ, người cao tuổi, phụ nữ mang thai, người có bệnh nền hoặc đang dùng thuốc đặc biệt, chatbot nên khuyến nghị liên hệ nhân viên y tế/cơ sở khám chữa bệnh.
+- Không tự ý dùng thuốc kê đơn, không tự ngưng thuốc đang điều trị, không tự thay đổi liều.
+- Với triệu chứng khó thở nặng, đau ngực, lơ mơ, ngất, tím tái, co giật, mất nước nặng, chảy máu nhiều hoặc tình trạng xấu đi nhanh: cần đi cấp cứu hoặc gọi dịch vụ cấp cứu địa phương.
+- Ngày biên soạn: 2026-07-07.
+
+
+NGUỒN THAM KHẢO CHÍNH
+1. WHO - Diabetes: https://www.who.int/news-room/fact-sheets/detail/diabetes
+2. CDC - Diabetes Basics: https://www.cdc.gov/diabetes/about/index.html
+3. CDC - Symptoms of Diabetes: https://www.cdc.gov/diabetes/signs-symptoms/index.html
+4. CDC - Diabetes Testing: https://www.cdc.gov/diabetes/diabetes-testing/index.html
+5. American Diabetes Association - Diabetes Diagnosis & Tests: https://diabetes.org/about-diabetes/diagnosis
+6. ADA Standards of Care in Diabetes: https://professional.diabetes.org/standards-of-care

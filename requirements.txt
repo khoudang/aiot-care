@@ -1,0 +1,11 @@
+flask
+flask-socketio
+opencv-python
+mediapipe
+requests
+bleak
+pyserial
+numpy
+pypdf
+python-docx
+python-dotenv

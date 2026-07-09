@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Đăng nhập — AIoT Care Station</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0d1013;--surface:#15191f;--surface-2:#1b2129;--surface-3:#222932;
+      --border:#262d37;--border-2:#2f3742;
+      --text:#e8ebf0;--muted:#8791a0;--faint:#5a6473;
+      --accent:#4c9be8;--accent-soft:rgba(76,155,232,.12);--accent-line:rgba(76,155,232,.35);
+      --ok:#3ba55d;--bad:#e05656;
+      --font:"Inter","Segoe UI",system-ui,Arial,sans-serif;
+    }
+    body{min-height:100vh;font-family:var(--font);color:var(--text);background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px;font-size:15px}
+    .shell{width:100%;max-width:960px;display:grid;grid-template-columns:1.05fr .95fr;background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+
+    .left{padding:40px 36px;border-right:1px solid var(--border);display:flex;flex-direction:column}
+    .brand{display:flex;align-items:center;gap:12px;margin-bottom:28px}
+    .brand-mark{width:46px;height:46px;border-radius:11px;display:grid;place-items:center;background:var(--surface-3);border:1px solid var(--border-2);color:var(--accent);font-size:1.2rem}
+    .brand h1{font-size:1.08rem;font-weight:650}
+    .brand span{color:var(--faint);font-size:.82rem}
+    .hero h2{font-size:1.7rem;line-height:1.3;font-weight:650;letter-spacing:-.01em;margin-bottom:12px}
+    .hero .lead{color:var(--muted);line-height:1.65;font-size:.92rem;max-width:400px}
+    .flist{margin-top:24px;display:grid;gap:10px}
+    .fitem{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border)}
+    .fitem i{color:var(--accent);margin-top:2px;width:18px;text-align:center}
+    .fitem span{color:var(--text);line-height:1.5;font-size:.88rem}
+    .status{margin-top:24px;padding:14px 16px;border-radius:11px;background:var(--surface-2);border:1px solid var(--border)}
+    .status .sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+    .status .sh .t{font-size:.8rem;color:var(--muted);font-weight:600}
+    .status .sh .b{display:inline-flex;align-items:center;gap:6px;font-size:.74rem;font-weight:600;padding:4px 10px;border-radius:20px;background:rgba(59,165,93,.13);color:#9ad9b0;border:1px solid rgba(59,165,93,.3)}
+    .status .rooms{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+    .sroom{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:9px;background:var(--surface-3);border:1px solid var(--border)}
+    .sroom .d{width:8px;height:8px;border-radius:50%;background:var(--ok);flex-shrink:0}
+    .sroom .n{font-size:.76rem;color:var(--muted)}
+    .sroom .n b{display:block;color:var(--text);font-size:.79rem}
+
+    .right{padding:40px 34px;display:flex;align-items:center;justify-content:center;background:var(--bg)}
+    .form-card{width:100%;max-width:360px}
+    .fc-icon{width:46px;height:46px;border-radius:11px;display:grid;place-items:center;margin-bottom:16px;background:var(--surface-2);border:1px solid var(--border-2);color:var(--accent);font-size:1.15rem}
+    .form-card h3{font-size:1.4rem;font-weight:650;margin-bottom:6px}
+    .form-card .sub{color:var(--muted);margin-bottom:22px;font-size:.9rem;line-height:1.55}
+
+    .alert{padding:11px 13px;border-radius:9px;margin-bottom:13px;font-size:.88rem;display:flex;align-items:center;gap:9px}
+    .alert i{flex-shrink:0}
+    .alert.error{background:rgba(224,86,86,.1);color:#f0a5a5;border:1px solid rgba(224,86,86,.3)}
+    .alert.success{background:rgba(59,165,93,.1);color:#9ad9b0;border:1px solid rgba(59,165,93,.3)}
+
+    .fld{margin-bottom:14px}
+    .fld label{display:block;margin-bottom:7px;font-size:.86rem;color:var(--muted);font-weight:600}
+    .iw{position:relative}
+    .iw>i.lic{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--faint)}
+    .iw input{width:100%;padding:12px 42px 12px 40px;border-radius:10px;border:1px solid var(--border-2);background:var(--surface-2);color:var(--text);outline:none;font-size:.94rem;font-family:inherit;transition:border-color .15s}
+    .iw input:focus{border-color:var(--accent-line)}
+    .iw .eye{position:absolute;right:11px;top:50%;transform:translateY(-50%);color:var(--faint);cursor:pointer;background:none;border:none;padding:6px;font-size:.92rem}
+    .iw .eye:hover{color:var(--accent)}
+
+    .submit{width:100%;margin-top:6px;border:none;border-radius:10px;padding:12px 16px;font-size:.95rem;font-weight:650;color:#0d1013;cursor:pointer;background:var(--accent);display:inline-flex;align-items:center;justify-content:center;gap:9px;font-family:inherit;transition:filter .15s}
+    .submit:hover{filter:brightness(1.06)}
+    .bottom{margin-top:18px;text-align:center;color:var(--muted);font-size:.88rem;line-height:1.55}
+    .bottom a{color:var(--accent);font-weight:600}
+    .bottom a:hover{text-decoration:underline}
+
+    @media(max-width:840px){.shell{grid-template-columns:1fr;max-width:420px}.left{display:none}.right{padding:32px 26px}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="left">
+      <div class="brand">
+        <div class="brand-mark"><i class="fas fa-house-medical"></i></div>
+        <div><h1>AIoT Care Station</h1><span>Giám sát chăm sóc người bệnh</span></div>
+      </div>
+      <div class="hero">
+        <h2>Đăng nhập vào trung tâm điều khiển</h2>
+        <p class="lead">Theo dõi cảm biến ba phòng qua BLE, điều khiển thiết bị và nhận cảnh báo an toàn theo thời gian thực.</p>
+        <div class="flist">
+          <div class="fitem"><i class="fas fa-shield-heart"></i><span>Cảnh báo gas – khói – lửa và phát hiện té ngã cho người bệnh.</span></div>
+          <div class="fitem"><i class="fas fa-user-group"></i><span>Tài khoản riêng cho từng thành viên và quản trị viên.</span></div>
+          <div class="fitem"><i class="fas fa-lock"></i><span>Mật khẩu được mã hóa trước khi lưu vào cơ sở dữ liệu.</span></div>
+        </div>
+        <div class="status">
+          <div class="sh"><span class="t"><i class="fab fa-bluetooth-b" style="color:#7ab8f0;margin-right:6px"></i>Hệ thống đang giám sát</span>
+            <span class="b"><i class="fas fa-circle-check"></i> An toàn</span></div>
+          <div class="rooms">
+            <div class="sroom"><span class="d"></span><span class="n">Phòng<b>Người bệnh</b></span></div>
+            <div class="sroom"><span class="d"></span><span class="n">Phòng<b>Khách</b></span></div>
+            <div class="sroom"><span class="d"></span><span class="n">Phòng<b>Bếp</b></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="form-card">
+        <div class="fc-icon"><i class="fas fa-right-to-bracket"></i></div>
+        <h3>Đăng nhập</h3>
+        <p class="sub">Nhập tài khoản đã được cấp để vào trang điều khiển.</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert {{ category }}">
+                <i class="fas {{ 'fa-circle-exclamation' if category == 'error' else 'fa-circle-check' }}"></i>
+                <span>{{ message }}</span>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('login') }}">
+          <div class="fld">
+            <label for="username">Tên đăng nhập</label>
+            <div class="iw"><i class="fas fa-user lic"></i>
+              <input type="text" id="username" name="username" placeholder="Username" required autofocus>
+            </div>
+          </div>
+          <div class="fld">
+            <label for="password">Mật khẩu</label>
+            <div class="iw"><i class="fas fa-lock lic"></i>
+              <input type="password" id="password" name="password" placeholder="Password" required>
+              <button type="button" class="eye" data-target="password"><i class="fas fa-eye"></i></button>
+            </div>
+          </div>
+          <button type="submit" class="submit"><i class="fas fa-right-to-bracket"></i> Đăng nhập</button>
+        </form>
+
+        <div class="bottom">
+          {% if allow_register %}
+            Chưa có tài khoản? <a href="{{ url_for('register') }}">Tạo tài khoản mới</a>
+          {% else %}
+            Liên hệ quản trị để được cấp tài khoản truy cập.
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.querySelectorAll('.eye').forEach(b=>b.addEventListener('click',()=>{
+      const i=document.getElementById(b.dataset.target),ic=b.querySelector('i'),sh=i.type==='password';
+      i.type=sh?'text':'password';ic.className=sh?'fas fa-eye-slash':'fas fa-eye';
+    }));
+  </script>
+</body>
+</html>

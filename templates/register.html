@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Đăng ký — AIoT Care Station</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0d1013;--surface:#15191f;--surface-2:#1b2129;--surface-3:#222932;
+      --border:#262d37;--border-2:#2f3742;
+      --text:#e8ebf0;--muted:#8791a0;--faint:#5a6473;
+      --accent:#4c9be8;--accent-soft:rgba(76,155,232,.12);--accent-line:rgba(76,155,232,.35);
+      --ok:#3ba55d;--bad:#e05656;
+      --font:"Inter","Segoe UI",system-ui,Arial,sans-serif;
+    }
+    body{min-height:100vh;font-family:var(--font);color:var(--text);background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px;font-size:15px}
+    .card{width:100%;max-width:460px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px 30px}
+    .head{text-align:center;margin-bottom:22px}
+    .head .icon{width:56px;height:56px;border-radius:14px;display:grid;place-items:center;margin:0 auto 14px;background:var(--surface-2);border:1px solid var(--border-2);color:var(--accent);font-size:1.35rem}
+    .head h2{font-size:1.5rem;font-weight:650;margin-bottom:6px}
+    .head p{color:var(--muted);font-size:.9rem;line-height:1.5}
+
+    .alert{padding:11px 13px;border-radius:9px;margin-bottom:13px;font-size:.88rem;display:flex;align-items:center;gap:9px}
+    .alert i{flex-shrink:0}
+    .alert.error{background:rgba(224,86,86,.1);color:#f0a5a5;border:1px solid rgba(224,86,86,.3)}
+    .alert.success{background:rgba(59,165,93,.1);color:#9ad9b0;border:1px solid rgba(59,165,93,.3)}
+
+    .fld{margin-bottom:14px}
+    .fld label{display:block;margin-bottom:7px;font-size:.86rem;color:var(--muted);font-weight:600}
+    .iw{position:relative}
+    .iw>i.lic{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--faint)}
+    .iw input{width:100%;padding:12px 42px 12px 40px;border-radius:10px;border:1px solid var(--border-2);background:var(--surface-2);color:var(--text);outline:none;font-size:.94rem;font-family:inherit;transition:border-color .15s}
+    .iw input:focus{border-color:var(--accent-line)}
+    .iw .eye{position:absolute;right:11px;top:50%;transform:translateY(-50%);color:var(--faint);cursor:pointer;background:none;border:none;padding:6px;font-size:.92rem}
+    .iw .eye:hover{color:var(--accent)}
+    .fld.code .iw input{border-color:var(--accent-line);background:var(--accent-soft)}
+
+    .submit{width:100%;margin-top:6px;border:none;border-radius:10px;padding:12px 16px;font-size:.95rem;font-weight:650;color:#0d1013;cursor:pointer;background:var(--accent);display:inline-flex;align-items:center;justify-content:center;gap:9px;font-family:inherit;transition:filter .15s}
+    .submit:hover{filter:brightness(1.06)}
+    .note{margin-top:15px;padding:12px 14px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border);color:var(--muted);font-size:.83rem;line-height:1.55;display:flex;gap:10px;align-items:flex-start}
+    .note i{color:var(--accent);margin-top:2px}
+    .bottom{margin-top:15px;text-align:center;color:var(--muted);font-size:.88rem}
+    .bottom a{color:var(--accent);font-weight:600}
+    .bottom a:hover{text-decoration:underline}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="head">
+      <div class="icon"><i class="fas fa-user-plus"></i></div>
+      <h2>Tạo tài khoản thành viên</h2>
+      <p>Đăng ký để cùng theo dõi và chăm sóc trên hệ thống.</p>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ category }}">
+            <i class="fas {{ 'fa-circle-exclamation' if category == 'error' else 'fa-circle-check' }}"></i>
+            <span>{{ message }}</span>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('register') }}">
+      <div class="fld">
+        <label for="username">Tên đăng nhập</label>
+        <div class="iw"><i class="fas fa-user lic"></i>
+          <input type="text" id="username" name="username" placeholder="Từ 3 ký tự" required autofocus>
+        </div>
+      </div>
+      <div class="fld">
+        <label for="password">Mật khẩu</label>
+        <div class="iw"><i class="fas fa-lock lic"></i>
+          <input type="password" id="password" name="password" placeholder="Tối thiểu 6 ký tự" minlength="6" required>
+          <button type="button" class="eye" data-target="password"><i class="fas fa-eye"></i></button>
+        </div>
+      </div>
+      <div class="fld">
+        <label for="confirm_password">Xác nhận mật khẩu</label>
+        <div class="iw"><i class="fas fa-shield-halved lic"></i>
+          <input type="password" id="confirm_password" name="confirm_password" placeholder="Nhập lại mật khẩu" required>
+          <button type="button" class="eye" data-target="confirm_password"><i class="fas fa-eye"></i></button>
+        </div>
+      </div>
+      <div class="fld code">
+        <label for="register_code">Mã nội bộ</label>
+        <div class="iw"><i class="fas fa-key lic"></i>
+          <input type="text" id="register_code" name="register_code" placeholder="Nhập mã do quản trị cấp" required>
+        </div>
+      </div>
+      <button type="submit" class="submit"><i class="fas fa-circle-check"></i> Tạo tài khoản</button>
+    </form>
+
+    <div class="note">
+      <i class="fas fa-circle-info"></i>
+      <span>Mã nội bộ do quản trị viên cấp để giới hạn người được phép tạo tài khoản. Liên hệ quản trị nếu bạn chưa có mã.</span>
+    </div>
+    <div class="bottom">Đã có tài khoản? <a href="{{ url_for('login') }}">Quay lại đăng nhập</a></div>
+  </div>
+
+  <script>
+    document.querySelectorAll('.eye').forEach(b=>b.addEventListener('click',()=>{
+      const i=document.getElementById(b.dataset.target),ic=b.querySelector('i'),sh=i.type==='password';
+      i.type=sh?'text':'password';ic.className=sh?'fas fa-eye-slash':'fas fa-eye';
+    }));
+  </script>
+</body>
+</html>
