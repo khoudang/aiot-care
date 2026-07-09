@@ -58,11 +58,15 @@ class MyCommandCallbacks: public BLECharacteristicCallbacks {
 
 void setup() {
   Serial.begin(115200);
+  delay(3000); // Đợi USB CDC sẵn sàng
+  Serial.println("\n--- BOOTING PATIENT NODE ---");
   
-  // Khởi tạo UART cho Pi (Giao tiếp Serial gửi góc quay)
+  // Khởi tạo UART cho Pi
+  Serial.println("[1] Init UART1...");
   Serial1.begin(115200, SERIAL_8N1, PIN_UART_RX, PIN_UART_TX);
   
   // Cấu hình chân
+  Serial.println("[2] Init Pins...");
   pinMode(PIN_BUZZER, OUTPUT);
   pinMode(PIN_FAN_IN1, OUTPUT);
   pinMode(PIN_FAN_IN2, OUTPUT);
@@ -72,15 +76,20 @@ void setup() {
   digitalWrite(PIN_FAN_IN1, LOW);
   digitalWrite(PIN_FAN_IN2, LOW);
 
+  Serial.println("[3] Init Servo...");
   trackingServo.attach(PIN_SERVO);
   trackingServo.write(90); // Mặc định ở giữa
   
+  Serial.println("[4] Init I2C & SHT31...");
   Wire.begin(PIN_SDA, PIN_SCL);
   if (!sht31.begin(0x44)) {
-    Serial.println("Couldn't find SHT31");
+    Serial.println("    -> Warning: Couldn't find SHT31 (Check wiring)");
+  } else {
+    Serial.println("    -> SHT31 OK!");
   }
 
   // Khởi tạo BLE
+  Serial.println("[5] Init BLE...");
   BLEDevice::init("AIoT_Patient_Node");
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
@@ -98,6 +107,7 @@ void setup() {
   pAdvertising->setScanResponse(true);
   pAdvertising->setMinPreferred(0x06);
   BLEDevice::startAdvertising();
+  Serial.println("[6] BLE Started! Waiting for Pi...");
 }
 
 void loop() {

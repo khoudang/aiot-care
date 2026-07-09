@@ -57,7 +57,10 @@ class MyCommandCallbacks: public BLECharacteristicCallbacks {
 
 void setup() {
   Serial.begin(115200);
+  delay(3000);
+  Serial.println("\n--- BOOTING KITCHEN NODE ---");
   
+  Serial.println("[1] Init Pins...");
   pinMode(PIN_MQ2_AO, INPUT);
   pinMode(PIN_MQ2_DO, INPUT);
   pinMode(PIN_FLAME_DO, INPUT);
@@ -69,9 +72,11 @@ void setup() {
   digitalWrite(PIN_EXHAUST_IN1, LOW);
   digitalWrite(PIN_EXHAUST_IN2, LOW);
 
+  Serial.println("[2] Init Servo...");
   windowServo.attach(PIN_WINDOW_SERVO);
   windowServo.write(0); // Đóng mặc định
   
+  Serial.println("[3] Init BLE...");
   BLEDevice::init("AIoT_Kitchen_Node");
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
@@ -89,6 +94,7 @@ void setup() {
   pAdvertising->setScanResponse(true);
   pAdvertising->setMinPreferred(0x06);
   BLEDevice::startAdvertising();
+  Serial.println("[4] BLE Started! Waiting for Pi...");
 }
 
 void loop() {

@@ -60,7 +60,10 @@ class MyCommandCallbacks: public BLECharacteristicCallbacks {
 
 void setup() {
   Serial.begin(115200);
+  delay(3000);
+  Serial.println("\n--- BOOTING LIVING NODE ---");
   
+  Serial.println("[1] Init Pins...");
   pinMode(PIN_PIR, INPUT);
   pinMode(PIN_LIGHT_RELAY, OUTPUT);
   pinMode(PIN_FAN_IN1, OUTPUT);
@@ -70,15 +73,20 @@ void setup() {
   digitalWrite(PIN_FAN_IN1, LOW);
   digitalWrite(PIN_FAN_IN2, LOW);
 
+  Serial.println("[2] Init I2C Sensors...");
   Wire.begin(PIN_SDA, PIN_SCL);
   if (!sht31.begin(0x44)) {
-    Serial.println("Couldn't find SHT31");
+    Serial.println("    -> Warning: Couldn't find SHT31");
+  } else {
+    Serial.println("    -> SHT31 OK");
   }
   if (!lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x23, &Wire)) {
-    Serial.println("Couldn't find BH1750");
+    Serial.println("    -> Warning: Couldn't find BH1750");
+  } else {
+    Serial.println("    -> BH1750 OK");
   }
 
-  // Khởi tạo BLE
+  Serial.println("[3] Init BLE...");
   BLEDevice::init("AIoT_Living_Node");
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
@@ -96,6 +104,7 @@ void setup() {
   pAdvertising->setScanResponse(true);
   pAdvertising->setMinPreferred(0x06);
   BLEDevice::startAdvertising();
+  Serial.println("[4] BLE Started! Waiting for Pi...");
 }
 
 void loop() {
