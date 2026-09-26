@@ -13,16 +13,21 @@ BLEServer* pServer = NULL;
 BLECharacteristic* pNotifyChar = NULL;
 bool deviceConnected = false;
 
-// Pinout theo sơ đồ Excel
+// Pinout node bếp cập nhật; BLE MAC dự kiến: E8:3D:C1:9D:A5:16.
 const int PIN_MQ2_AO = 0;
 const int PIN_MQ2_DO = 1;
 const int PIN_FLAME_DO = 2;
-const int PIN_WINDOW_SERVO = 3;
-const int PIN_LIGHT_RELAY = 4;
+const int PIN_WINDOW_SERVO = 4;
+const int PIN_LIGHT_RELAY = 20;
+const int PIN_BUZZER = 5;
 const int PIN_EXHAUST_IN1 = 7;
 const int PIN_EXHAUST_IN2 = 8;
 
 Servo windowServo;
+bool windowOpen = false;
+bool exhaustOn = false;
+bool lightOn = false;
+bool buzzerOn = false;
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) { deviceConnected = true; }
@@ -38,17 +43,29 @@ class MyCommandCallbacks: public BLECharacteristicCallbacks {
       if (value.length() > 0) {
         StaticJsonDocument<200> doc;
         if (!deserializeJson(doc, value)) {
+          // Accept both {"cmd":"buzzer","state":1} and {"buzzer":true}.
+          const char* cmd = doc["cmd"] | "";
+          if (doc.containsKey("state") &&
+              (strcmp(cmd, "window") == 0 || strcmp(cmd, "exhaust") == 0 ||
+               strcmp(cmd, "light") == 0 || strcmp(cmd, "buzzer") == 0)) {
+            doc[cmd] = doc["state"].as<bool>();
+          }
           if (doc.containsKey("window")) {
-            bool open = doc["window"];
-            windowServo.write(open ? 90 : 0);
+            windowOpen = doc["window"];
+            windowServo.write(windowOpen ? 90 : 0);
           }
           if (doc.containsKey("exhaust")) {
-            bool on = doc["exhaust"];
-            digitalWrite(PIN_EXHAUST_IN1, on ? HIGH : LOW);
+            exhaustOn = doc["exhaust"];
+            digitalWrite(PIN_EXHAUST_IN1, exhaustOn ? HIGH : LOW);
             digitalWrite(PIN_EXHAUST_IN2, LOW);
           }
           if (doc.containsKey("light")) {
-            digitalWrite(PIN_LIGHT_RELAY, doc["light"] ? HIGH : LOW);
+            lightOn = doc["light"];
+            digitalWrite(PIN_LIGHT_RELAY, lightOn ? HIGH : LOW);
+          }
+          if (doc.containsKey("buzzer")) {
+            buzzerOn = doc["buzzer"];
+            digitalWrite(PIN_BUZZER, buzzerOn ? HIGH : LOW);
           }
         }
       }
@@ -65,10 +82,12 @@ void setup() {
   pinMode(PIN_MQ2_DO, INPUT);
   pinMode(PIN_FLAME_DO, INPUT);
   pinMode(PIN_LIGHT_RELAY, OUTPUT);
+  pinMode(PIN_BUZZER, OUTPUT);
   pinMode(PIN_EXHAUST_IN1, OUTPUT);
   pinMode(PIN_EXHAUST_IN2, OUTPUT);
   
   digitalWrite(PIN_LIGHT_RELAY, LOW);
+  digitalWrite(PIN_BUZZER, LOW);
   digitalWrite(PIN_EXHAUST_IN1, LOW);
   digitalWrite(PIN_EXHAUST_IN2, LOW);
 
@@ -108,10 +127,13 @@ void loop() {
     bool smoke = (digitalRead(PIN_MQ2_DO) == HIGH); 
     bool flame = (digitalRead(PIN_FLAME_DO) == LOW); // LOW nghĩa là có lửa
 
-    char payload[150];
+    char payload[256];
     snprintf(payload, sizeof(payload), 
-      "{\"room\":\"kitchen\",\"gas\":%d,\"smoke\":%s,\"flame\":%s}", 
-      gas, smoke ? "true" : "false", flame ? "true" : "false");
+      "{\"room\":\"kitchen\",\"gas\":%d,\"smoke\":%s,\"flame\":%s,"
+      "\"window\":%s,\"exhaust\":%s,\"light\":%s,\"buzzer\":%s}",
+      gas, smoke ? "true" : "false", flame ? "true" : "false",
+      windowOpen ? "true" : "false", exhaustOn ? "true" : "false",
+      lightOn ? "true" : "false", buzzerOn ? "true" : "false");
 
     pNotifyChar->setValue(payload);
     pNotifyChar->notify();

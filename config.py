@@ -63,7 +63,7 @@ NODES = [
     {
         "room": "kitchen",
         "name": "Phòng bếp",
-        "mac": os.getenv("BLE_MAC_KITCHEN", "a0:f2:62:a5:6d:18"),
+        "mac": os.getenv("BLE_MAC_KITCHEN", "E8:3D:C1:9D:A5:16"),
         "notify_uuid": os.getenv("BLE_NOTIFY_UUID_KITCHEN", BLE_NOTIFY_UUID),
         "command_uuid": os.getenv("BLE_COMMAND_UUID_KITCHEN", BLE_COMMAND_UUID),
     },

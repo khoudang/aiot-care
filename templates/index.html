@@ -831,6 +831,10 @@
               <label class="sw"><input type="checkbox" id="kt-window-toggle"><span class="tr"></span></label></div>
             <div class="tile" id="kt-exhaust-tile"><div class="ic"><i class="fas fa-fan"></i></div><div class="meta"><h4>Quạt hút</h4><p id="kt-exhaust-status">Đang tắt</p></div>
               <label class="sw"><input type="checkbox" id="kt-exhaust-toggle"><span class="tr"></span></label></div>
+            <div class="tile light" id="kt-light-tile"><div class="ic"><i class="fas fa-lightbulb"></i></div><div class="meta"><h4>Đèn bếp</h4><p id="kt-light-status">Đang tắt</p></div>
+              <label class="sw"><input type="checkbox" id="kt-light-toggle"><span class="tr"></span></label></div>
+            <div class="tile" id="kt-buzzer-tile"><div class="ic"><i class="fas fa-bell"></i></div><div class="meta"><h4>Còi báo động bếp</h4><p id="kt-buzzer-status">Im lặng</p></div>
+              <label class="sw"><input type="checkbox" id="kt-buzzer-toggle"><span class="tr"></span></label></div>
           </div>
 
           <div class="sec"><h3>Nồng độ khí gas</h3><span class="ln"></span><span class="rt">gauge realtime</span></div>
@@ -1233,6 +1237,8 @@
   bindToggle('lv-auto-toggle','lv-auto-tile','Bật đèn khi có người buổi tối','Đã tắt tự động',on=>emitSet('living','auto',{state:on}));
   bindToggle('kt-window-toggle','kt-window-tile','Đang mở','Đang đóng',on=>emitSet('kitchen','window',{state:on}));
   bindToggle('kt-exhaust-toggle','kt-exhaust-tile','Đang hút','Đang tắt',on=>emitSet('kitchen','exhaust',{state:on}));
+  bindToggle('kt-light-toggle','kt-light-tile','Đang bật','Đang tắt',on=>emitSet('kitchen','light',{state:on}));
+  bindToggle('kt-buzzer-toggle','kt-buzzer-tile','Đang kêu','Im lặng',on=>emitSet('kitchen','buzzer',{state:on}));
 
   /* ---- apply data ---- */
   function badge(el,cls,txt){el.className='rb '+cls;el.textContent=txt;}
@@ -1270,6 +1276,8 @@
     if(d.flame!=null){document.getElementById('kt-flame-status').textContent=d.flame?'PHÁT HIỆN LỬA':'Không phát hiện';document.getElementById('kt-flame-tile').classList.toggle('alarm',!!d.flame);document.getElementById('ov-kitchen-flame').textContent=d.flame?'Có':'Không';}
     if(d.window!=null)setToggle('kt-window-toggle','kt-window-tile',d.window,'Đang mở','Đang đóng');
     if(d.exhaust!=null)setToggle('kt-exhaust-toggle','kt-exhaust-tile',d.exhaust,'Đang hút','Đang tắt');
+    if(d.light!=null)setToggle('kt-light-toggle','kt-light-tile',d.light,'Đang bật','Đang tắt');
+    if(d.buzzer!=null)setToggle('kt-buzzer-toggle','kt-buzzer-tile',d.buzzer,'Đang kêu','Im lặng');
     const danger=d.flame||d.smoke||(d.gas!=null&&d.gas>=2500),warn=(d.gas!=null&&d.gas>=1500);
     badge(document.getElementById('ov-kitchen-badge'),danger?'bad':(warn?'warn':'ok'),danger?'Nguy hiểm':(warn?'Cảnh báo':'An toàn'));
     touch();

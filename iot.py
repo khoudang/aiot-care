@@ -142,7 +142,8 @@ ROOMS = {
     },
     "kitchen": {
         "gas": None, "smoke": False, "flame": False,
-        "window": False, "exhaust": False, "updated_at": 0,
+        "window": False, "exhaust": False, "light": False, "buzzer": False,
+        "updated_at": 0,
     },
     "wearable": {
         "heart_rate": None, "spo2": None, "status": "normal", "updated_at": 0,
@@ -399,6 +400,8 @@ _DEVICE_LABELS = {
     ("living", "auto"): "chế độ tự động phòng khách",
     ("kitchen", "window"): "cửa sổ bếp",
     ("kitchen", "exhaust"): "quạt hút bếp",
+    ("kitchen", "light"): "đèn bếp",
+    ("kitchen", "buzzer"): "còi báo động bếp",
 }
 
 
@@ -419,6 +422,9 @@ def set_device(room, device, state=None, value=None, source="manual", user_id=No
     cmd = {"cmd": device}
     if state is not None:
         cmd["state"] = 1 if state else 0
+        # Kitchen Arduino firmware also accepts flat boolean device commands.
+        if room == "kitchen" and device in {"window", "exhaust", "light", "buzzer"}:
+            cmd[device] = bool(state)
     if value is not None:
         cmd["value"] = int(value)
     enqueue_command(room, json.dumps(cmd, ensure_ascii=False))
@@ -593,6 +599,8 @@ def _enter_emergency():
     # thông gió + báo động (chạy độc lập, không tắt đèn/camera)
     set_device("kitchen", "exhaust", state=True, source="auto", silent=True)
     set_device("kitchen", "window", state=True, source="auto", silent=True)
+    set_device("kitchen", "buzzer", state=True, source="auto", silent=True)
+    set_device("kitchen", "light", state=True, source="auto", silent=True)
     set_device("patient", "buzzer", state=True, source="auto", silent=True)
     # đảm bảo camera bật để quan sát người bệnh
     set_camera_mode("on", user_id=None)
@@ -601,6 +609,12 @@ def _enter_emergency():
 def confirm_safe(user_id=None):
     """Người dùng xác nhận an toàn -> khôi phục thiết bị."""
     global alert_level
+    danger, warn = _danger_warn()
+    if danger or warn:
+        _emit("alert_state", {"level": alert_level,
+                              "message": "Chưa thể xác nhận an toàn: cảm biến vẫn báo khói/lửa hoặc gas cao."})
+        return
+    set_device("kitchen", "buzzer", state=False, source="auto", silent=True)
     set_device("patient", "buzzer", state=False, source="auto", silent=True)
     set_device("kitchen", "exhaust", state=False, source="auto", silent=True)
     set_device("kitchen", "window", state=False, source="auto", silent=True)

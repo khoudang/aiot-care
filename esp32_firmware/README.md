@@ -56,6 +56,10 @@ Mỗi ESP32 hoạt động như một **BLE Server**.
 ---
 
 ### 🟡 NODE 3: Kitchen Node (Phòng Bếp)
+**BLE MAC dự kiến:** `E8:3D:C1:9D:A5:16`. Cấu hình Pi dùng `BLE_MAC_KITCHEN=E8:3D:C1:9D:A5:16`; nếu `.env` đã có MAC cũ thì cần cập nhật. Firmware in MAC thực tế ra Serial Monitor khi khởi động để đối chiếu.
+
+Pinout dưới đây là bản cập nhật cho node bếp, thay thế phần tương ứng trong `sodochan.xlsx` / `sodochan.csv` cũ.
+
 **Mục đích:** Báo cháy, báo rò rỉ khí gas, bật quạt hút và mở cửa sổ an toàn.
 
 #### Sơ đồ cắm chân (Pinout)
@@ -63,13 +67,17 @@ Mỗi ESP32 hoạt động như một **BLE Server**.
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **MQ-2** | **5V** | GND | AO / DO | **GPIO0 / GPIO1** | Đo khí gas và khói |
 | **Flame Sensor** | **3.3V** | GND | DO | **GPIO2** | Báo có lửa (Mức LOW) |
-| **Servo SG90** | **5V** | GND | Signal | **GPIO3** | Cửa sổ thoáng khí |
-| **Relay đèn** | **5V** | GND | IN | **GPIO4** | Bật đèn bếp |
+| **Servo SG90** | **5V** | GND | Signal | **GPIO4** | Cửa sổ thoáng khí |
+| **Relay đèn** | **5V** | GND | IN | **GPIO20** | Bật đèn bếp |
+| **Buzzer** | Theo module | GND | Signal | **GPIO5** | Điều khiển HIGH/LOW; mặc định LOW |
 | **Driver quạt hút**| Khẩn cấp 5V/12V| GND | IN1 / IN2 | **GPIO7 / GPIO8** | Quạt thông gió |
 
 #### Logic Giao tiếp
-*   **Gửi lên Pi:** `{"room":"kitchen","gas":300,"smoke":false,"flame":false}`
-*   **Nhận từ Pi:** `{"window": true, "exhaust": true, "light": true}`
+*   **Gửi lên Pi:** `{"room":"kitchen","gas":300,"smoke":false,"flame":false,"window":false,"exhaust":false,"light":false,"buzzer":false}`. Trạng thái thiết bị phản ánh lệnh đã thực thi tại ESP32, không phải cảm biến xác nhận cơ khí.
+*   **Nhận từ Pi:** `{"window": true, "exhaust": true, "light": true, "buzzer": true}`
+*   Cũng nhận lệnh dạng `{"cmd":"buzzer","state":1}`. Buzzer chủ động GPIO5 dùng HIGH để bật, LOW để tắt.
+*   Dashboard có công tắc đèn bếp và còi. Khi khẩn cấp, backend bật còi bếp, đèn bếp, quạt hút và mở cửa sổ. Khi cảm biến hết cảnh báo, xác nhận an toàn sẽ tắt còi/quạt và đóng cửa sổ; đèn vẫn giữ sáng.
+*   Không xác nhận an toàn khi cảm biến còn báo nguy hiểm hoặc gas vượt ngưỡng cảnh báo. Quy ước MQ-2 DO trong firmware này vẫn là HIGH = báo khói; cần đối chiếu module thực tế nếu luôn báo khói khi không có khói.
 
 ---
 
