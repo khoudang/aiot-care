@@ -1,390 +1,108 @@
-# AIoT Care Station — BLE P2P + BLE Mesh Backend
+# AIoT Care
 
-Backend này đã được thiết kế lại theo mô hình kết hợp **BLE P2P** và **BLE Mesh**:
+Hệ thống giám sát và điều khiển **phòng người bệnh, phòng khách và phòng bếp**.
+Raspberry Pi nhận dữ liệu từ ba ESP32-C3 qua BLE, xử lý tại backend Python và
+cập nhật dashboard theo thời gian thực. Laptop Windows có thể dùng để thử node bếp.
 
-- **BLE P2P:** Raspberry Pi chỉ kết nối trực tiếp với **ESP chính** ở phòng người bệnh.
-- **BLE Mesh:** ESP chính giao tiếp nội bộ với các node trong mesh: `patient`, `living`, `kitchen`, `wearable`.
-- **Web / Socket.IO:** Pi giải mã dữ liệu từ ESP chính, cập nhật state từng phòng đúng thứ tự và đẩy realtime lên dashboard.
-- **UART:** Pi vẫn gửi góc servo tracking camera bằng UART riêng, không đi qua BLE Mesh.
+[Sơ đồ chân](docs/HARDWARE.md) · [Cài đặt & vận hành](docs/SETUP.md) ·
+[Firmware](esp32_firmware/README.md) · [API](docs/API.md) · [Trợ lý AI](docs/CHATBOT.md)
 
-Mục tiêu của thiết kế mới là giảm số kết nối BLE trực tiếp trên Raspberry Pi, gom dữ liệu mesh thành một gói chuẩn, và để ESP chính chịu trách nhiệm định tuyến lệnh xuống đúng node.
+## Chức năng
 
----
+| Khu vực | Theo dõi | Điều khiển |
+| --- | --- | --- |
+| Phòng người bệnh | Nhiệt độ, độ ẩm, chuyển động; camera, cử chỉ và phát hiện té ngã | Quạt, còi, servo quay camera |
+| Phòng khách | Nhiệt độ, độ ẩm, ánh sáng, chuyển động | Đèn, quạt, chế độ tự động |
+| Phòng bếp | Giá trị gas ADC, khói, lửa | Cửa sổ, quạt hút, đèn, còi |
 
-## 1. Kiến trúc tổng thể
+Dashboard có tổng quan ba phòng, trạng thái kết nối, cảnh báo, lịch sử cảm biến,
+trợ lý AI và trang quản trị tài khoản. Dự án **không sử dụng vòng đeo tay**.
+Đèn phòng bệnh chưa có GPIO được gán nên chưa hỗ trợ điều khiển.
+
+## Kiến trúc
+
+```mermaid
+flowchart LR
+    Phone["Trình duyệt điện thoại / laptop"] <-->|"HTTP + Socket.IO"| Server["Raspberry Pi hoặc laptop
+Flask + BLE gateway"]
+    Remote["Trình duyệt qua 4G / mạng khác"] <-->|HTTPS| Tunnel[ngrok]
+    Tunnel <--> Server
+    Server <-->|BLE| Patient["ESP32-C3 · Phòng bệnh"]
+    Server <-->|BLE| Living["ESP32-C3 · Phòng khách"]
+    Server <-->|BLE| Kitchen["ESP32-C3 · Bếp"]
+    Server -->|"UART · góc servo"| Patient
+    Camera[Camera] --> Server
+    Server <--> DB[(SQLite)]
+```
+
+Ba node kết nối BLE trực tiếp với gateway; không dùng MQTT hay BLE Mesh.
+Ngrok chỉ đưa web ra Internet, không thay thế kết nối BLE giữa gateway và các node.
+Logic tự động cục bộ của bếp/phòng khách nằm trong firmware.
+
+## Chạy thử trên Windows
+
+Từ thư mục dự án, dùng môi trường Python đã cài các gói trong `requirements.txt`:
+
+```powershell
+python run_kitchen_test.py
+```
+
+Mở **http://127.0.0.1:5000/dashboard**. Chế độ này dùng `kitchen-test.db`, chỉ kết nối
+BLE node bếp và tắt camera/UART khi khởi động. Các nút điều khiển tác động tới
+phần cứng thật. Không chạy thêm bản thứ hai nếu cổng 5000 đang được sử dụng.
+
+Thử bằng điện thoại qua mạng khác, mở PowerShell thứ hai:
+
+```powershell
+ngrok http 5000 --inspect=false
+```
+
+Mở địa chỉ HTTPS do ngrok hiển thị và đăng nhập. Laptop phải bật, không sleep và
+có Internet. Xem [thiết lập ngrok lần đầu](docs/SETUP.md#ngrok-trên-laptop).
+
+## Triển khai trên Raspberry Pi
+
+Tạo môi trường Python, cài `requirements.txt`, cấu hình `.env` và chạy `python app.py`.
+Web lắng nghe cổng 5000; truy cập `http://<IP-của-Pi>:5000/dashboard` trong mạng LAN.
+[Hướng dẫn chi tiết](docs/SETUP.md) giải thích MAC BLE, camera, UART và dịch vụ systemd.
+
+## Sơ đồ chân
+
+Bảng đầy đủ cho cả ba node ở **[docs/HARDWARE.md](docs/HARDWARE.md)**,
+kèm [CSV hiện tại](docs/hardware/pinout.csv), đối chiếu trực tiếp các hằng `PIN_*` trong firmware.
+
+Pin bếp: **MQ-2 AO → GPIO0 · DO → GPIO1 · Flame DO → GPIO2 · Servo → GPIO4 ·
+Buzzer → GPIO5 · Quạt IN1/IN2 → GPIO7/GPIO8 · Relay đèn → GPIO20**.
+
+## Cấu trúc repo
 
 ```text
-Web Dashboard
-  │
-  │ Socket.IO / REST
-  ▼
-Raspberry Pi 4 Backend
-  ├─ Camera AI: gesture / tracking / fall detection
-  ├─ UART → ESP servo pan
-  └─ BLE P2P ⇄ ESP chính / Node phòng bệnh
-                    │
-                    │ BLE Mesh
-                    ▼
-        ┌────────────┬────────────┬────────────┬────────────┐
-        │ patient    │ living     │ kitchen    │ wearable   │
-        │ PIR/temp   │ temp/lux   │ gas/flame  │ HR/SpO2    │
-        │ light/fan  │ light/fan  │ exhaust    │ health     │
-        └────────────┴────────────┴────────────┴────────────┘
+app.py                 Khởi tạo ứng dụng và dịch vụ nền
+config.py              Cấu hình qua biến môi trường / .env
+web.py                 Trang web, API, xác thực, sự kiện Socket.IO
+iot.py                 BLE, camera, trạng thái và cảnh báo
+node_protocol.py       Hợp đồng lệnh điều khiển ba node
+database.py            SQLite: tài khoản, cấu hình, nhật ký
+run_kitchen_test.py     Chạy thử node bếp trên Windows
+templates/             Trang Jinja: dashboard, đăng nhập, đăng ký
+static/                CSS và JavaScript
+esp32_firmware/        Firmware ba node và header dùng chung
+docs/                  Hướng dẫn, API, sơ đồ chân và thiết kế giao diện
+medical_docs/          Nguồn tài liệu cho trợ lý AI
+tests/                 Kiểm thử Python và logic firmware C++ trên máy
 ```
 
----
+`chatbot_system.py`, `medical_rag.py` và `ingest_medical_docs.py` phục vụ trợ lý AI.
+`aiot-care.service` và `update.sh` là công cụ triển khai Pi, cần đọc và chỉnh theo máy
+trước khi sử dụng. Database, log, môi trường Python và index sinh tự động không đưa lên Git.
 
-## 2. Vai trò từng tầng
-
-### Raspberry Pi
-
-Pi không còn kết nối BLE trực tiếp với từng node. Pi chỉ làm các việc:
-
-1. Nhận lệnh điều khiển từ web.
-2. Đóng gói lệnh thành JSON `mesh_command`.
-3. Gửi `mesh_command` xuống ESP chính qua BLE P2P.
-4. Nhận JSON `mesh_state` lớn từ ESP chính.
-5. Giải mã dữ liệu theo thứ tự `patient → living → kitchen → wearable`.
-6. Cập nhật state backend, lịch sử biểu đồ, cảnh báo và Socket.IO.
-
-### ESP chính / node phòng bệnh
-
-ESP chính là gateway giữa Pi và BLE Mesh:
-
-1. Nhận dữ liệu cảm biến/trạng thái từ các node mesh.
-2. Gom dữ liệu thành một gói JSON `mesh_state`.
-3. Gửi `mesh_state` lên Pi qua BLE notify.
-4. Nhận `mesh_command` từ Pi qua BLE write.
-5. Giải mã `room`, `device`, `state`, `value`.
-6. Forward lệnh xuống đúng node mesh.
-
-### Các node BLE Mesh
-
-- `patient`: PIR, nhiệt độ, độ ẩm, đèn, quạt, buzzer.
-- `living`: nhiệt độ, độ ẩm, lux, đèn, quạt, auto mode.
-- `kitchen`: gas, khói, lửa, cửa sổ, quạt hút.
-- `wearable`: nhịp tim, SpO2, trạng thái sức khỏe.
-
----
-
-## 3. Luồng truyền dữ liệu lên web
-
-```text
-Node mesh gửi sensor/device state
-  ↓
-ESP chính nhận và gom dữ liệu
-  ↓
-ESP chính tạo mesh_state JSON lớn
-  ↓
-BLE P2P notify lên Pi
-  ↓
-Pi decode packet
-  ↓
-Pi update ROOMS theo thứ tự:
-patient → living → kitchen → wearable
-  ↓
-Pi emit Socket.IO:
-room_update / node_status / ai_status / mesh_packet / alert_state
-  ↓
-Web dashboard hiển thị đúng phòng, đúng cảm biến
-```
-
----
-
-## 4. Luồng điều khiển từ web xuống thiết bị
-
-```text
-User bấm điều khiển trên web
-  ↓
-Socket.IO event: set_device
-  ↓
-Pi gọi set_device(room, device, state, value)
-  ↓
-Pi đóng gói mesh_command JSON
-  ↓
-BLE P2P write xuống ESP chính
-  ↓
-ESP chính decode target.room + target.device
-  ↓
-ESP chính forward qua BLE Mesh đến đúng node
-  ↓
-Node thực thi bật/tắt/chỉnh thiết bị
-  ↓
-Node gửi state mới về ESP chính
-  ↓
-ESP chính gom vào mesh_state gửi lại Pi để đồng bộ web
-```
-
----
-
-## 5. Format gói ESP chính gửi lên Pi: `mesh_state`
-
-Firmware ESP chính nên gửi **newline-delimited JSON**, tức mỗi gói JSON kết thúc bằng `\n`. Backend đã hỗ trợ ghép lại JSON nếu BLE notify bị chia nhỏ thành nhiều chunk.
-
-### Format khuyến nghị
-
-```json
-{
-  "type": "mesh_state",
-  "seq": 101,
-  "ts": 1720000000,
-  "nodes": {
-    "patient": {
-      "online": true,
-      "sensors": {
-        "temp": 27.5,
-        "hum": 64,
-        "motion": 1
-      },
-      "devices": {
-        "light": 0,
-        "fan": 1,
-        "fan_speed": 70,
-        "buzzer": 0
-      }
-    },
-    "living": {
-      "online": true,
-      "sensors": {
-        "temp": 28.0,
-        "hum": 60,
-        "lux": 140,
-        "motion": 0
-      },
-      "devices": {
-        "light": 1,
-        "light_level": 80,
-        "fan": 0,
-        "fan_speed": 0,
-        "auto": 1
-      }
-    },
-    "kitchen": {
-      "online": true,
-      "sensors": {
-        "gas": 300,
-        "smoke": 0,
-        "flame": 0
-      },
-      "devices": {
-        "window": 0,
-        "exhaust": 0
-      }
-    },
-    "wearable": {
-      "online": true,
-      "sensors": {
-        "heart_rate": 78,
-        "spo2": 98
-      }
-    }
-  }
-}
-```
-
-### Format phẳng cũng được hỗ trợ
-
-Backend cũng chấp nhận format sau:
-
-```json
-{
-  "type": "mesh_state",
-  "seq": 102,
-  "nodes": {
-    "patient": {"online": true, "temp": 27.5, "hum": 64, "motion": 1, "light": 0},
-    "living": {"online": true, "temp": 28.0, "hum": 60, "lux": 140, "light": 1},
-    "kitchen": {"online": true, "gas": 300, "smoke": 0, "flame": 0},
-    "wearable": {"online": true, "heart_rate": 78, "spo2": 98}
-  }
-}
-```
-
----
-
-## 6. Format gói Pi gửi xuống ESP chính: `mesh_command`
-
-Khi web điều khiển thiết bị, backend gửi xuống ESP chính gói như sau:
-
-```json
-{
-  "type": "mesh_command",
-  "seq": 12,
-  "ts": 1720000001.25,
-  "source": "manual",
-  "target": {
-    "room": "kitchen",
-    "device": "exhaust"
-  },
-  "cmd": "exhaust",
-  "room": "kitchen",
-  "state": 1
-}
-```
-
-Ví dụ bật quạt phòng bệnh tốc độ 70%:
-
-```json
-{
-  "type": "mesh_command",
-  "seq": 13,
-  "source": "gesture",
-  "target": {
-    "room": "patient",
-    "device": "fan"
-  },
-  "cmd": "fan",
-  "room": "patient",
-  "state": 1,
-  "value": 70
-}
-```
-
-ESP chính chỉ cần ưu tiên các field:
-
-- `target.room` hoặc `room`
-- `target.device` hoặc `cmd`
-- `state`
-- `value`
-- `seq`
-
----
-
-## 7. Cấu hình `.env`
-
-Tạo file `.env` từ `.env.example` và sửa MAC/UUID theo thiết bị thật.
-
-```env
-SECRET_KEY=smart_home_secret_key_2026_change_me
-DATABASE=smart_home.db
-ALLOW_REGISTER=1
-ADMIN_REGISTER_CODE=FAMILY2026
-
-# BLE P2P + BLE Mesh
-BLE_ENABLE=1
-BLE_TOPOLOGY=p2p_mesh
-BLE_GATEWAY_ROOM=patient
-BLE_GATEWAY_MAC=a0:f2:62:a5:6d:16
-BLE_NOTIFY_UUID=beb5483e-36e1-4688-b7f5-ea07361b26a8
-BLE_COMMAND_UUID=1c95d5e3-d03b-4c71-b54d-172fa5545a74
-BLE_WRITE_CHUNK_SIZE=180
-BLE_WRITE_WITH_RESPONSE=0
-BLE_RX_BUFFER_LIMIT=12000
-BLE_RECONNECT_DELAY=3
-
-# UART servo
-UART_ENABLE=1
-UART_PORT=/dev/ttyUSB0
-UART_BAUD=115200
-
-# Camera AI
-CAMERA_MODE_DEFAULT=auto
-VIDEO_SOURCE=0
-CAMERA_WIDTH=320
-CAMERA_HEIGHT=240
-JPEG_QUALITY=60
-PROCESS_EVERY_N_FRAMES=5
-STATUS_EMIT_INTERVAL=0.3
-STREAM_SLEEP=0.02
-
-# Medical RAG
-GEMINI_API_KEY=your_key_here
-GEMINI_CHAT_MODEL=gemini-2.5-flash-lite
-GEMINI_EMBEDDING_MODEL=gemini-embedding-001
-MEDICAL_RAG_AUTO_INGEST=0
-```
-
-Nếu muốn chạy test web trên laptop không có BLE:
-
-```env
-BLE_ENABLE=0
-UART_ENABLE=0
-CAMERA_MODE_DEFAULT=off
-```
-
-Nếu muốn quay lại firmware cũ Pi kết nối từng node:
-
-```env
-BLE_TOPOLOGY=legacy_multi_node
-```
-
----
-
-## 8. Cấu trúc source
-
-```text
-project/
-├── app.py
-├── config.py
-├── database.py
-├── iot.py
-├── web.py
-├── medical_rag.py
-├── ingest_medical_docs.py
-├── requirements.txt
-├── README.md
-└── .env.example
-```
-
----
-
-## 9. Chạy backend
+## Kiểm tra
 
 ```bash
-pip install -r requirements.txt
-cp .env.example .env
-python app.py
+python -m unittest discover -s tests -v
+git diff --check
 ```
 
-Mở dashboard:
-
-```text
-http://<ip-raspberry-pi>:5000
-```
-
----
-
-## 10. Các Socket.IO event chính
-
-Backend vẫn giữ event cũ để frontend không phải đổi nhiều:
-
-- `request_initial_state`
-- `set_device`
-- `set_camera_mode`
-- `set_tracking`
-- `confirm_safe`
-- `control_device`
-
-Backend emit lên web:
-
-- `bootstrap`
-- `room_update`
-- `node_status`
-- `sensor_chart_update`
-- `mesh_packet`
-- `system_alert`
-- `alert_state`
-- `camera_sync`
-- `ai_status`
-
----
-
-## 11. Ghi chú quan trọng cho firmware ESP chính
-
-1. Nên gửi mỗi `mesh_state` kết thúc bằng `\n`.
-2. Nên có `seq` tăng dần để Pi bỏ qua packet trùng.
-3. Nên gửi full snapshot 4 node mỗi chu kỳ, hoặc ít nhất gửi node nào có thay đổi.
-4. Nên có `online` cho từng node để dashboard biết node nào mất mesh.
-5. Khi nhận `mesh_command`, ESP chính nên ACK hoặc gửi lại state mới trong `mesh_state` tiếp theo.
-6. Nếu JSON lớn hơn MTU BLE, ESP chính có thể chia notify thành nhiều chunk; backend Pi đã có buffer ghép lại.
-
----
-
-## 12. Điểm đã chỉnh trong backend
-
-- Thêm cấu hình `BLE_TOPOLOGY=p2p_mesh`.
-- Thêm BLE gateway config: `BLE_GATEWAY_MAC`, `BLE_GATEWAY_NOTIFY_UUID`, `BLE_GATEWAY_COMMAND_UUID`.
-- Pi chỉ mở 1 BLE connection đến ESP chính.
-- Thêm parser `mesh_state` để giải mã JSON lớn.
-- Thêm builder `mesh_command` để đóng gói lệnh từ web.
-- Giữ API/socket web hiện tại để frontend ít phải chỉnh.
-- Giữ fallback `legacy_multi_node` để test firmware cũ.
+Test Python dùng các dependency giả lập; test logic firmware cần `g++` và sẽ báo
+skip nếu thiếu compiler. Kết quả này không thay thế việc biên dịch toàn bộ sketch
+và thử cảm biến/thiết bị trên ESP32 thật.

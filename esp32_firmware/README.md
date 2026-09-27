@@ -1,91 +1,75 @@
-# Tài liệu Kỹ thuật Firmware ESP32-C3 Super Mini (AIoT Care Station)
+# Firmware ESP32-C3
 
-Thư mục này chứa mã nguồn C++ (Arduino) cho 3 mạch ESP32-C3 dựa trên **chuẩn sơ đồ phần cứng mới nhất (sodochan.xlsx)**.
+[Về dự án](../README.md) · [Sơ đồ chân ba node](../docs/HARDWARE.md)
 
-> [!CAUTION]
-> **CẢNH BÁO NGUỒN ĐIỆN:** Mạch ESP32-C3 Super Mini hoạt động ở mức logic 3.3V. Bạn phải cắm chuẩn xác chân nguồn (VCC) cho các cảm biến theo bảng bên dưới. **Nếu cắm nhầm cảm biến 3.3V vào chân 5V, cảm biến sẽ cháy ngay lập tức!** Chân 5V trên mạch thường ký hiệu là `5V` hoặc `VBUS`, chân 3.3V ký hiệu là `3.3V`.
+| Sketch | Tên quảng bá BLE | Vai trò |
+| --- | --- | --- |
+| `patient_node/patient_node.ino` | `AIoT_Patient_Node` | SHT, PIR, quạt, buzzer, servo qua UART |
+| `living_node/living_node.ino` | `AIoT_Living_Node` | SHT, BH1750, PIR, đèn, quạt tự động |
+| `kitchen_node/kitchen_node.ino` | `AIoT_Kitchen_Node` | Gas, khói, lửa, cửa sổ, quạt hút, đèn, buzzer |
 
----
+Hai header dùng chung: `command_contract.h` xử lý lệnh/ACK, `node_logic.h` chứa
+logic tự động bếp và phòng khách. Giữ nguyên cấu trúc thư mục khi mở/biên dịch sketch
+vì các sketch include header bằng đường dẫn `../`.
 
-## 1. Kiến trúc Giao tiếp (BLE & JSON)
-Mỗi ESP32 hoạt động như một **BLE Server**.
-*   **Service UUID:** `4fafc201-1fb5-459e-8fcc-c5c9c331914b`
-*   **Notify UUID (Gửi đi):** `beb5483e-36e1-4688-b7f5-ea07361b26a8`
-*   **Write UUID (Nhận lệnh):** `1c95d5e3-d03b-4c71-b54d-172fa5545a74`
+## Biên dịch và nạp
 
----
+Trong Arduino IDE, dùng ESP32 board package và chọn board phù hợp ESP32-C3 của bạn
+(cấu hình dự án trước đây dùng **ESP32C3 Dev Module**, USB CDC On Boot bật).
+Các thư viện mà mã nguồn sử dụng:
 
-## 2. Chi tiết Từng Node (Chuẩn theo sodochan.xlsx)
+- BLE, Wire và FreeRTOS trong ESP32 Arduino core.
+- ArduinoJson, ESP32Servo, Adafruit SHT31 Library, BH1750.
 
-### 🔴 NODE 1: Patient Node (Phòng Người Bệnh)
-**Mục đích:** Đọc SHT30, PIR, điều khiển quạt, còi và nhận UART từ Pi để quay servo theo dõi khuôn mặt.
+Repo chưa khóa phiên bản ESP32 core/thư viện. Biên dịch từng sketch để xác nhận tương
+thích trước khi nạp; test C++ trên máy chỉ kiểm tra logic trong header.
+Mở Serial Monitor **115200**, đọc MAC được in khi boot và cập nhật cấu hình gateway.
 
-#### Sơ đồ cắm chân (Pinout)
-| Thiết bị | Chân Nguồn (VCC) | Chân Đất (GND) | Chân Tín hiệu | ESP32-C3 | Ghi chú |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **SHT30** | **3.3V** | GND | SDA / SCL | **GPIO8 / GPIO9** | Đo nhiệt độ, độ ẩm |
-| **PIR HC-SR501** | **5V** | GND | OUT | **GPIO5** | Cảm biến chuyển động |
-| **Servo tracking**| **5V** | GND | Signal | **GPIO6** | Xoay camera theo người |
-| **Buzzer** | N/A | GND | VCC (Signal) | **GPIO0** | Còi báo động (Cấp nguồn từ I/O) |
-| **Driver quạt** | Khẩn cấp 5V/12V | GND | IN1 / IN2 | **GPIO1 / GPIO2** | Quạt làm mát |
-| **UART Pi** | N/A | N/A | RX / TX | **GPIO20 / GPIO21** | Nhận UART từ Raspberry Pi |
+## Giao thức BLE
 
-#### Logic Giao tiếp
-*   **Gửi lên Pi:** `{"room":"patient","temp":25.5,"hum":60.5,"motion":true}`
-*   **Nhận từ Pi:** `{"fan": true, "buzzer": true}`
-*   **Xử lý UART Servo:** Pi gửi qua dây Serial chuỗi góc ví dụ `A90\n`, Node giải mã và điều khiển servo xoay camera.
+| Thành phần | UUID |
+| --- | --- |
+| Service | `4fafc201-1fb5-459e-8fcc-c5c9c331914b` |
+| Notify: node → gateway | `beb5483e-36e1-4688-b7f5-ea07361b26a8` |
+| Write: gateway → node | `1c95d5e3-d03b-4c71-b54d-172fa5545a74` |
 
----
+Telemetry là JSON kết thúc bằng newline, được chia thành các đoạn notify tối đa
+20 byte. Gateway phải ghép lại trước khi parse. Mỗi node gửi khoảng một lần/giây
+khi kết nối; mất kết nối thì quảng bá trở lại.
 
-### 🟢 NODE 2: Living Node (Phòng Khách)
-**Mục đích:** Theo dõi nhiệt độ, độ ẩm, độ sáng. Điều khiển quạt, đèn.
+Lệnh ví dụ: `{"id":1,"cmd":"buzzer","state":1,"buzzer":true}`.
+Node trả ACK với cùng `id` và trạng thái `applied`, `rejected` hoặc `busy`.
+Quạt nhận PWM 0–255 trên đường BLE; backend đổi phần trăm 0–100 của giao diện sang PWM.
 
-#### Sơ đồ cắm chân (Pinout)
-| Thiết bị | Chân Nguồn (VCC) | Chân Đất (GND) | Chân Tín hiệu | ESP32-C3 | Ghi chú |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **PIR HC-SR501** | **5V** | GND | OUT | **GPIO10** | Cảm biến chuyển động |
-| **BH1750** | **3.3V** | GND | SDA / SCL | **GPIO8 / GPIO9** | Cảm biến ánh sáng |
-| **SHT30** | **3.3V** | GND | SDA / SCL | **GPIO8 / GPIO9** | Cảm biến nhiệt độ, độ ẩm |
-| **Relay đèn** | **5V** | GND | IN | **GPIO7** | Bật tắt đèn |
-| **Driver quạt** | Khẩn cấp 5V/12V | GND | IN1 / IN2 | **GPIO1 / GPIO2** | Quạt làm mát |
+## Logic hiện tại
 
-#### Logic Giao tiếp
-*   **Gửi lên Pi:** `{"room":"living","temp":26.2,"hum":55.0,"lux":850,"motion":false}`
-*   **Nhận từ Pi:** `{"light": true, "fan": true, "auto": true}`
+### Bếp
 
----
+`KitchenState` đọc cảm biến mỗi khoảng 100 ms, kể cả lúc mất BLE:
 
-### 🟡 NODE 3: Kitchen Node (Phòng Bếp)
-**BLE MAC dự kiến:** `E8:3D:C1:9D:A5:16`. Cấu hình Pi dùng `BLE_MAC_KITCHEN=E8:3D:C1:9D:A5:16`; nếu `.env` đã có MAC cũ thì cần cập nhật. Firmware in MAC thực tế ra Serial Monitor khi khởi động để đối chiếu.
+- Gas ADC ≥ 1500: còi cảnh báo nhịp 300 ms mỗi 2 giây.
+- Gas ADC ≥ 2500, có khói hoặc có lửa: mở cửa, bật quạt hút và còi, **tắt đèn**.
+- Trong trạng thái khẩn cấp, node từ chối lệnh điều khiển thủ công.
+- Khi hết cả nguy hiểm và cảnh báo liên tục 10 giây, node khôi phục trạng thái
+  các đầu ra đã lưu trước khẩn cấp.
 
-Pinout dưới đây là bản cập nhật cho node bếp, thay thế phần tương ứng trong `sodochan.xlsx` / `sodochan.csv` cũ.
+Ngưỡng này nằm trong `node_logic.h`; đổi biến môi trường ngưỡng gas trên gateway
+không tự đổi ngưỡng đã biên dịch trong node. Backend còn có quy trình cảnh báo và
+xác nhận khôi phục các phòng khác; không đồng nhất việc node bếp hết cảnh báo với
+việc toàn bộ hệ thống đã hoàn tất xác nhận.
 
-**Mục đích:** Báo cháy, báo rò rỉ khí gas, bật quạt hút và mở cửa sổ an toàn.
+### Phòng khách
 
-#### Sơ đồ cắm chân (Pinout)
-| Thiết bị | Chân Nguồn (VCC) | Chân Đất (GND) | Chân Tín hiệu | ESP32-C3 | Ghi chú |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **MQ-2** | **5V** | GND | AO / DO | **GPIO0 / GPIO1** | Đo khí gas và khói |
-| **Flame Sensor** | **3.3V** | GND | DO | **GPIO2** | Báo có lửa (Mức LOW) |
-| **Servo SG90** | **5V** | GND | Signal | **GPIO4** | Cửa sổ thoáng khí |
-| **Relay đèn** | **5V** | GND | IN | **GPIO20** | Bật đèn bếp |
-| **Buzzer** | Theo module | GND | Signal | **GPIO5** | Điều khiển HIGH/LOW; mặc định LOW |
-| **Driver quạt hút**| Khẩn cấp 5V/12V| GND | IN1 / IN2 | **GPIO7 / GPIO8** | Quạt thông gió |
+Chế độ tự động chạy cục bộ ngay cả khi mất BLE. Khi có chuyển động gần đây: bật
+đèn nếu lux < 100; quạt 100% nếu nhiệt độ ≥ 30 hoặc độ ẩm ≥ 75, khoảng 50% nếu
+nhiệt độ ≥ 27 hoặc độ ẩm ≥ 65, còn lại tắt. Không có chuyển động trong 120 giây
+thì tắt đèn/quạt. Lệnh đèn hoặc quạt thủ công tắt `auto`; lệnh `auto` bật lại chế độ này.
 
-#### Logic Giao tiếp
-*   **Gửi lên Pi:** `{"room":"kitchen","gas":300,"smoke":false,"flame":false,"window":false,"exhaust":false,"light":false,"buzzer":false}`. Trạng thái thiết bị phản ánh lệnh đã thực thi tại ESP32, không phải cảm biến xác nhận cơ khí.
-*   **Nhận từ Pi:** `{"window": true, "exhaust": true, "light": true, "buzzer": true}`
-*   Cũng nhận lệnh dạng `{"cmd":"buzzer","state":1}`. Buzzer chủ động GPIO5 dùng HIGH để bật, LOW để tắt.
-*   Dashboard có công tắc đèn bếp và còi. Khi khẩn cấp, backend bật còi bếp, đèn bếp, quạt hút và mở cửa sổ. Khi cảm biến hết cảnh báo, xác nhận an toàn sẽ tắt còi/quạt và đóng cửa sổ; đèn vẫn giữ sáng.
-*   Không xác nhận an toàn khi cảm biến còn báo nguy hiểm hoặc gas vượt ngưỡng cảnh báo. Quy ước MQ-2 DO trong firmware này vẫn là HIGH = báo khói; cần đối chiếu module thực tế nếu luôn báo khói khi không có khói.
+### Phòng bệnh
 
----
+Quạt và buzzer nhận lệnh BLE. Servo nhận góc qua UART1 trên GPIO20/21, không qua
+lệnh servo BLE. Camera và xử lý AI chạy trên gateway.
 
-## 3. Hướng dẫn Nạp Code và Thư viện
-1. Chọn Board: **ESP32C3 Dev Module** trong Arduino IDE (Nhớ bật `USB CDC On Boot: Enabled`).
-2. Cài các thư viện sau từ Library Manager:
-   - **ArduinoJson** (by Benoit Blanchon)
-   - **ESP32Servo** (by Kevin Harrington)
-   - **Adafruit SHT31 Library** (by Adafruit)
-   - **BH1750** (by Christopher Laws)
-3. Nạp code vào từng mạch, sau đó dùng điện thoại (app **nRF Connect**) quét dò địa chỉ MAC Bluetooth và điền vào file `.env` trên Pi.
+Các hành vi trên mô tả mã nguồn hiện tại, không khẳng định tất cả board đang được
+nạp đúng phiên bản này. Patient/living hiện thay nhiệt độ hoặc độ ẩm NaN thành 0
+khi gửi telemetry; không xem số 0 là bằng chứng cảm biến hoạt động bình thường.

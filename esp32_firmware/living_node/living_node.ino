@@ -3,6 +3,8 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 #include <ArduinoJson.h>
+#include "../command_contract.h"
+#include "../node_logic.h"
 #include <Wire.h>
 #include <Adafruit_SHT31.h>
 #include <BH1750.h>
@@ -27,6 +29,10 @@ Adafruit_SHT31 sht31 = Adafruit_SHT31();
 BH1750 lightMeter;
 
 bool auto_mode = true;
+LivingState living;
+
+int fanPwm = 0;
+bool lightOn = false;
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) { deviceConnected = true; }
@@ -36,39 +42,43 @@ class MyServerCallbacks: public BLEServerCallbacks {
     }
 };
 
-class MyCommandCallbacks: public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic *pCharacteristic) {
-      String value = pCharacteristic->getValue().c_str();
+bool handleCommand(const String &value) {
+      bool applied = false;
       if (value.length() > 0) {
-        StaticJsonDocument<200> doc;
+        StaticJsonDocument<384> doc;
         if (!deserializeJson(doc, value)) {
-          if (doc.containsKey("light")) {
-            digitalWrite(PIN_LIGHT_RELAY, doc["light"] ? HIGH : LOW);
+          bool enabled;
+          if (commandFan(doc, fanPwm)) {
+            applied = true;
+            analogWrite(PIN_FAN_IN1, fanPwm);
+            digitalWrite(PIN_FAN_IN2, LOW);
+            auto_mode = false;
           }
-          if (doc.containsKey("fan")) {
-            bool on = doc["fan"];
-            digitalWrite(PIN_FAN_IN1, on ? HIGH : LOW);
-            digitalWrite(PIN_FAN_IN2, LOW); // Quay 1 chiều
+          if (commandSwitch(doc, "light", enabled)) {
+            applied = true;
+            lightOn = enabled;
+            digitalWrite(PIN_LIGHT_RELAY, lightOn ? HIGH : LOW);
+            auto_mode = false;
           }
-          if (doc.containsKey("auto")) {
-            auto_mode = doc["auto"];
-          }
+          if (commandSwitch(doc, "auto", enabled)) { auto_mode = enabled; applied = true; }
         }
       }
-    }
-};
+      return applied;
+}
 
 void setup() {
+  commandInbox = xQueueCreate(8, 200);
+  rejectedInbox = xQueueCreate(8, 200);
   Serial.begin(115200);
   delay(3000);
   Serial.println("\n--- BOOTING LIVING NODE ---");
-  
+
   Serial.println("[1] Init Pins...");
   pinMode(PIN_PIR, INPUT);
   pinMode(PIN_LIGHT_RELAY, OUTPUT);
   pinMode(PIN_FAN_IN1, OUTPUT);
   pinMode(PIN_FAN_IN2, OUTPUT);
-  
+
   digitalWrite(PIN_LIGHT_RELAY, LOW);
   digitalWrite(PIN_FAN_IN1, LOW);
   digitalWrite(PIN_FAN_IN2, LOW);
@@ -89,7 +99,7 @@ void setup() {
   Serial.println("[3] Init BLE...");
   BLEDevice::init("AIoT_Living_Node");
   Serial.printf("    => MAC ADDRESS: %s\n", BLEDevice::getAddress().toString().c_str());
-  
+
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
 
@@ -110,24 +120,31 @@ void setup() {
 }
 
 void loop() {
+  drainCommands(handleCommand, pNotifyChar);
   static unsigned long lastSend = 0;
-  if (deviceConnected && millis() - lastSend > 1000) {
+  if (millis() - lastSend > 1000) {
     lastSend = millis();
-    
+
     float t = sht31.readTemperature();
     float h = sht31.readHumidity();
     float lux = lightMeter.readLightLevel();
     bool motion = digitalRead(PIN_PIR) == HIGH;
 
+    // Local automation runs even when BLE is disconnected.
+    living.update(millis(), motion, lux, t, h, auto_mode, lightOn, fanPwm);
+    digitalWrite(PIN_LIGHT_RELAY, lightOn ? HIGH : LOW);
+    analogWrite(PIN_FAN_IN1, fanPwm);
+    digitalWrite(PIN_FAN_IN2, LOW);
+    if (!deviceConnected) return;
     if (isnan(t)) t = 0.0;
     if (isnan(h)) h = 0.0;
 
-    char payload[150];
-    snprintf(payload, sizeof(payload), 
-      "{\"room\":\"living\",\"temp\":%.1f,\"hum\":%.1f,\"lux\":%d,\"motion\":%s}", 
-      t, h, (int)lux, motion ? "true" : "false");
+    char payload[256];
+    snprintf(payload, sizeof(payload),
+      "{\"room\":\"living\",\"temp\":%.1f,\"hum\":%.1f,\"lux\":%d,\"motion\":%s,\"light\":%s,\"fan\":%s,\"fan_speed\":%d,\"auto\":%s}",
+      t, h, (int)lux, motion ? "true" : "false", lightOn ? "true" : "false",
+      fanPwm > 0 ? "true" : "false", (fanPwm * 100 + 127) / 255, auto_mode ? "true" : "false");
 
-    pNotifyChar->setValue(payload);
-    pNotifyChar->notify();
+    notifyJson(pNotifyChar, payload);
   }
 }

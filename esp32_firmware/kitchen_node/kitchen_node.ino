@@ -3,6 +3,8 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 #include <ArduinoJson.h>
+#include "../command_contract.h"
+#include "../node_logic.h"
 #include <ESP32Servo.h>
 
 #define SERVICE_UUID           "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
@@ -24,10 +26,23 @@ const int PIN_EXHAUST_IN1 = 7;
 const int PIN_EXHAUST_IN2 = 8;
 
 Servo windowServo;
-bool windowOpen = false;
-bool exhaustOn = false;
-bool lightOn = false;
-bool buzzerOn = false;
+KitchenState kitchen;
+bool &windowOpen = kitchen.windowOpen;
+bool &exhaustOn = kitchen.exhaustOn;
+bool &lightOn = kitchen.lightOn;
+bool &buzzerOn = kitchen.buzzerOn;
+bool &emergency = kitchen.emergency;
+bool &warningGas = kitchen.warningGas;
+
+void applyOutputs() {
+  windowServo.write(windowOpen ? 90 : 0);
+  digitalWrite(PIN_EXHAUST_IN1, exhaustOn ? HIGH : LOW);
+  digitalWrite(PIN_EXHAUST_IN2, LOW);
+  digitalWrite(PIN_LIGHT_RELAY, lightOn ? HIGH : LOW);
+  // Mild gas warning pulses; emergency remains continuously audible.
+  bool sound = kitchen.sound(millis());
+  digitalWrite(PIN_BUZZER, sound ? HIGH : LOW);
+}
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) { deviceConnected = true; }
@@ -37,42 +52,27 @@ class MyServerCallbacks: public BLEServerCallbacks {
     }
 };
 
-class MyCommandCallbacks: public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic *pCharacteristic) {
-      String value = pCharacteristic->getValue().c_str();
+bool handleCommand(const String &value) {
+      bool applied = false;
       if (value.length() > 0) {
-        StaticJsonDocument<200> doc;
+        StaticJsonDocument<384> doc;
         if (!deserializeJson(doc, value)) {
-          // Accept both {"cmd":"buzzer","state":1} and {"buzzer":true}.
-          const char* cmd = doc["cmd"] | "";
-          if (doc.containsKey("state") &&
-              (strcmp(cmd, "window") == 0 || strcmp(cmd, "exhaust") == 0 ||
-               strcmp(cmd, "light") == 0 || strcmp(cmd, "buzzer") == 0)) {
-            doc[cmd] = doc["state"].as<bool>();
-          }
-          if (doc.containsKey("window")) {
-            windowOpen = doc["window"];
-            windowServo.write(windowOpen ? 90 : 0);
-          }
-          if (doc.containsKey("exhaust")) {
-            exhaustOn = doc["exhaust"];
-            digitalWrite(PIN_EXHAUST_IN1, exhaustOn ? HIGH : LOW);
-            digitalWrite(PIN_EXHAUST_IN2, LOW);
-          }
-          if (doc.containsKey("light")) {
-            lightOn = doc["light"];
-            digitalWrite(PIN_LIGHT_RELAY, lightOn ? HIGH : LOW);
-          }
-          if (doc.containsKey("buzzer")) {
-            buzzerOn = doc["buzzer"];
-            digitalWrite(PIN_BUZZER, buzzerOn ? HIGH : LOW);
-          }
+          // Commands cannot override the local emergency latch/recovery window.
+          if (emergency) return false;
+          bool enabled;
+          if (commandSwitch(doc, "window", enabled)) { windowOpen = enabled; applied = true; }
+          if (commandSwitch(doc, "exhaust", enabled)) { exhaustOn = enabled; applied = true; }
+          if (commandSwitch(doc, "light", enabled)) { lightOn = enabled; applied = true; }
+          if (commandSwitch(doc, "buzzer", enabled)) { buzzerOn = enabled; applied = true; }
+          applyOutputs();
         }
       }
-    }
-};
+      return applied;
+}
 
 void setup() {
+  commandInbox = xQueueCreate(8, 200);
+  rejectedInbox = xQueueCreate(8, 200);
   Serial.begin(115200);
   delay(3000);
   Serial.println("\n--- BOOTING KITCHEN NODE ---");
@@ -119,23 +119,31 @@ void setup() {
 }
 
 void loop() {
+  static unsigned long lastSample = 0;
   static unsigned long lastSend = 0;
-  if (deviceConnected && millis() - lastSend > 1000) {
-    lastSend = millis();
-    
-    int gas = analogRead(PIN_MQ2_AO);
-    bool smoke = (digitalRead(PIN_MQ2_DO) == HIGH); 
-    bool flame = (digitalRead(PIN_FLAME_DO) == LOW); // LOW nghĩa là có lửa
-
+  static int gas = 0;
+  static bool smoke = false;
+  static bool flame = false;
+  unsigned long now = millis();
+  if (now - lastSample >= 100) {
+    lastSample = now;
+    gas = analogRead(PIN_MQ2_AO);
+    smoke = digitalRead(PIN_MQ2_DO) == HIGH;
+    flame = digitalRead(PIN_FLAME_DO) == LOW;
+    kitchen.update(now, gas, smoke, flame);
+  }
+  drainCommands(handleCommand, pNotifyChar);
+  applyOutputs();
+  if (deviceConnected && now - lastSend >= 1000) {
+    lastSend = now;
     char payload[256];
-    snprintf(payload, sizeof(payload), 
+    snprintf(payload, sizeof(payload),
       "{\"room\":\"kitchen\",\"gas\":%d,\"smoke\":%s,\"flame\":%s,"
-      "\"window\":%s,\"exhaust\":%s,\"light\":%s,\"buzzer\":%s}",
+      "\"window\":%s,\"exhaust\":%s,\"light\":%s,\"buzzer\":%s,\"emergency\":%s}",
       gas, smoke ? "true" : "false", flame ? "true" : "false",
       windowOpen ? "true" : "false", exhaustOn ? "true" : "false",
-      lightOn ? "true" : "false", buzzerOn ? "true" : "false");
-
-    pNotifyChar->setValue(payload);
-    pNotifyChar->notify();
+      lightOn ? "true" : "false", (buzzerOn || warningGas) ? "true" : "false",
+      emergency ? "true" : "false");
+    notifyJson(pNotifyChar, payload);
   }
 }

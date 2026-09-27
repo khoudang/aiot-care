@@ -67,15 +67,6 @@ NODES = [
         "notify_uuid": os.getenv("BLE_NOTIFY_UUID_KITCHEN", BLE_NOTIFY_UUID),
         "command_uuid": os.getenv("BLE_COMMAND_UUID_KITCHEN", BLE_COMMAND_UUID),
     },
-    {
-        # Node thứ 4: Gateway nhận dữ liệu BLE từ vòng đeo tay (MAX30102)
-        # đọc nhịp tim + SpO2, rồi gửi tiếp lên Pi qua BLE.
-        "room": "wearable",
-        "name": "Vòng đeo sức khỏe",
-        "mac": os.getenv("BLE_MAC_WEARABLE", "a0:f2:62:a5:6d:19"),
-        "notify_uuid": os.getenv("BLE_NOTIFY_UUID_WEARABLE", BLE_NOTIFY_UUID),
-        "command_uuid": os.getenv("BLE_COMMAND_UUID_WEARABLE", BLE_COMMAND_UUID),
-    },
 ]
 
 # Alias tương thích ngược (một số script cũ có thể tham chiếu)
@@ -142,16 +133,6 @@ GAS_WARN_THRESHOLD = float(os.getenv("GAS_WARN_THRESHOLD", "1500"))
 GAS_HIGH_THRESHOLD = float(os.getenv("GAS_HIGH_THRESHOLD", "2500"))
 GAS_SMOOTH_WINDOW = int(os.getenv("GAS_SMOOTH_WINDOW", "5"))
 
-
-# ------------------------------------------------------------------ #
-#  Ngưỡng sức khỏe (vòng đeo MAX30102: nhịp tim + SpO2)
-#  Vượt ngưỡng -> cảnh báo hệ thống + gửi Telegram.
-# ------------------------------------------------------------------ #
-SPO2_WARN = float(os.getenv("SPO2_WARN", "95"))          # SpO2 < 95% -> bất ổn
-SPO2_CRITICAL = float(os.getenv("SPO2_CRITICAL", "90"))  # SpO2 < 90% -> nguy hiểm
-HR_LOW = float(os.getenv("HR_LOW", "50"))                # nhịp tim < 50 bpm -> chậm bất thường
-HR_HIGH = float(os.getenv("HR_HIGH", "120"))             # nhịp tim > 120 bpm -> nhanh bất thường
-HEALTH_HOLD_SEC = float(os.getenv("HEALTH_HOLD_SEC", "6"))  # giữ bất thường bao lâu mới báo (giảm nhiễu)
 
 # ------------------------------------------------------------------ #
 #  AI / Medical RAG - Chatbot "Bác sĩ gia đình"

@@ -3,6 +3,7 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 #include <ArduinoJson.h>
+#include "../command_contract.h"
 #include <Wire.h>
 #include <Adafruit_SHT31.h>
 #include <ESP32Servo.h>
@@ -29,6 +30,9 @@ const int PIN_PIR = 5;
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
 Servo trackingServo;
 
+int fanPwm = 0;
+bool buzzerOn = false;
+
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) { deviceConnected = true; }
     void onDisconnect(BLEServer* pServer) {
@@ -37,41 +41,45 @@ class MyServerCallbacks: public BLEServerCallbacks {
     }
 };
 
-class MyCommandCallbacks: public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic *pCharacteristic) {
-      String value = pCharacteristic->getValue().c_str();
+bool handleCommand(const String &value) {
+      bool applied = false;
       if (value.length() > 0) {
-        StaticJsonDocument<200> doc;
+        StaticJsonDocument<384> doc;
         if (!deserializeJson(doc, value)) {
-          if (doc.containsKey("buzzer")) {
-            digitalWrite(PIN_BUZZER, doc["buzzer"] ? HIGH : LOW);
+          bool enabled;
+          if (commandFan(doc, fanPwm)) {
+            applied = true;
+            analogWrite(PIN_FAN_IN1, fanPwm);
+            digitalWrite(PIN_FAN_IN2, LOW);
           }
-          if (doc.containsKey("fan")) {
-            bool on = doc["fan"];
-            digitalWrite(PIN_FAN_IN1, on ? HIGH : LOW);
-            digitalWrite(PIN_FAN_IN2, LOW); // Quay 1 chiều
+          if (commandSwitch(doc, "buzzer", enabled)) {
+            applied = true;
+            buzzerOn = enabled;
+            digitalWrite(PIN_BUZZER, buzzerOn ? HIGH : LOW);
           }
         }
       }
-    }
-};
+      return applied;
+}
 
 void setup() {
+  commandInbox = xQueueCreate(8, 200);
+  rejectedInbox = xQueueCreate(8, 200);
   Serial.begin(115200);
   delay(3000); // Đợi USB CDC sẵn sàng
   Serial.println("\n--- BOOTING PATIENT NODE ---");
-  
+
   // Khởi tạo UART cho Pi
   Serial.println("[1] Init UART1...");
   Serial1.begin(115200, SERIAL_8N1, PIN_UART_RX, PIN_UART_TX);
-  
+
   // Cấu hình chân
   Serial.println("[2] Init Pins...");
   pinMode(PIN_BUZZER, OUTPUT);
   pinMode(PIN_FAN_IN1, OUTPUT);
   pinMode(PIN_FAN_IN2, OUTPUT);
   pinMode(PIN_PIR, INPUT);
-  
+
   digitalWrite(PIN_BUZZER, LOW);
   digitalWrite(PIN_FAN_IN1, LOW);
   digitalWrite(PIN_FAN_IN2, LOW);
@@ -79,7 +87,7 @@ void setup() {
   Serial.println("[3] Init Servo...");
   trackingServo.attach(PIN_SERVO);
   trackingServo.write(90); // Mặc định ở giữa
-  
+
   Serial.println("[4] Init I2C & SHT31...");
   Wire.begin(PIN_SDA, PIN_SCL);
   if (!sht31.begin(0x44)) {
@@ -92,7 +100,7 @@ void setup() {
   Serial.println("[5] Init BLE...");
   BLEDevice::init("AIoT_Patient_Node");
   Serial.printf("    => MAC ADDRESS: %s\n", BLEDevice::getAddress().toString().c_str());
-  
+
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
 
@@ -113,6 +121,7 @@ void setup() {
 }
 
 void loop() {
+  drainCommands(handleCommand, pNotifyChar);
   // Xử lý lệnh UART từ Pi để quay Servo
   if (Serial1.available()) {
     String cmd = Serial1.readStringUntil('\n');
@@ -129,7 +138,7 @@ void loop() {
   static unsigned long lastSend = 0;
   if (deviceConnected && millis() - lastSend > 1000) {
     lastSend = millis();
-    
+
     float t = sht31.readTemperature();
     float h = sht31.readHumidity();
     bool motion = digitalRead(PIN_PIR) == HIGH;
@@ -137,12 +146,12 @@ void loop() {
     if (isnan(t)) t = 0.0;
     if (isnan(h)) h = 0.0;
 
-    char payload[150];
-    snprintf(payload, sizeof(payload), 
-      "{\"room\":\"patient\",\"temp\":%.1f,\"hum\":%.1f,\"motion\":%s}", 
-      t, h, motion ? "true" : "false");
+    char payload[256];
+    snprintf(payload, sizeof(payload),
+      "{\"room\":\"patient\",\"temp\":%.1f,\"hum\":%.1f,\"motion\":%s,\"fan\":%s,\"fan_speed\":%d,\"buzzer\":%s}",
+      t, h, motion ? "true" : "false", fanPwm > 0 ? "true" : "false",
+      (fanPwm * 100 + 127) / 255, buzzerOn ? "true" : "false");
 
-    pNotifyChar->setValue(payload);
-    pNotifyChar->notify();
+    notifyJson(pNotifyChar, payload);
   }
 }

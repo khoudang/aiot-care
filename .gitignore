@@ -9,3 +9,11 @@ env/
 *.db-shm
 *.sqlite3
 medical_index/
+
+# Local tooling and generated artifacts
+.venv/
+venv311/
+.pytest_cache/
+.coverage
+htmlcov/
+*.log

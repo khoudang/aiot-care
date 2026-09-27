@@ -16,9 +16,11 @@ Không dùng MQTT. Toàn bộ realtime đẩy lên web bằng Socket.IO.
 
 import asyncio
 import json
+import math
 import queue
 import threading
 import time
+from node_protocol import build_command
 from collections import deque
 
 import cv2
@@ -76,9 +78,6 @@ from config import (
     UART_ENABLE,
     UART_PORT,
     VIDEO_SOURCE,
-)
-from config import (
-    SPO2_WARN, SPO2_CRITICAL, HR_LOW, HR_HIGH, HEALTH_HOLD_SEC,
 )
 from database import (
     get_config_value, log_audit, vn_now_sql, fetch_gesture_mappings,
@@ -145,12 +144,9 @@ ROOMS = {
         "window": False, "exhaust": False, "light": False, "buzzer": False,
         "updated_at": 0,
     },
-    "wearable": {
-        "heart_rate": None, "spo2": None, "status": "normal", "updated_at": 0,
-    },
 }
 
-NODE_ONLINE = {"patient": False, "living": False, "kitchen": False, "wearable": False}
+NODE_ONLINE = {"patient": False, "living": False, "kitchen": False}
 
 AI = {
     "gesture": "—", "fps": "--", "latency": "--",
@@ -168,6 +164,18 @@ camera_owner_user_id = None
 
 # Cảnh báo
 alert_level = "normal"                     # normal | light | emergency | awaiting
+_emergency_snapshot = None
+_restoration_started = None
+_restoration_seen = {}
+_kitchen_safe_since = None
+_kitchen_sample_at = None
+_kitchen_emergency = False
+_fall_buzzer_saved = None
+_fall_restore_target = None
+_safety_retry_at = {}
+SAFETY_RECHECK_SEC = 5.0
+KITCHEN_SAFE_HOLD_SEC = 10.0
+KITCHEN_SAMPLE_TIMEOUT_SEC = 3.0
 gas_window = {"kitchen": deque(maxlen=GAS_SMOOTH_WINDOW)}
 
 services_started = False
@@ -179,12 +187,16 @@ histories = {
     "living": {"labels": deque(maxlen=MAX_HISTORY), "temp": deque(maxlen=MAX_HISTORY),
                "hum": deque(maxlen=MAX_HISTORY), "lux": deque(maxlen=MAX_HISTORY)},
     "kitchen": {"labels": deque(maxlen=MAX_HISTORY), "gas": deque(maxlen=MAX_HISTORY)},
-    "wearable": {"labels": deque(maxlen=MAX_HISTORY), "heart_rate": deque(maxlen=MAX_HISTORY),
-                 "spo2": deque(maxlen=MAX_HISTORY)},
 }
 
 # Hàng đợi lệnh BLE theo từng phòng
 command_queues = {room: queue.Queue(maxsize=20) for room in ROOMS}
+_delivery_lock = threading.RLock()
+_pending_commands = {room: {} for room in ROOMS}
+_command_sequence = 0
+COMMAND_ATTEMPTS = 4
+COMMAND_ACK_TIMEOUT = 2.0
+COMMAND_TTL = 30.0
 ble_clients = {room: None for room in ROOMS}
 ble_loop = None
 
@@ -237,8 +249,6 @@ _NUMERIC_ALIASES = {
     "gas": "gas", "ppm": "gas",
     "lux": "lux", "light_level": "light_level", "brightness": "light_level",
     "fan_speed": "fan_speed", "speed": "fan_speed",
-    "heart_rate": "heart_rate", "hr": "heart_rate", "bpm": "heart_rate",
-    "spo2": "spo2", "oxygen": "spo2", "sp_o2": "spo2",
 }
 _BOOL_KEYS = ["motion", "light", "fan", "buzzer", "smoke", "flame", "window", "exhaust", "auto"]
 
@@ -246,9 +256,27 @@ _BOOL_KEYS = ["motion", "light", "fan", "buzzer", "smoke", "flame", "window", "e
 def apply_node_payload(room, payload):
     """Nhận dict telemetry từ 1 node, cập nhật state phòng tương ứng."""
     global last_motion_ts
+    global _kitchen_safe_since, _kitchen_sample_at, _kitchen_emergency
 
     if room not in ROOMS:
         return
+
+    if room == "kitchen" and any(key in payload for key in ("gas", "smoke", "flame")):
+        sample_time = time.monotonic()
+        gas = payload.get("gas")
+        valid = (type(gas) in (int, float) and math.isfinite(gas) and 0 <= gas <= 4095
+                 and type(payload.get("smoke")) is bool
+                 and type(payload.get("flame")) is bool)
+        continuous = (_kitchen_sample_at is not None and
+                      sample_time - _kitchen_sample_at <= KITCHEN_SAMPLE_TIMEOUT_SEC)
+        safe = valid and gas < GAS_WARN_THRESHOLD and not payload["smoke"] and not payload["flame"]
+        if not safe:
+            _kitchen_safe_since = None
+        elif _kitchen_safe_since is None or not continuous:
+            _kitchen_safe_since = sample_time
+        _kitchen_sample_at = sample_time if valid else None
+        if type(payload.get("emergency")) is bool:
+            _kitchen_emergency = payload["emergency"]
 
     with state_lock:
         r = ROOMS[room]
@@ -274,8 +302,8 @@ def apply_node_payload(room, payload):
         _maybe_auto_camera_on()
 
     evaluate_alerts()
-    if room == "wearable":
-        evaluate_health()
+    _observe_restoration(room, payload)
+    _observe_fall_restoration(room, payload)
 
     _emit("room_update", {"room": room, "data": dict(ROOMS[room])})
     if room == "patient":
@@ -293,6 +321,9 @@ def _gas_avg(room):
 #  Node online / offline
 # ================================================================== #
 def set_node_online(room, online):
+    if room not in ROOMS:
+        return
+    _restoration_seen.pop(room, None)
     changed = NODE_ONLINE.get(room) != online
     NODE_ONLINE[room] = online
     if changed:
@@ -305,25 +336,56 @@ def set_node_online(room, online):
 
 def room_name(room):
     return {"patient": "phòng người bệnh", "living": "phòng khách",
-            "kitchen": "phòng bếp", "wearable": "vòng đeo sức khỏe"}.get(room, room)
+            "kitchen": "phòng bếp"}.get(room, room)
 
 
 # ================================================================== #
 #  BLE — kết nối 3 node đồng thời
 # ================================================================== #
 def _make_notify_handler(room):
+    buffer = bytearray()
+
+    def apply_frame(frame):
+        payload = json.loads(frame.decode("utf-8"))
+        if isinstance(payload, dict):
+            target = payload.get("room", room)
+            target = "patient" if target == "bed" else target
+            if target == room:
+                if "ack" in payload:
+                    if type(payload["ack"]) is not int:
+                        return
+                    with _delivery_lock:
+                        pending = _pending_commands[room].get(payload["ack"])
+                        if pending and payload.get("status") in ("applied", "rejected"):
+                            del _pending_commands[room][payload["ack"]]
+                            if payload["status"] == "rejected":
+                                _fail_restoration(room)
+                                _emit("command_error", {"room": room, "message": "Node rejected command"})
+                else:
+                    apply_node_payload(room, payload)
+
     def handler(_sender, data):
+        buffer.extend(data)
+        if len(buffer) > 2048:
+            buffer.clear()
+            return
+        while b"\n" in buffer:
+            frame, _, remainder = buffer.partition(b"\n")
+            buffer[:] = remainder
+            if not frame.strip():
+                continue
+            try:
+                apply_frame(frame)
+            except (ValueError, UnicodeError):
+                pass
+        # Compatibility with old firmware sending one complete JSON notification.
         try:
-            text = data.decode("utf-8", errors="ignore").strip()
-            if not text:
-                return
-            payload = json.loads(text)
-            if isinstance(payload, dict):
-                # node có thể tự khai báo "room"; nếu có thì ưu tiên
-                target = payload.get("room", room)
-                apply_node_payload(target if target in ROOMS else room, payload)
-        except Exception as exc:
-            print(f"[BLE {room}] parse error:", exc)
+            json.loads(buffer.decode("utf-8"))
+        except (ValueError, UnicodeError):
+            return
+        frame = bytes(buffer)
+        buffer.clear()
+        apply_frame(frame)
     return handler
 
 
@@ -346,19 +408,12 @@ async def _node_loop(node):
                 print(f"[BLE {room}] connected")
 
                 await client.start_notify(notify_uuid, _make_notify_handler(room))
+                _resync_safety(room)
 
                 # vòng lặp gửi lệnh (drain queue) + giữ kết nối
                 while client.is_connected:
-                    try:
-                        item = command_queues[room].get_nowait()
-                    except queue.Empty:
-                        await asyncio.sleep(0.05)
-                        continue
-                    try:
-                        await client.write_gatt_char(command_uuid, item.encode("utf-8"))
-                        print(f"[BLE {room}] sent: {item}")
-                    except Exception as exc:
-                        print(f"[BLE {room}] write error:", exc)
+                    await _send_pending(room, client, command_uuid)
+                    await asyncio.sleep(0.05)
 
         except Exception as exc:
             print(f"[BLE {room}] disconnected / reconnect:", exc)
@@ -380,12 +435,68 @@ def _ble_thread():
 
 
 def enqueue_command(room, text):
+    global _command_sequence
     if room not in command_queues:
-        return
+        return False
+    with _delivery_lock:
+        if len(_pending_commands[room]) >= 20:
+            return False
+        command = json.loads(text)
+        _command_sequence = _command_sequence % 0xFFFFFFFF + 1
+        command["id"] = _command_sequence
+        text = json.dumps(command, separators=(",", ":"))
+        try:
+            command_queues[room].put_nowait(text)
+        except queue.Full:
+            return False
+        _pending_commands[room][_command_sequence] = {
+            "text": text, "created": time.monotonic(), "sent": None, "attempts": 0}
+        return True
+
+
+def _cancel_commands(room, device=None):
+    """A new safety phase invalidates queued and retrying older commands."""
+    with _delivery_lock:
+        for ident, pending in list(_pending_commands[room].items()):
+            if device is None or json.loads(pending["text"])["cmd"] == device:
+                del _pending_commands[room][ident]
+        retained = []
+        while True:
+            try:
+                text = command_queues[room].get_nowait()
+                if device is not None and json.loads(text)["cmd"] != device:
+                    retained.append(text)
+            except queue.Empty:
+                break
+        for text in retained:
+            command_queues[room].put_nowait(text)
+
+
+async def _send_pending(room, client, command_uuid):
+    _reconcile_safety(room)
+    # One in-flight command per room preserves auto/manual command ordering.
+    with _delivery_lock:
+        while not command_queues[room].empty():
+            command_queues[room].get_nowait()
+        if not _pending_commands[room]:
+            return
+        ident, pending = next(iter(_pending_commands[room].items()))
+        now = time.monotonic()
+        due = pending["sent"] is None or now - pending["sent"] >= COMMAND_ACK_TIMEOUT
+        if now - pending["created"] >= COMMAND_TTL or (due and pending["attempts"] >= COMMAND_ATTEMPTS):
+            del _pending_commands[room][ident]
+            _fail_restoration(room)
+            _emit("command_error", {"room": room, "message": "Command acknowledgement timeout"})
+            return
+        if not due:
+            return
+        pending["sent"] = now
+        pending["attempts"] += 1
     try:
-        command_queues[room].put_nowait(text)
-    except queue.Full:
-        print(f"[BLE {room}] command queue full")
+        await client.write_gatt_char(command_uuid, pending["text"].encode("utf-8"), response=True)
+    except Exception:
+        # Retain the same ID across write errors and reconnect, until bounded expiry.
+        raise
 
 
 # ================================================================== #
@@ -406,8 +517,17 @@ _DEVICE_LABELS = {
 
 
 def set_device(room, device, state=None, value=None, source="manual", user_id=None, silent=False):
-    """Gửi lệnh điều khiển 1 thiết bị và cập nhật state cục bộ (optimistic)."""
-    if room not in ROOMS:
+    """Queue a validated command; only node telemetry confirms device state."""
+    try:
+        room, cmd = build_command(room, device, state, value)
+    except ValueError as exc:
+        _emit("command_error", {"room": room, "device": device, "message": str(exc)})
+        return
+    if source != "auto" and (_emergency_snapshot is not None or
+                             room == "patient" and device == "buzzer" and
+                             (AI.get("fall") or _fall_buzzer_saved is not None)):
+        _emit("command_error", {"room": room, "device": device,
+                                "message": "Điều khiển đang khóa do cảnh báo."})
         return
 
     # chống dội lệnh trùng
@@ -417,32 +537,10 @@ def set_device(room, device, state=None, value=None, source="manual", user_id=No
     now = now_ts()
     if prev and prev[0] == sig and (now - prev[1]) < COMMAND_DEBOUNCE_SEC and source != "auto":
         return
+    if not enqueue_command(room, json.dumps(cmd, ensure_ascii=False)):
+        _emit("command_error", {"room": room, "device": device, "message": "Command queue full"})
+        return False
     _last_cmd[key] = (sig, now)
-
-    cmd = {"cmd": device}
-    if state is not None:
-        cmd["state"] = 1 if state else 0
-        # Kitchen Arduino firmware also accepts flat boolean device commands.
-        if room == "kitchen" and device in {"window", "exhaust", "light", "buzzer"}:
-            cmd[device] = bool(state)
-    if value is not None:
-        cmd["value"] = int(value)
-    enqueue_command(room, json.dumps(cmd, ensure_ascii=False))
-
-    # cập nhật state cục bộ để UI phản hồi ngay
-    with state_lock:
-        r = ROOMS[room]
-        if state is not None and device in r:
-            r[device] = bool(state)
-        if value is not None:
-            if device == "fan":
-                r["fan_speed"] = int(value)
-                if "fan" in r:
-                    r["fan"] = int(value) > 0
-            elif device == "light" and "light_level" in r:
-                r["light_level"] = int(value)
-                r["light"] = int(value) > 0
-        r["updated_at"] = now
 
     if not silent:
         label = _DEVICE_LABELS.get(key, f"{device} {room}")
@@ -579,7 +677,9 @@ def _danger_warn():
     with state_lock:
         k = dict(ROOMS["kitchen"])
     gas_k = _gas_avg("kitchen") or 0
-    danger = bool(k["flame"] or k["smoke"] or gas_k >= GAS_HIGH_THRESHOLD)
+    danger = bool(k["flame"] or k["smoke"] or gas_k >= GAS_HIGH_THRESHOLD
+                  or (as_number(k.get("gas")) or 0) >= GAS_HIGH_THRESHOLD
+                  or _kitchen_emergency)
     warn = bool(gas_k >= GAS_WARN_THRESHOLD)
     return danger, warn
 
@@ -592,15 +692,106 @@ def _set_alert(level, message=None):
     _emit("alert_state", {"level": level, "message": message})
 
 
+def _fail_restoration(room):
+    """Keep the snapshot/lock, but allow explicit confirmation to start again."""
+    global _restoration_started
+    if _restoration_started is None or room not in ("patient", "living"):
+        return
+    _restoration_started = None
+    _restoration_seen.clear()
+    for target in ("patient", "living"):
+        _cancel_commands(target)
+    _emit("command_error", {"room": room,
+                            "message": "Khôi phục chưa được xác nhận; hãy xác nhận an toàn để thử lại."})
+
+
+def _patient_buzzer_target():
+    """Resolve active alerts, acknowledged recovery intent, then saved baseline."""
+    if AI.get("fall"):
+        return True
+    if _emergency_snapshot is not None and _restoration_started is None:
+        return True
+    if _fall_restore_target is not None:
+        return _fall_restore_target
+    if _fall_buzzer_saved is not None:
+        return True
+    if _emergency_snapshot is not None:
+        return bool(_emergency_snapshot["patient"]["buzzer"])
+    return bool(ROOMS["patient"]["buzzer"])
+
+
+def _resync_safety(room):
+    """Rebuild current safety intent without repeating alerts or saving a new snapshot."""
+    _fail_restoration(room)
+    if _emergency_snapshot is not None and room in ("patient", "living"):
+        _cancel_commands(room)
+        if room == "living":
+            set_device(room, "auto", state=False, source="auto", silent=True)
+            set_device(room, "light", state=False, source="auto", silent=True)
+        set_device(room, "fan", state=False, source="auto", silent=True)
+        if room == "patient":
+            set_device(room, "buzzer", state=True, source="auto", silent=True)
+    elif room == "patient" and (AI.get("fall") or _fall_buzzer_saved is not None):
+        _cancel_commands(room)
+        set_device(room, "buzzer", state=_patient_buzzer_target(),
+                   source="auto", silent=True)
+
+
+def _reconcile_safety(room):
+    """Safety intent outlives bounded delivery attempts, including lost telemetry."""
+    if _restoration_started is not None:
+        return
+    desired = {}
+    if _emergency_snapshot is not None:
+        if room == "living":
+            desired = {"auto": False, "light": False, "fan": False}
+        elif room == "patient":
+            desired = {"fan": False, "buzzer": True}
+    elif room == "patient" and (AI.get("fall") or _fall_buzzer_saved is not None):
+        desired = {"buzzer": _patient_buzzer_target()}
+    now = time.monotonic()
+    with _delivery_lock:
+        queued = {json.loads(p["text"])["cmd"] for p in _pending_commands[room].values()}
+        for device, state in desired.items():
+            key = (room, device)
+            if device in queued or now < _safety_retry_at.get(key, 0):
+                continue
+            _safety_retry_at[key] = now + SAFETY_RECHECK_SEC
+            set_device(room, device, state=state, source="auto", silent=True)
+
+
+def _observe_fall_restoration(room, payload):
+    global _fall_buzzer_saved, _fall_restore_target
+    if (room != "patient" or _fall_restore_target is None or AI.get("fall")
+            or _emergency_snapshot is not None):
+        return
+    with _delivery_lock:
+        if _pending_commands[room]:
+            return
+    if type(payload.get("buzzer")) is bool and payload["buzzer"] == _fall_restore_target:
+        _fall_buzzer_saved = None
+        _fall_restore_target = None
+        _emit("alert_state", {"level": alert_level, "message": "Node đã xác nhận kết thúc cảnh báo té ngã."})
+
+
 def _enter_emergency():
-    """Kịch bản khẩn cấp: thông gió, còi, GIỮ đèn + camera."""
+    """Kitchen owns local outputs; gateway quiets other rooms and saves state."""
+    global _emergency_snapshot, _restoration_started
+    _restoration_started = None
+    _restoration_seen.clear()
+    for room in ("patient", "living"):
+        _cancel_commands(room)
+    if _emergency_snapshot is None:
+        with state_lock:
+            _emergency_snapshot = {room: dict(ROOMS[room]) for room in ("patient", "living")}
+            if _fall_buzzer_saved is not None:
+                _emergency_snapshot["patient"]["buzzer"] = _fall_buzzer_saved
     log_audit("Cảnh báo khẩn cấp: khói/lửa/gas cao", user_id=None)
     send_telegram_alert_async("khan cap chay/gas")
-    # thông gió + báo động (chạy độc lập, không tắt đèn/camera)
-    set_device("kitchen", "exhaust", state=True, source="auto", silent=True)
-    set_device("kitchen", "window", state=True, source="auto", silent=True)
-    set_device("kitchen", "buzzer", state=True, source="auto", silent=True)
-    set_device("kitchen", "light", state=True, source="auto", silent=True)
+    set_device("living", "auto", state=False, source="auto", silent=True)
+    set_device("living", "light", state=False, source="auto", silent=True)
+    for room in ("patient", "living"):
+        set_device(room, "fan", state=False, source="auto", silent=True)
     set_device("patient", "buzzer", state=True, source="auto", silent=True)
     # đảm bảo camera bật để quan sát người bệnh
     set_camera_mode("on", user_id=None)
@@ -608,20 +799,98 @@ def _enter_emergency():
 
 def confirm_safe(user_id=None):
     """Người dùng xác nhận an toàn -> khôi phục thiết bị."""
-    global alert_level
-    danger, warn = _danger_warn()
-    if danger or warn:
-        _emit("alert_state", {"level": alert_level,
-                              "message": "Chưa thể xác nhận an toàn: cảm biến vẫn báo khói/lửa hoặc gas cao."})
+    global alert_level, _emergency_snapshot, _restoration_started
+    global _fall_restore_target
+    if _emergency_snapshot is None and _fall_buzzer_saved is not None:
+        if AI.get("fall"):
+            return
+        _fall_restore_target = _fall_buzzer_saved
+        _cancel_commands("patient", "buzzer")
+        set_device("patient", "buzzer", state=_patient_buzzer_target(), source="auto", silent=True)
+        _emit("alert_state", {"level": alert_level, "message": "Đang chờ node xác nhận kết thúc cảnh báo té ngã."})
         return
-    set_device("kitchen", "buzzer", state=False, source="auto", silent=True)
-    set_device("patient", "buzzer", state=False, source="auto", silent=True)
-    set_device("kitchen", "exhaust", state=False, source="auto", silent=True)
-    set_device("kitchen", "window", state=False, source="auto", silent=True)
+    danger, warn = _danger_warn()
+    now = time.monotonic()
+    safe_confirmed = (_kitchen_safe_since is not None and _kitchen_sample_at is not None
+                      and now - _kitchen_safe_since >= KITCHEN_SAFE_HOLD_SEC
+                      and now - _kitchen_sample_at <= KITCHEN_SAMPLE_TIMEOUT_SEC)
+    if danger or warn or not safe_confirmed:
+        _emit("alert_state", {"level": alert_level,
+                              "message": "Cần dữ liệu bếp bình thường liên tục ít nhất 10 giây và còn cập nhật."})
+        return
+    if _emergency_snapshot is not None:
+        if _restoration_started is not None:
+            if now - _restoration_started < COMMAND_TTL:
+                return
+            _fail_restoration("patient")
+        _restoration_started = now
+        if not AI.get("fall") and _fall_buzzer_saved is not None:
+            _fall_restore_target = _fall_buzzer_saved
+        _restoration_seen.clear()
+        for room in ("patient", "living"):
+            _cancel_commands(room)
+        for room, saved in _emergency_snapshot.items():
+            if room == "living" and saved["auto"]:
+                continue
+            set_device(room, "fan", state=saved["fan"], value=int(saved["fan_speed"]),
+                       source="auto", silent=True)
+        saved = _emergency_snapshot["living"]
+        if not saved["auto"]:
+            set_device("living", "light", state=saved["light"], source="auto", silent=True)
+        set_device("living", "auto", state=saved["auto"], source="auto", silent=True)
+        set_device("patient", "buzzer",
+                   state=_patient_buzzer_target(),
+                   source="auto", silent=True)
+        _emit("alert_state", {"level": alert_level,
+                              "message": "Đang chờ node xác nhận khôi phục."})
+        return
     log_audit("Xác nhận an toàn, khôi phục thiết bị", user_id=user_id)
     alert_level = "normal"
     _emit("alert_state", {"level": "normal", "message": "Đã khôi phục về trạng thái bình thường."})
     evaluate_alerts()   # nếu vẫn còn nguy hiểm sẽ tự quay lại emergency
+
+
+def _observe_restoration(room, payload):
+    """Require a complete actuator report, never a sensor-only timestamp."""
+    global _emergency_snapshot, _restoration_started
+    if _restoration_started is None or _emergency_snapshot is None:
+        return
+    danger, warn = _danger_warn()
+    now = time.monotonic()
+    for target, observed in list(_restoration_seen.items()):
+        if not NODE_ONLINE.get(target) or now - observed > KITCHEN_SAMPLE_TIMEOUT_SEC:
+            _restoration_seen.pop(target, None)
+    if (danger or warn or _kitchen_safe_since is None or
+            now - _kitchen_safe_since < KITCHEN_SAFE_HOLD_SEC or _kitchen_sample_at is None or
+            now - _kitchen_sample_at > KITCHEN_SAMPLE_TIMEOUT_SEC):
+        _restoration_seen.clear()
+        return
+    if room not in _emergency_snapshot or not NODE_ONLINE.get(room):
+        return
+    with _delivery_lock:
+        if _pending_commands[room]:
+            return
+    saved = _emergency_snapshot[room]
+    expected = {"fan": saved["fan"],
+                "fan_speed": int(saved["fan_speed"]) if saved["fan"] else 0}
+    if room == "living":
+        expected.update(light=saved["light"], auto=saved["auto"])
+        if saved["auto"]:
+            expected = {"auto": True}
+    else:
+        expected["buzzer"] = _patient_buzzer_target()
+    matches = all(type(payload.get(key)) is type(value) and payload[key] == value
+                  for key, value in expected.items())
+    if matches:
+        _restoration_seen[room] = now
+    else:
+        _restoration_seen.pop(room, None)
+    if set(_restoration_seen) == {"patient", "living"}:
+        _emergency_snapshot = None
+        _restoration_started = None
+        _restoration_seen.clear()
+        log_audit("Khôi phục đã được các node xác nhận", user_id=None)
+        _set_alert("normal", "Đã khôi phục về trạng thái bình thường.")
 
 
 def evaluate_alerts():
@@ -645,50 +914,6 @@ def evaluate_alerts():
             _set_alert("light", "Khí gas tăng cao hơn mức bình thường.")
         else:
             _set_alert("normal")
-
-
-# ================================================================== #
-#  Sức khỏe (vòng đeo MAX30102) — Yêu cầu 1
-# ================================================================== #
-_health_bad_since = 0.0
-
-
-def evaluate_health():
-    """Đánh giá nhịp tim + SpO2, cập nhật trạng thái và cảnh báo nếu vượt ngưỡng."""
-    global _health_bad_since
-    with state_lock:
-        w = dict(ROOMS["wearable"])
-    hr = as_number(w.get("heart_rate"))
-    spo2 = as_number(w.get("spo2"))
-
-    status = "normal"
-    reasons = []
-    if spo2 is not None:
-        if spo2 < SPO2_CRITICAL:
-            status = "critical"
-            reasons.append(f"SpO2 {spo2:.0f}% rất thấp")
-        elif spo2 < SPO2_WARN:
-            status = "warn"
-            reasons.append(f"SpO2 {spo2:.0f}% thấp")
-    if hr is not None and (hr < HR_LOW or hr > HR_HIGH):
-        if status == "normal":
-            status = "warn"
-        reasons.append(f"nhịp tim {hr:.0f} bpm bất thường")
-
-    with state_lock:
-        ROOMS["wearable"]["status"] = status
-
-    now = now_ts()
-    if status != "normal":
-        if _health_bad_since == 0.0:
-            _health_bad_since = now
-        elif (now - _health_bad_since) >= HEALTH_HOLD_SEC and _should_alert("health"):
-            msg = "Chỉ số sức khỏe bất thường: " + ", ".join(reasons)
-            _emit("system_alert", {"type": "health", "message": msg})
-            send_telegram_alert_async("suc khoe bat thuong: " + "; ".join(reasons))
-            log_audit("Cảnh báo sức khỏe: " + ", ".join(reasons), user_id=None)
-    else:
-        _health_bad_since = 0.0
 
 
 # ================================================================== #
@@ -925,11 +1150,17 @@ def detect_fall(landmarks, w, h):
 
 def _handle_fall(is_suspect):
     global _fall_since
+    global _fall_buzzer_saved, _fall_restore_target
     now = now_ts()
     if is_suspect:
         if _fall_since == 0.0:
             _fall_since = now
         elif (now - _fall_since) >= FALL_HOLD_SEC and not AI["fall"]:
+            if _fall_buzzer_saved is None:
+                _fall_buzzer_saved = bool((_emergency_snapshot or ROOMS)["patient"]["buzzer"])
+            _fall_restore_target = None
+            _cancel_commands("patient", "buzzer")
+            _restoration_seen.pop("patient", None)
             with state_lock:
                 AI["fall"] = True
             log_audit("Phát hiện té ngã ở phòng người bệnh", user_id=None)
