@@ -16,7 +16,6 @@ def main():
         "SECRET_KEY": secrets.token_hex(32),
         "UART_ENABLE": "0",
         "CAMERA_MODE_DEFAULT": "off",
-        "MEDICAL_RAG_AUTO_INGEST": "0",
     })
 
     import config

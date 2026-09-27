@@ -13,7 +13,6 @@ from flask import (
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import iot
-from chatbot_system import get_chat_job, submit_chat_question
 from config import ALLOW_REGISTER
 from database import (
     admin_required,
@@ -184,116 +183,6 @@ def register_web(app, socketio):
     def api_state():
         return jsonify(iot.snapshot_all())
 
-
-    # ----------------------------------------------------------------- #
-    #  Chatbot AI hệ thống — chỉ còn 1 trợ lý duy nhất
-    #  Backend tự quyết định nội bộ:
-    #  - câu hỏi sức khỏe: bổ sung Medical RAG nếu phù hợp
-    #  - câu hỏi cần thông tin mới: bổ sung Web Search nếu cần
-    #  - câu hỏi tổng quát: gọi LLM trực tiếp
-    #  Frontend không cần truyền mode nữa.
-    # ----------------------------------------------------------------- #
-    @app.route("/api/chatbot", methods=["POST"])
-    @login_required
-    def api_chatbot_submit():
-        payload = request.get_json(silent=True) or {}
-        question = (payload.get("message") or payload.get("question") or "").strip()
-
-        result = submit_chat_question(
-            question,
-            user_id=session.get("user_id"),
-        )
-
-        if not result.get("ok"):
-            return jsonify(result), 429
-
-        return jsonify(result), 202
-
-    @app.route("/api/chatbot/result/<job_id>", methods=["GET"])
-    @login_required
-    def api_chatbot_result(job_id):
-        job = get_chat_job(job_id)
-
-        if not job:
-            return jsonify({
-                "ok": False,
-                "status": "not_found",
-                "message": "Không tìm thấy tác vụ chatbot hoặc tác vụ đã hết hạn."
-            }), 404
-
-        if job["status"] in {"queued", "running"}:
-            return jsonify({
-                "ok": True,
-                "status": job["status"],
-                "message": "Trợ lý AI đang xử lý câu hỏi..."
-            })
-
-        if job["status"] == "done":
-            return jsonify({
-                "ok": True,
-                "status": "done",
-                "answer": job.get("answer") or "",
-                "sources": job.get("sources") or [],
-                "web_results": job.get("web_results") or [],
-            })
-
-        return jsonify({
-            "ok": False,
-            "status": "error",
-            "message": job.get("message") or "Chatbot xử lý thất bại."
-        }), 500
-
-    # Tương thích ngược với frontend cũ đang gọi /api/medical_chat.
-    # Endpoint cũ vẫn hoạt động nhưng bên trong dùng cùng một AI duy nhất.
-    @app.route("/api/medical_chat", methods=["POST"])
-    @login_required
-    def api_medical_chat():
-        payload = request.get_json(silent=True) or {}
-        question = (payload.get("message") or payload.get("question") or "").strip()
-
-        result = submit_chat_question(
-            question,
-            user_id=session.get("user_id"),
-        )
-
-        if not result.get("ok"):
-            return jsonify(result), 429
-
-        return jsonify(result), 202
-
-    @app.route("/api/medical_chat/result/<job_id>", methods=["GET"])
-    @login_required
-    def api_medical_chat_result(job_id):
-        job = get_chat_job(job_id)
-
-        if not job:
-            return jsonify({
-                "ok": False,
-                "status": "not_found",
-                "message": "Không tìm thấy tác vụ chatbot hoặc tác vụ đã hết hạn."
-            }), 404
-
-        if job["status"] in {"queued", "running"}:
-            return jsonify({
-                "ok": True,
-                "status": job["status"],
-                "message": "Trợ lý AI đang xử lý câu hỏi..."
-            })
-
-        if job["status"] == "done":
-            return jsonify({
-                "ok": True,
-                "status": "done",
-                "answer": job.get("answer") or "",
-                "sources": job.get("sources") or [],
-                "web_results": job.get("web_results") or [],
-            })
-
-        return jsonify({
-            "ok": False,
-            "status": "error",
-            "message": job.get("message") or "Chatbot xử lý thất bại."
-        }), 500
 
     # ---- Ánh xạ cử chỉ (Yêu cầu 2) ----
     @app.route("/api/gesture_mappings", methods=["GET"])

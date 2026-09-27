@@ -5,7 +5,7 @@ Raspberry Pi nhận dữ liệu từ ba ESP32-C3 qua BLE, xử lý tại backend
 cập nhật dashboard theo thời gian thực. Laptop Windows có thể dùng để thử node bếp.
 
 [Sơ đồ chân](docs/HARDWARE.md) · [Cài đặt & vận hành](docs/SETUP.md) ·
-[Firmware](esp32_firmware/README.md) · [API](docs/API.md) · [Trợ lý AI](docs/CHATBOT.md)
+[Firmware](esp32_firmware/README.md) · [API](docs/API.md)
 
 ## Chức năng
 
@@ -16,7 +16,7 @@ cập nhật dashboard theo thời gian thực. Laptop Windows có thể dùng �
 | Phòng bếp | Giá trị gas ADC, khói, lửa | Cửa sổ, quạt hút, đèn, còi |
 
 Dashboard có tổng quan ba phòng, trạng thái kết nối, cảnh báo, lịch sử cảm biến,
-trợ lý AI và trang quản trị tài khoản. Dự án **không sử dụng vòng đeo tay**.
+và trang quản trị tài khoản. Dự án **không sử dụng vòng đeo tay**.
 Đèn phòng bệnh chưa có GPIO được gán nên chưa hỗ trợ điều khiển.
 
 ## Kiến trúc
@@ -88,13 +88,11 @@ templates/             Trang Jinja: dashboard, đăng nhập, đăng ký
 static/                CSS và JavaScript
 esp32_firmware/        Firmware ba node và header dùng chung
 docs/                  Hướng dẫn, API, sơ đồ chân và thiết kế giao diện
-medical_docs/          Nguồn tài liệu cho trợ lý AI
 tests/                 Kiểm thử Python và logic firmware C++ trên máy
 ```
 
-`chatbot_system.py`, `medical_rag.py` và `ingest_medical_docs.py` phục vụ trợ lý AI.
 `aiot-care.service` và `update.sh` là công cụ triển khai Pi, cần đọc và chỉnh theo máy
-trước khi sử dụng. Database, log, môi trường Python và index sinh tự động không đưa lên Git.
+trước khi sử dụng. Database, log, môi trường Python không đưa lên Git.
 
 ## Kiểm tra
 

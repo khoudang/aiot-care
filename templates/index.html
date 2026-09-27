@@ -41,7 +41,6 @@
       </ul>
       {% endif %}
 
-      <button class="family-doctor-toggle" id="family-doctor-toggle" type="button"><i class="fas fa-comment-medical"></i> Hỏi trợ lý</button>
       <div class="side-foot">
         <div class="user-row">
           <div class="user-av"><i class="fas fa-user"></i></div>
@@ -333,37 +332,6 @@
     </div>
   </div>
 
-
-  <!-- ============ FLOATING CHATBOT: BÁC SĨ GIA ĐÌNH ============ -->
-
-
-  <section class="family-doctor-panel" id="family-doctor-panel" aria-live="polite" aria-label="Chatbot Bác sĩ gia đình">
-    <div class="fd-head">
-      <div class="fd-avatar"><i class="fas fa-user-doctor"></i></div>
-      <div class="fd-title">
-        <b>Bác sĩ gia đình</b>
-        <span>Hỗ trợ hỏi đáp sức khỏe, bệnh tật cơ bản</span>
-      </div>
-      <button class="fd-close" id="family-doctor-close" type="button" aria-label="Đóng chatbot"><i class="fas fa-xmark"></i></button>
-    </div>
-    <div class="fd-notice">
-      <i class="fas fa-circle-info"></i>
-      Thông tin chỉ để tham khảo, không thay thế bác sĩ. Nếu có dấu hiệu nặng như khó thở, đau ngực, ngất, co giật, hãy liên hệ cơ sở y tế ngay.
-    </div>
-    <div class="fd-messages" id="family-doctor-messages">
-      <div class="fd-msg bot">Xin chào, tôi là Bác sĩ gia đình. Bạn có thể hỏi các câu cơ bản như triệu chứng cảm lạnh, sốt xuất huyết, huyết áp cao, tiểu đường hoặc hen suyễn.</div>
-    </div>
-    <div class="fd-quick" aria-label="Câu hỏi gợi ý">
-      <button type="button" data-fd-question="Dấu hiệu cảm lạnh thường gặp là gì?">Cảm lạnh</button>
-      <button type="button" data-fd-question="Sốt xuất huyết có dấu hiệu cảnh báo nào cần đi khám?">Sốt xuất huyết</button>
-      <button type="button" data-fd-question="Huyết áp cao cần lưu ý điều gì?">Huyết áp cao</button>
-      <button type="button" data-fd-question="Người bệnh tiểu đường nên theo dõi gì hằng ngày?">Tiểu đường</button>
-    </div>
-    <form class="fd-form" id="family-doctor-form">
-      <input id="family-doctor-input" type="text" placeholder="Nhập câu hỏi sức khỏe..." autocomplete="off" enterkeyhint="send" inputmode="text">
-      <button id="family-doctor-send" type="submit" aria-label="Gửi câu hỏi"><i class="fas fa-paper-plane"></i></button>
-    </form>
-  </section>
 
   <!-- ============ BOTTOM NAV (phones) ============ -->
   <nav class="botnav" id="botnav">

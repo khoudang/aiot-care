@@ -38,7 +38,6 @@ không đưa key, mật khẩu hoặc token thật lên Git.
 | `VIDEO_SOURCE` | Chỉ số camera OpenCV, mặc định `0` |
 | `ALLOW_REGISTER` | `1` cho đăng ký, `0` tắt đăng ký |
 | `ADMIN_REGISTER_CODE` | Mã đăng ký khởi tạo khi cấu hình DB chưa tồn tại |
-| `GEMINI_API_KEY` | Key cho trợ lý AI, xem [CHATBOT.md](CHATBOT.md) |
 
 Các UUID và lựa chọn nâng cao nằm trong [config.py](../config.py).
 Ứng dụng seed tài khoản mẫu từ `INITIAL_USERS` khi tài khoản tương ứng chưa tồn tại.
@@ -53,7 +52,7 @@ python run_kitchen_test.py
 ```
 
 Mở `http://127.0.0.1:5000/dashboard`. Script dùng BLE thật, chỉ chọn node `kitchen`,
-dùng `kitchen-test.db`, tắt UART, đặt camera `off`, tắt tự ingest RAG.
+dùng `kitchen-test.db`, tắt UART, đặt camera `off`.
 Script tạo khóa phiên mới mỗi lần chạy nên cần đăng nhập lại sau khi khởi động lại.
 Địa chỉ loopback chỉ truy cập được ngay trên laptop; dùng ngrok cho máy bên ngoài.
 
@@ -87,8 +86,8 @@ cổng serial của tài khoản chạy ứng dụng. Chạy:
 python app.py
 ```
 
-Mở `http://<IP-của-Pi>:5000/dashboard`. Entry point này khởi tạo cả BLE, camera,
-chatbot và database; không phải máy chủ giao diện độc lập. Không import `app.py`
+Mở `http://<IP-của-Pi>:5000/dashboard`. Entry point này khởi tạo BLE, camera
+và database; không phải máy chủ giao diện độc lập. Không import `app.py`
 chỉ để kiểm tra tài liệu hoặc quét route.
 
 ### Tự chạy với systemd
@@ -107,7 +106,7 @@ journalctl -u aiot-care -n 100 --no-pager
 ```
 
 Ngrok là tiến trình riêng; service này chỉ khởi động ứng dụng AIoT Care.
-`update.sh` thực hiện git pull, ingest tài liệu và restart service: đọc trước khi
+`update.sh` thực hiện git pull và restart service: đọc trước khi
 chạy, không dùng trong lúc có thay đổi cục bộ chưa được lưu.
 
 ## Khi chưa thấy dữ liệu

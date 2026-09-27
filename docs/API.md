@@ -11,15 +11,12 @@ session chưa có `user_id`. Trình duyệt dùng cùng origin với web.
 | GET | `/api/state` | Snapshot: `rooms`, `nodes`, `ai`, `camera`, `alert`, `histories` |
 | GET | `/api/history` | Các chuỗi lịch sử theo phòng |
 | GET | `/video_feed` | MJPEG khi camera hoạt động |
-| POST | `/api/chatbot` | Gửi `{"message":"..."}`, nhận job và HTTP 202 nếu được xếp hàng |
-| GET | `/api/chatbot/result/<job_id>` | Trạng thái `queued`, `running`, `done` hoặc `error` |
 | GET, POST | `/api/gesture_mappings` | Đọc/cập nhật ánh xạ cử chỉ |
 | DELETE | `/api/gesture_mappings/<gesture_name>` | Xóa ánh xạ |
 | GET | `/api/kitchen_alerts` | Lịch sử cảnh báo bếp |
 
 API quản trị dưới `/api/admin/` yêu cầu role `admin`: users, logs và configs.
-`/api/medical_chat` và `/api/medical_chat/result/<job_id>` là alias tương thích chatbot cũ.
-Không có REST `/api/control` hay `/api/ai_chat` trong `web.py` hiện tại.
+Điều khiển thiết bị sử dụng sự kiện Socket.IO bên dưới.
 
 `rooms` và `nodes` gồm `patient`, `living`, `kitchen`. `camera.mode` nhận `auto`,
 `on`, `off`; `alert.level` là `normal`, `light`, `emergency` hoặc `awaiting`.
