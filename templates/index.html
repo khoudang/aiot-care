@@ -321,6 +321,14 @@
               </div>
             </form>
           </div>
+          <div class="card ble-settings">
+            <div class="card-h"><div><h3>Node BLE</h3><p>Đổi địa chỉ ESP và kết nối lại từng phòng</p></div>
+              <button type="button" class="btn sm" id="ble-scan"><i class="fas fa-magnifying-glass"></i> Quét thiết bị</button>
+            </div>
+            <div class="ble-list" id="ble-list"></div>
+            <datalist id="ble-found"></datalist>
+            <p class="ble-note" id="ble-message" role="status" aria-live="polite">Nhập MAC BLE đang phát của ESP; không dùng MAC Wi-Fi.</p>
+          </div>
         </section>
         {% endif %}
 

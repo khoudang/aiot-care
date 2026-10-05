@@ -56,6 +56,7 @@ class WebFeaturesTests(unittest.TestCase):
             html = response.get_data(as_text=True)
             self.assertNotIn('family-doctor', html)
             self.assertNotIn('Hỏi trợ lý', html)
+            self.assertEqual('id="ble-list"' in html, username == 'test-admin')
             for room in ('patient', 'living', 'kitchen'):
                 self.assertIn('id="' + room + '"', html)
             for endpoint, method in (
@@ -84,3 +85,46 @@ class WebFeaturesTests(unittest.TestCase):
         self.assertEqual(self.client.get('/dashboard').status_code, 302)
         socket = self.socketio.test_client(self.app, flask_test_client=self.client)
         self.assertFalse(socket.is_connected())
+
+    def test_ble_mac_admin_only_validation_and_persistence(self):
+        def nodes():
+            from database import get_config_value
+            return [
+                {'room': room, 'mac': get_config_value('ble_mac_' + room, mac), 'online': False}
+                for room, mac in (
+                    ('patient', 'AA:00:00:00:00:01'),
+                    ('living', 'AA:00:00:00:00:02'),
+                    ('kitchen', 'AA:00:00:00:00:03'),
+                )
+            ]
+        self.iot.ble_node_settings.side_effect = nodes
+        url = '/api/admin/ble-nodes/patient'
+        self.assertEqual(self.client.get('/api/admin/ble-nodes').status_code, 401)
+        self.assertEqual(self.client.post(url, json={'mac': 'AB:CD:EF:01:23:45'}).status_code, 401)
+        self.login('test-member')
+        self.assertEqual(self.client.get('/api/admin/ble-scan').status_code, 403)
+        self.assertEqual(self.client.post(url, json={'mac': 'AB:CD:EF:01:23:45'}).status_code, 403)
+        self.client.get('/logout')
+        self.login()
+        self.assertEqual(self.client.post(url, json=['AB:CD:EF:01:23:45']).status_code, 400)
+        self.assertEqual(self.client.post(url, json='AB:CD:EF:01:23:45').status_code, 400)
+        self.assertEqual(self.client.post(url, json={'mac': 'invalid'}).status_code, 400)
+        self.assertEqual(self.client.post(url, json={'mac': 'AA:00:00:00:00:02'}).status_code, 400)
+        self.assertEqual(self.client.post('/api/admin/ble-nodes/other', json={'mac': 'AB:CD:EF:01:23:45'}).status_code, 404)
+        self.iot.reconnect_ble_node.assert_not_called()
+        response = self.client.post(url, json={'mac': 'ab:cd:ef:01:23:45'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['nodes'][0]['mac'], 'AB:CD:EF:01:23:45')
+        self.iot.reconnect_ble_node.assert_called_once_with('patient')
+        self.assertEqual(self.client.get('/api/admin/ble-nodes').json['nodes'][0]['mac'], 'AB:CD:EF:01:23:45')
+        self.client.post(url, json={'mac': 'AB:CD:EF:01:23:45'})
+        self.iot.reconnect_ble_node.assert_called_once()
+
+    def test_ble_scan_is_admin_only_and_reports_failure(self):
+        self.login()
+        self.iot.scan_ble_devices.return_value = [{'name': 'ESP', 'mac': 'AB:CD:EF:01:23:45'}]
+        self.assertEqual(self.client.get('/api/admin/ble-scan').json['devices'][0]['name'], 'ESP')
+        self.iot.scan_ble_devices.side_effect = RuntimeError('Bluetooth adapter unavailable')
+        response = self.client.get('/api/admin/ble-scan')
+        self.assertEqual(response.status_code, 503)
+        self.assertNotIn('Bluetooth adapter unavailable', response.get_data(as_text=True))

@@ -40,6 +40,10 @@ không đưa key, mật khẩu hoặc token thật lên Git.
 | `ADMIN_REGISTER_CODE` | Mã đăng ký khởi tạo khi cấu hình DB chưa tồn tại |
 
 Các UUID và lựa chọn nâng cao nằm trong [config.py](../config.py).
+Admin có thể đổi MAC trong **Cấu hình hệ thống → Node BLE**. Giá trị lưu trong SQLite
+ghi đè MAC mặc định từ `.env`; sau khi lưu, gateway ngắt và kết nối lại riêng node đó.
+Nút **Quét thiết bị** hiển thị các thiết bị BLE đang quảng bá gần Pi. Chọn địa chỉ BLE
+của đúng ESP, không dùng địa chỉ Wi-Fi. Node đã kết nối có thể không xuất hiện khi quét.
 Ứng dụng seed tài khoản mẫu từ `INITIAL_USERS` khi tài khoản tương ứng chưa tồn tại.
 Đăng nhập tài khoản quản trị đã cấu hình; thay mật khẩu mẫu và mã đăng ký trước khi
 chia sẻ link Internet. Cấu hình đăng ký/Telegram đã lưu trong DB được quản lý qua

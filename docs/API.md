@@ -16,6 +16,9 @@ session chưa có `user_id`. Trình duyệt dùng cùng origin với web.
 | GET | `/api/kitchen_alerts` | Lịch sử cảnh báo bếp |
 
 API quản trị dưới `/api/admin/` yêu cầu role `admin`: users, logs và configs.
+`GET /api/admin/ble-nodes` trả MAC và trạng thái ba node; `POST /api/admin/ble-nodes/<room>`
+nhận `{ "mac": "AA:BB:CC:DD:EE:FF" }` để lưu và kết nối lại node tương ứng.
+`GET /api/admin/ble-scan` quét các thiết bị BLE đang quảng bá gần gateway.
 Điều khiển thiết bị sử dụng sự kiện Socket.IO bên dưới.
 
 `rooms` và `nodes` gồm `patient`, `living`, `kitchen`. `camera.mode` nhận `auto`,

@@ -33,9 +33,10 @@ except Exception:                       # cho phép chạy web khi thiếu media
     mp = None
 
 try:
-    from bleak import BleakClient
+    from bleak import BleakClient, BleakScanner
 except Exception:
     BleakClient = None
+    BleakScanner = None
 
 try:
     import serial                       # pyserial cho UART
@@ -199,6 +200,8 @@ COMMAND_ACK_TIMEOUT = 2.0
 COMMAND_TTL = 30.0
 ble_clients = {room: None for room in ROOMS}
 ble_loop = None
+BLE_MAC_CONFIG_KEYS = {room: f"ble_mac_{room}" for room in ROOMS}
+_ble_reconfigure = {room: threading.Event() for room in ROOMS}
 
 # UART
 uart = None
@@ -389,9 +392,44 @@ def _make_notify_handler(room):
     return handler
 
 
+def _configured_mac(node):
+    """SQLite override, falling back to the address supplied by config.py."""
+    return get_config_value(BLE_MAC_CONFIG_KEYS[node["room"]], node["mac"])
+
+
+def ble_node_settings():
+    return [{"room": node["room"], "mac": _configured_mac(node),
+             "online": bool(NODE_ONLINE[node["room"]])} for node in NODES]
+
+
+async def _scan_ble_devices():
+    devices = await BleakScanner.discover(timeout=5.0)
+    return sorted([{"name": device.name or "Thiết bị BLE", "mac": device.address.upper()}
+                   for device in devices], key=lambda device: (device["name"], device["mac"]))
+
+
+def scan_ble_devices():
+    if BleakScanner is None or ble_loop is None or not ble_loop.is_running():
+        raise RuntimeError("BLE chưa sẵn sàng trên gateway.")
+    future = asyncio.run_coroutine_threadsafe(_scan_ble_devices(), ble_loop)
+    try:
+        return future.result(timeout=9)
+    except Exception:
+        future.cancel()
+        raise
+
+
+def reconnect_ble_node(room):
+    """Ask the node loop to close its current link and read the new MAC."""
+    _ble_reconfigure[room].set()
+    _cancel_commands(room)
+    for key in list(_last_cmd):
+        if key[0] == room:
+            _last_cmd.pop(key, None)
+
+
 async def _node_loop(node):
     room = node["room"]
-    mac = node["mac"]
     notify_uuid = node["notify_uuid"]
     command_uuid = node["command_uuid"]
 
@@ -401,8 +439,15 @@ async def _node_loop(node):
 
     while True:
         try:
+            _ble_reconfigure[room].clear()
+            mac = _configured_mac(node)
+            if not mac or not mac.strip():
+                print("[BLE] MAC not configured; waiting for node", room)
+                continue
             print(f"[BLE {room}] connecting to {mac} ...")
             async with BleakClient(mac) as client:
+                if _ble_reconfigure[room].is_set() or _configured_mac(node).upper() != mac.upper():
+                    continue
                 ble_clients[room] = client
                 set_node_online(room, True)
                 print(f"[BLE {room}] connected")
@@ -411,7 +456,7 @@ async def _node_loop(node):
                 _resync_safety(room)
 
                 # vòng lặp gửi lệnh (drain queue) + giữ kết nối
-                while client.is_connected:
+                while client.is_connected and not _ble_reconfigure[room].is_set():
                     await _send_pending(room, client, command_uuid)
                     await asyncio.sleep(0.05)
 

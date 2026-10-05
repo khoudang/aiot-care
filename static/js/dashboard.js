@@ -23,7 +23,7 @@
     kitchen:['Phòng bếp','Giám sát gas – khói – lửa và thông gió khẩn cấp'],
     'admin-users':['Quản lý tài khoản','Tài khoản truy cập hệ thống'],
     'admin-logs':['Nhật ký & cảnh báo','Lịch sử đăng nhập, hoạt động và cảnh báo'],
-    'admin-settings':['Cấu hình hệ thống','Mã nội bộ và cấu hình Telegram'],
+    'admin-settings':['Cấu hình hệ thống','Tài khoản, Telegram và kết nối ESP'],
   };
   function goTo(room){
     document.querySelectorAll('[data-room]').forEach(i=>i.classList.toggle('active',i.dataset.room===room));

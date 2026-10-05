@@ -1,3 +1,4 @@
+import re
 import time
 
 from flask import (
@@ -384,6 +385,43 @@ def register_web(app, socketio):
                 "telegram_chat_id": telegram_chat_id,
             },
         })
+
+    @app.route("/api/admin/ble-nodes", methods=["GET"])
+    @admin_required
+    def api_admin_ble_nodes():
+        return jsonify({"ok": True, "nodes": iot.ble_node_settings()})
+
+    @app.route("/api/admin/ble-scan", methods=["GET"])
+    @admin_required
+    def api_admin_ble_scan():
+        try:
+            return jsonify({"ok": True, "devices": iot.scan_ble_devices()})
+        except Exception as exc:
+            app.logger.warning("BLE scan failed: %s", exc)
+            return jsonify({"ok": False, "message": "Không quét được BLE trên gateway."}), 503
+
+    @app.route("/api/admin/ble-nodes/<room>", methods=["POST"])
+    @admin_required
+    def api_admin_ble_node_update(room):
+        if room not in ("patient", "living", "kitchen"):
+            return jsonify({"ok": False, "message": "Phòng không hợp lệ."}), 404
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"ok": False, "message": "Dữ liệu MAC không hợp lệ."}), 400
+        mac = data.get("mac")
+        if not isinstance(mac, str) or not re.fullmatch(r"(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}", mac.strip()):
+            return jsonify({"ok": False, "message": "MAC BLE phải có dạng AA:BB:CC:DD:EE:FF."}), 400
+        mac = mac.strip().upper()
+        nodes = iot.ble_node_settings()
+        if any(node["room"] != room and node["mac"].upper() == mac for node in nodes):
+            return jsonify({"ok": False, "message": "MAC này đã gán cho phòng khác."}), 400
+        current = next(node for node in nodes if node["room"] == room)
+        if current["mac"].upper() != mac:
+            set_config_value(f"ble_mac_{room}", mac)
+            log_audit(f"Đổi MAC BLE phòng {room}: {mac}", user_id=session.get("user_id"))
+            iot.reconnect_ble_node(room)
+        return jsonify({"ok": True, "message": "Đã lưu MAC BLE. Gateway sẽ kết nối lại node.",
+                        "nodes": iot.ble_node_settings()})
 
     # ----------------------------------------------------------------- #
     #  Socket.IO — realtime (BLE, không MQTT)
