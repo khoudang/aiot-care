@@ -17,6 +17,10 @@ def build_command(room, device, state=None, value=None):
     if value is not None:
         if device != "fan" or type(value) is not int or not 0 <= value <= 100:
             raise ValueError("Only fan accepts integer percent 0..100")
+    if device == "confirm_safe":
+        if room != "kitchen":
+            raise ValueError("confirm_safe is only valid for kitchen")
+        return room, {"cmd": "confirm_safe"}
     if state is None and value is None:
         raise ValueError("Missing state/value")
     command = {"cmd": device}
