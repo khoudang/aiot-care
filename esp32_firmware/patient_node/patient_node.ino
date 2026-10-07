@@ -22,6 +22,7 @@ const int PIN_SCL = 9;
 const int PIN_BUZZER = 0;
 const int PIN_FAN_IN1 = 1;
 const int PIN_FAN_IN2 = 2;
+const int PIN_LIGHT_RELAY = 4;
 const int PIN_UART_RX = 20;
 const int PIN_UART_TX = 21;
 const int PIN_SERVO = 6;
@@ -32,6 +33,7 @@ Servo trackingServo;
 
 int fanPwm = 0;
 bool buzzerOn = false;
+bool lightOn = false;
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) { deviceConnected = true; }
@@ -57,6 +59,11 @@ bool handleCommand(const String &value) {
             buzzerOn = enabled;
             digitalWrite(PIN_BUZZER, buzzerOn ? HIGH : LOW);
           }
+          if (commandSwitch(doc, "light", enabled)) {
+            applied = true;
+            lightOn = enabled;
+            digitalWrite(PIN_LIGHT_RELAY, lightOn ? HIGH : LOW);
+          }
         }
       }
       return applied;
@@ -78,11 +85,13 @@ void setup() {
   pinMode(PIN_BUZZER, OUTPUT);
   pinMode(PIN_FAN_IN1, OUTPUT);
   pinMode(PIN_FAN_IN2, OUTPUT);
+  pinMode(PIN_LIGHT_RELAY, OUTPUT);
   pinMode(PIN_PIR, INPUT);
 
   digitalWrite(PIN_BUZZER, LOW);
   digitalWrite(PIN_FAN_IN1, LOW);
   digitalWrite(PIN_FAN_IN2, LOW);
+  digitalWrite(PIN_LIGHT_RELAY, LOW);
 
   Serial.println("[3] Init Servo...");
   trackingServo.attach(PIN_SERVO);
@@ -148,9 +157,10 @@ void loop() {
 
     char payload[256];
     snprintf(payload, sizeof(payload),
-      "{\"room\":\"patient\",\"temp\":%.1f,\"hum\":%.1f,\"motion\":%s,\"fan\":%s,\"fan_speed\":%d,\"buzzer\":%s}",
-      t, h, motion ? "true" : "false", fanPwm > 0 ? "true" : "false",
-      (fanPwm * 100 + 127) / 255, buzzerOn ? "true" : "false");
+      "{\"room\":\"patient\",\"temp\":%.1f,\"hum\":%.1f,\"motion\":%s,\"light\":%s,\"fan\":%s,\"fan_speed\":%d,\"buzzer\":%s}",
+      t, h, motion ? "true" : "false", lightOn ? "true" : "false",
+      fanPwm > 0 ? "true" : "false", (fanPwm * 100 + 127) / 255,
+      buzzerOn ? "true" : "false");
 
     notifyJson(pNotifyChar, payload);
   }
