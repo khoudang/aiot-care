@@ -11,13 +11,13 @@ cập nhật dashboard theo thời gian thực. Laptop Windows có thể dùng �
 
 | Khu vực | Theo dõi | Điều khiển |
 | --- | --- | --- |
-| Phòng người bệnh | Nhiệt độ, độ ẩm, chuyển động; camera, cử chỉ và phát hiện té ngã | Quạt, còi, servo quay camera |
-| Phòng khách | Nhiệt độ, độ ẩm, ánh sáng, chuyển động | Đèn, quạt, chế độ tự động |
+| Phòng người bệnh | Nhiệt độ, độ ẩm, PIR; camera, cử chỉ và phát hiện té ngã | Đèn, quạt, còi, servo quay camera |
+| Phòng khách | Nhiệt độ, độ ẩm, BH1750, hiện diện HLK-LD2420 | Đèn, quạt, chế độ tự động |
 | Phòng bếp | Giá trị gas ADC, khói, lửa | Cửa sổ, quạt hút, đèn, còi |
 
 Dashboard có tổng quan ba phòng, trạng thái kết nối, cảnh báo, lịch sử cảm biến,
 và trang quản trị tài khoản. Dự án **không sử dụng vòng đeo tay**.
-Đèn phòng bệnh chưa có GPIO được gán nên chưa hỗ trợ điều khiển.
+Đèn phòng bệnh dùng relay tại GPIO4. Lịch sử cảm biến được lưu định kỳ vào SQLite.
 
 ## Kiến trúc
 
@@ -71,7 +71,7 @@ Web lắng nghe cổng 5000; truy cập `http://<IP-của-Pi>:5000/dashboard` tr
 Bảng đầy đủ cho cả ba node ở **[docs/HARDWARE.md](docs/HARDWARE.md)**,
 kèm [CSV hiện tại](docs/hardware/pinout.csv), đối chiếu trực tiếp các hằng `PIN_*` trong firmware.
 
-Pin bếp: **MQ-2 AO → GPIO0 · DO → GPIO1 · Flame DO → GPIO2 · Servo → GPIO4 ·
+Pin bếp: **MP-2 AO → GPIO0 · DO → GPIO1 · Flame DO → GPIO2 · Servo → GPIO4 ·
 Buzzer → GPIO5 · Quạt IN1/IN2 → GPIO7/GPIO8 · Relay đèn → GPIO20**.
 
 ## Cấu trúc repo
@@ -82,7 +82,7 @@ config.py              Cấu hình qua biến môi trường / .env
 web.py                 Trang web, API, xác thực, sự kiện Socket.IO
 iot.py                 BLE, camera, trạng thái và cảnh báo
 node_protocol.py       Hợp đồng lệnh điều khiển ba node
-database.py            SQLite: tài khoản, cấu hình, nhật ký
+database.py            SQLite: tài khoản, cấu hình, nhật ký và lịch sử cảm biến
 run_kitchen_test.py     Chạy thử node bếp trên Windows
 templates/             Trang Jinja: dashboard, đăng nhập, đăng ký
 static/                CSS và JavaScript
