@@ -9,7 +9,8 @@ session chưa có `user_id`. Trình duyệt dùng cùng origin với web.
 | Phương thức | Đường dẫn | Chức năng |
 | --- | --- | --- |
 | GET | `/api/state` | Snapshot: `rooms`, `nodes`, `ai`, `camera`, `alert`, `histories` |
-| GET | `/api/history` | Các chuỗi lịch sử theo phòng |
+| GET | `/api/history` | Các chuỗi lịch sử ngắn hạn trong RAM theo phòng |
+| GET | `/api/sensor_history` | Lịch sử cảm biến đã lưu SQLite; hỗ trợ `room`, `limit` |
 | GET | `/video_feed` | MJPEG khi camera hoạt động |
 | GET, POST | `/api/gesture_mappings` | Đọc/cập nhật ánh xạ cử chỉ |
 | DELETE | `/api/gesture_mappings/<gesture_name>` | Xóa ánh xạ |
@@ -36,8 +37,10 @@ Camera stream không tự quyết định chế độ camera; chế độ đư�
 | `set_tracking` | `{"enabled":true}` | Theo dõi bằng servo |
 | `confirm_safe` | `{}` | Yêu cầu xác nhận an toàn; backend kiểm tra điều kiện |
 
-Thiết bị hợp lệ: patient → `fan`, `buzzer`; living → `light`, `fan`, `auto`;
-kitchen → `light`, `buzzer`, `window`, `exhaust`. Xem [node_protocol.py](../node_protocol.py).
+Thiết bị hợp lệ: patient → `light`, `fan`, `buzzer`; living → `light`, `fan`, `auto`;
+kitchen → `light`, `buzzer`, `window`, `exhaust`. Lệnh nội bộ `confirm_safe`
+được gateway gửi riêng tới firmware bếp sau khi người dùng xác nhận an toàn. Xem
+[node_protocol.py](../node_protocol.py).
 `control_device` là sự kiện cũ nhận trường `command`, không dùng payload room/device
 của `set_device`.
 
@@ -57,3 +60,10 @@ của `set_device`.
 
 Ví dụ và bảng này mô tả giao thức, không thực thi lệnh thiết bị. ACK firmware xác
 nhận xử lý lệnh, không phải phản hồi đo cơ khí của cửa sổ/đèn/quạt.
+
+
+## Telemetry hiện diện phòng khách
+
+Firmware phòng khách gửi trường `presence` từ ngõ OT2 của HLK-LD2420. Giao diện
+có fallback đọc `motion` để tương thích firmware cũ, nhưng payload chuẩn mới dùng
+`presence`.
