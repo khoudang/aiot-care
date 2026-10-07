@@ -111,6 +111,27 @@ def init_db():
         """
     )
 
+    cur.execute(
+        """
+        create table if not exists sensor_history (
+            id integer primary key autoincrement,
+            room text not null,
+            temperature real,
+            humidity real,
+            lux real,
+            gas real,
+            presence integer,
+            smoke integer,
+            flame integer,
+            timestamp datetime not null
+        )
+        """
+    )
+    cur.execute(
+        "create index if not exists idx_sensor_history_room_time "
+        "on sensor_history(room, timestamp desc)"
+    )
+
     # Ánh xạ cử chỉ mặc định (giữ hành vi cũ) — chỉ chèn nếu bảng trống
     cur.execute("select count(*) from gesture_mappings")
     if cur.fetchone()[0] == 0:
@@ -498,6 +519,60 @@ def fetch_kitchen_alerts(limit=50):
         """,
         (limit,),
     )
+    rows = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+# ================================================================== #
+#  Lịch sử cảm biến
+# ================================================================== #
+def insert_sensor_history(room, data):
+    """Lưu một mẫu cảm biến định kỳ; trường không áp dụng được để NULL."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    presence = data.get("presence", data.get("motion"))
+    cur.execute(
+        """
+        insert into sensor_history (
+            room, temperature, humidity, lux, gas, presence, smoke, flame, timestamp
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            room,
+            data.get("temp"),
+            data.get("hum"),
+            data.get("lux"),
+            data.get("gas"),
+            None if presence is None else int(bool(presence)),
+            None if data.get("smoke") is None else int(bool(data.get("smoke"))),
+            None if data.get("flame") is None else int(bool(data.get("flame"))),
+            vn_now_sql(),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def fetch_sensor_history(room=None, limit=300):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    limit = max(1, min(int(limit), 5000))
+    if room:
+        cur.execute(
+            """
+            select * from sensor_history
+            where room = ?
+            order by id desc
+            limit ?
+            """,
+            (room, limit),
+        )
+    else:
+        cur.execute(
+            "select * from sensor_history order by id desc limit ?",
+            (limit,),
+        )
     rows = [dict(row) for row in cur.fetchall()]
     conn.close()
     return rows
