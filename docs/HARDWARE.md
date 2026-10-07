@@ -13,8 +13,8 @@ Tên BLE: `AIoT_Kitchen_Node`. MAC dự kiến: **`E8:3D:C1:9D:A5:16`**;
 
 | Thiết bị | Tín hiệu | ESP32-C3 | Quy ước trong firmware |
 | --- | --- | --- | --- |
-| MQ-2 (người dùng ghi MP-2) | AO | GPIO0 | Đọc ADC thô, chưa quy đổi ppm |
-| MQ-2 | DO | GPIO1 | HIGH = báo khói theo code hiện tại |
+| MP-2 | AO | GPIO0 | Đọc ADC thô, chưa quy đổi ppm |
+| MP-2 | DO | GPIO1 | HIGH = báo khói theo code hiện tại |
 | Cảm biến lửa | DO | GPIO2 | LOW = phát hiện lửa |
 | Servo SG90 cửa sổ | Signal | GPIO4 | 0° đóng, 90° mở theo lệnh servo |
 | Buzzer chủ động | Signal | GPIO5 | HIGH bật, LOW tắt; loại đã thử có tiếng |
@@ -23,8 +23,8 @@ Tên BLE: `AIoT_Kitchen_Node`. MAC dự kiến: **`E8:3D:C1:9D:A5:16`**;
 | Relay đèn | IN | GPIO20 | HIGH bật, LOW tắt theo code |
 
 ```text
-MQ-2 AO ───────────── GPIO0       SG90 Signal ───── GPIO4
-MQ-2 DO ───────────── GPIO1       Buzzer Signal ─── GPIO5
+MP-2 AO ───────────── GPIO0       SG90 Signal ───── GPIO4
+MP-2 DO ───────────── GPIO1       Buzzer Signal ─── GPIO5
 Flame DO ──────────── GPIO2       Quạt IN1 ──────── GPIO7
 Relay đèn IN ──────── GPIO20      Quạt IN2 ──────── GPIO8
 ```
@@ -40,13 +40,14 @@ Tên BLE: `AIoT_Patient_Node`. Cấu hình địa chỉ thực tế bằng `BLE_
 | PIR | OUT | GPIO5 | HIGH = có chuyển động |
 | Buzzer | Signal | GPIO0 | HIGH bật, LOW tắt |
 | Driver quạt | IN1 / IN2 | GPIO1 / GPIO2 | PWM trên IN1; IN2 LOW |
+| Relay đèn | IN | GPIO4 | HIGH bật, LOW tắt theo code |
 | Servo camera | Signal | GPIO6 | Khởi động ở 90° |
 | UART từ gateway | RX | GPIO20 | Nối TX của Pi/USB–UART vào đây |
 | UART về gateway | TX | GPIO21 | Nối RX của Pi/USB–UART nếu cần |
 
 UART dùng **115200 baud, 8N1**, chuỗi ví dụ `A90\n` (kết thúc bằng ký tự xuống dòng).
 Nối chung GND. `UART_PORT` phải là cổng thực tế; USB dùng nạp sketch không mặc nhiên
-là UART1 trên GPIO20/21. Chưa gán chân relay đèn cho phòng bệnh.
+là UART1 trên GPIO20/21. Relay đèn phòng bệnh được chốt tại GPIO4.
 
 ## Phòng khách — `living`
 
@@ -56,9 +57,14 @@ Tên BLE: `AIoT_Living_Node`. Cấu hình địa chỉ thực tế bằng `BLE_M
 | --- | --- | --- | --- |
 | SHT30/SHT31 và BH1750 | SDA | GPIO8 | Chung bus; địa chỉ `0x44` và `0x23` |
 | SHT30/SHT31 và BH1750 | SCL | GPIO9 | Chung bus I²C |
-| PIR | OUT | GPIO10 | HIGH = có chuyển động |
+| HLK-LD2420 | OT2 | GPIO10 | HIGH = phát hiện hiện diện; dùng cho logic tự động |
+| HLK-LD2420 | OT1 / UART_TX | GPIO20 (RX) | UART radar -> ESP32-C3 |
+| HLK-LD2420 | UART_RX | GPIO21 (TX) | ESP32-C3 -> UART radar |
 | Relay đèn | IN | GPIO7 | HIGH bật, LOW tắt theo code |
 | Driver quạt | IN1 / IN2 | GPIO1 / GPIO2 | PWM trên IN1; IN2 LOW |
+
+HLK-LD2420 được cấp 3,3 V và nối GND chung. OT2 là tín hiệu hiện diện chính cho
+logic tự động. UART 115200 baud được đấu đầy đủ để phục vụ cấu hình/chẩn đoán radar.
 
 ## Nguồn và mức tín hiệu
 
