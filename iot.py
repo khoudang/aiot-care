@@ -55,7 +55,9 @@ from config import (
     ENABLE_GESTURE,
     ENABLE_TRACKING,
     FALL_ASPECT,
+    FALL_HIP_VEL,
     FALL_HOLD_SEC,
+    FALL_MOTION_WINDOW_SEC,
     FALL_TORSO_DEG,
     GAS_HIGH_THRESHOLD,
     GAS_SMOOTH_WINDOW,
@@ -63,6 +65,7 @@ from config import (
     GESTURE_COOLDOWN_SEC,
     JPEG_QUALITY,
     MAX_HISTORY,
+    SENSOR_HISTORY_INTERVAL,
     NODES,
     PROCESS_EVERY_N_FRAMES,
     SERVO_CENTER,
@@ -82,6 +85,7 @@ from config import (
 )
 from database import (
     get_config_value, log_audit, vn_now_sql, fetch_gesture_mappings,
+    insert_sensor_history,
 )
 
 
@@ -136,7 +140,7 @@ ROOMS = {
         "updated_at": 0,
     },
     "living": {
-        "temp": None, "hum": None, "motion": False, "lux": None,
+        "temp": None, "hum": None, "presence": False, "lux": None,
         "light": False, "light_level": 0, "fan": False, "fan_speed": 0,
         "auto": True, "updated_at": 0,
     },
@@ -171,6 +175,7 @@ _restoration_seen = {}
 _kitchen_safe_since = None
 _kitchen_sample_at = None
 _kitchen_emergency = False
+_kitchen_awaiting_confirm = False
 _fall_buzzer_saved = None
 _fall_restore_target = None
 _safety_retry_at = {}
@@ -189,6 +194,7 @@ histories = {
                "hum": deque(maxlen=MAX_HISTORY), "lux": deque(maxlen=MAX_HISTORY)},
     "kitchen": {"labels": deque(maxlen=MAX_HISTORY), "gas": deque(maxlen=MAX_HISTORY)},
 }
+_last_history_persist = {room: 0.0 for room in ROOMS}
 
 # Hàng đợi lệnh BLE theo từng phòng
 command_queues = {room: queue.Queue(maxsize=20) for room in ROOMS}
@@ -253,13 +259,13 @@ _NUMERIC_ALIASES = {
     "lux": "lux", "light_level": "light_level", "brightness": "light_level",
     "fan_speed": "fan_speed", "speed": "fan_speed",
 }
-_BOOL_KEYS = ["motion", "light", "fan", "buzzer", "smoke", "flame", "window", "exhaust", "auto"]
+_BOOL_KEYS = ["motion", "presence", "light", "fan", "buzzer", "smoke", "flame", "window", "exhaust", "auto"]
 
 
 def apply_node_payload(room, payload):
     """Nhận dict telemetry từ 1 node, cập nhật state phòng tương ứng."""
     global last_motion_ts
-    global _kitchen_safe_since, _kitchen_sample_at, _kitchen_emergency
+    global _kitchen_safe_since, _kitchen_sample_at, _kitchen_emergency, _kitchen_awaiting_confirm
 
     if room not in ROOMS:
         return
@@ -280,6 +286,8 @@ def apply_node_payload(room, payload):
         _kitchen_sample_at = sample_time if valid else None
         if type(payload.get("emergency")) is bool:
             _kitchen_emergency = payload["emergency"]
+        if type(payload.get("awaiting_confirm")) is bool:
+            _kitchen_awaiting_confirm = payload["awaiting_confirm"]
 
     with state_lock:
         r = ROOMS[room]
@@ -298,6 +306,15 @@ def apply_node_payload(room, payload):
         gas_window[room].append(as_number(ROOMS[room]["gas"]) or 0)
 
     push_history(room)
+
+    # Lưu lịch sử cảm biến theo chu kỳ để không ghi SQLite theo từng gói BLE 1 giây.
+    persist_now = time.monotonic()
+    if persist_now - _last_history_persist[room] >= SENSOR_HISTORY_INTERVAL:
+        try:
+            insert_sensor_history(room, dict(ROOMS[room]))
+            _last_history_persist[room] = persist_now
+        except Exception as exc:
+            print(f"[db] sensor history {room}:", exc)
 
     # PIR phòng bệnh -> bật camera theo chế độ auto
     if room == "patient" and ROOMS["patient"]["motion"]:
@@ -724,7 +741,7 @@ def _danger_warn():
     gas_k = _gas_avg("kitchen") or 0
     danger = bool(k["flame"] or k["smoke"] or gas_k >= GAS_HIGH_THRESHOLD
                   or (as_number(k.get("gas")) or 0) >= GAS_HIGH_THRESHOLD
-                  or _kitchen_emergency)
+                  or (_kitchen_emergency and not _kitchen_awaiting_confirm))
     warn = bool(gas_k >= GAS_WARN_THRESHOLD)
     return danger, warn
 
@@ -869,6 +886,8 @@ def confirm_safe(user_id=None):
                 return
             _fail_restoration("patient")
         _restoration_started = now
+        # Cho node bếp rời latch khẩn cấp và khôi phục snapshot cục bộ.
+        set_device("kitchen", "confirm_safe", source="auto", silent=True)
         if not AI.get("fall") and _fall_buzzer_saved is not None:
             _fall_restore_target = _fall_buzzer_saved
         _restoration_seen.clear()
@@ -1163,23 +1182,36 @@ def _apply_gesture(gesture_key):
     )
 
 
-# ---- Té ngã ----
+# ---- Té ngã: 3 đặc trưng AR + góc thân + vận tốc hông ----
 _fall_since = 0.0
+_prev_hip_y = None
+_prev_hip_ts = None
+_fall_motion_until = 0.0
 
 
 def detect_fall(landmarks, w, h):
-    """Heuristic: góc thân so phương đứng + tỉ lệ bbox. Trả về True/False (nghi ngờ)."""
+    """Phát hiện ứng viên té ngã theo chuỗi chuyển động -> tư thế bất thường.
+
+    Đặc trưng:
+      * aspect: tỉ lệ rộng/cao của bounding box cơ thể;
+      * angle: góc thân so với phương thẳng đứng;
+      * hip_velocity: vận tốc hông theo trục y chuẩn hóa/giây (dương = đi xuống).
+
+    Một tư thế nằm ngang chỉ được xem là ứng viên nếu trước đó vừa có pha hông
+    đi xuống đủ nhanh trong cửa sổ thời gian FALL_MOTION_WINDOW_SEC.
+    """
+    global _prev_hip_y, _prev_hip_ts, _fall_motion_until
+    now = time.monotonic()
     try:
-        ls, rs = landmarks[11], landmarks[12]    # shoulders
-        lh, rh = landmarks[23], landmarks[24]    # hips
+        ls, rs = landmarks[11], landmarks[12]
+        lh, rh = landmarks[23], landmarks[24]
         sx = (ls.x + rs.x) / 2 * w
         sy = (ls.y + rs.y) / 2 * h
         hx = (lh.x + rh.x) / 2 * w
         hy = (lh.y + rh.y) / 2 * h
+        hip_y = (lh.y + rh.y) / 2.0
 
-        import math
         dx, dy = hx - sx, hy - sy
-        # góc so với phương thẳng đứng (0 = đứng thẳng)
         angle = abs(math.degrees(math.atan2(abs(dx), abs(dy) + 1e-6)))
 
         xs = [p.x for p in landmarks]
@@ -1188,8 +1220,21 @@ def detect_fall(landmarks, w, h):
         bh = (max(ys) - min(ys)) * h
         aspect = bw / (bh + 1e-6)
 
-        return angle > FALL_TORSO_DEG or aspect > FALL_ASPECT
+        hip_velocity = 0.0
+        if _prev_hip_y is not None and _prev_hip_ts is not None:
+            dt = now - _prev_hip_ts
+            if 0.02 <= dt <= 1.0:
+                hip_velocity = (hip_y - _prev_hip_y) / dt
+        _prev_hip_y, _prev_hip_ts = hip_y, now
+
+        if hip_velocity >= FALL_HIP_VEL:
+            _fall_motion_until = now + FALL_MOTION_WINDOW_SEC
+
+        abnormal_posture = angle > FALL_TORSO_DEG or aspect > FALL_ASPECT
+        recent_descent = now <= _fall_motion_until
+        return abnormal_posture and recent_descent
     except Exception:
+        _prev_hip_y, _prev_hip_ts = None, None
         return False
 
 
@@ -1365,4 +1410,4 @@ def start_background_services():
     load_gesture_map()
     init_uart()
     threading.Thread(target=_ble_thread, daemon=True).start()
-    print("[iot] background services started (BLE x4 + UART)")
+    print("[iot] background services started (BLE x3 + UART)")
