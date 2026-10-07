@@ -4,8 +4,8 @@
 
 | Sketch | Tên quảng bá BLE | Vai trò |
 | --- | --- | --- |
-| `patient_node/patient_node.ino` | `AIoT_Patient_Node` | SHT, PIR, quạt, buzzer, servo qua UART |
-| `living_node/living_node.ino` | `AIoT_Living_Node` | SHT, BH1750, PIR, đèn, quạt tự động |
+| `patient_node/patient_node.ino` | `AIoT_Patient_Node` | SHT, PIR, relay đèn, quạt, buzzer, servo qua UART |
+| `living_node/living_node.ino` | `AIoT_Living_Node` | SHT, BH1750, HLK-LD2420, đèn, quạt tự động |
 | `kitchen_node/kitchen_node.ino` | `AIoT_Kitchen_Node` | Gas, khói, lửa, cửa sổ, quạt hút, đèn, buzzer |
 
 Hai header dùng chung: `command_contract.h` xử lý lệnh/ACK, `node_logic.h` chứa
@@ -50,8 +50,9 @@ Quạt nhận PWM 0–255 trên đường BLE; backend đổi phần trăm 0–1
 - Gas ADC ≥ 1500: còi cảnh báo nhịp 300 ms mỗi 2 giây.
 - Gas ADC ≥ 2500, có khói hoặc có lửa: mở cửa, bật quạt hút và còi, **tắt đèn**.
 - Trong trạng thái khẩn cấp, node từ chối lệnh điều khiển thủ công.
-- Khi hết cả nguy hiểm và cảnh báo liên tục 10 giây, node khôi phục trạng thái
-  các đầu ra đã lưu trước khẩn cấp.
+- Khi hết cả nguy hiểm và cảnh báo liên tục 10 giây, node chuyển sang trạng thái
+  chờ xác nhận và vẫn giữ cửa mở, quạt hút/còi bật, đèn tắt.
+- Chỉ sau lệnh `confirm_safe` từ gateway, node mới khôi phục các đầu ra đã lưu.
 
 Ngưỡng này nằm trong `node_logic.h`; đổi biến môi trường ngưỡng gas trên gateway
 không tự đổi ngưỡng đã biên dịch trong node. Backend còn có quy trình cảnh báo và
@@ -60,14 +61,14 @@ việc toàn bộ hệ thống đã hoàn tất xác nhận.
 
 ### Phòng khách
 
-Chế độ tự động chạy cục bộ ngay cả khi mất BLE. Khi có chuyển động gần đây: bật
+Chế độ tự động chạy cục bộ ngay cả khi mất BLE. Khi radar xác nhận có người gần đây: bật
 đèn nếu lux < 100; quạt 100% nếu nhiệt độ ≥ 30 hoặc độ ẩm ≥ 75, khoảng 50% nếu
-nhiệt độ ≥ 27 hoặc độ ẩm ≥ 65, còn lại tắt. Không có chuyển động trong 120 giây
+nhiệt độ ≥ 27 hoặc độ ẩm ≥ 65, còn lại tắt. Không phát hiện hiện diện trong 120 giây
 thì tắt đèn/quạt. Lệnh đèn hoặc quạt thủ công tắt `auto`; lệnh `auto` bật lại chế độ này.
 
 ### Phòng bệnh
 
-Quạt và buzzer nhận lệnh BLE. Servo nhận góc qua UART1 trên GPIO20/21, không qua
+Relay đèn GPIO4, quạt và buzzer nhận lệnh BLE. Servo nhận góc qua UART1 trên GPIO20/21, không qua
 lệnh servo BLE. Camera và xử lý AI chạy trên gateway.
 
 Các hành vi trên mô tả mã nguồn hiện tại, không khẳng định tất cả board đang được
