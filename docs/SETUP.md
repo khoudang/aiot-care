@@ -36,6 +36,10 @@ không đưa key, mật khẩu hoặc token thật lên Git.
 | `UART_PORT`, `UART_BAUD` | Cổng serial thực tế và baud; mặc định `/dev/ttyUSB0`, `115200` |
 | `CAMERA_MODE_DEFAULT` | `auto`, `on` hoặc `off` |
 | `VIDEO_SOURCE` | Chỉ số camera OpenCV, mặc định `0` |
+| `FALL_HIP_VEL` | Ngưỡng vận tốc hông khởi tạo, mặc định `0.35` y chuẩn hóa/giây |
+| `FALL_MOTION_WINDOW_SEC` | Cửa sổ ghép pha rơi với tư thế bất thường, mặc định `5.0` s |
+| `FALL_TORSO_DEG`, `FALL_ASPECT`, `FALL_HOLD_SEC` | Các tham số té ngã cần hiệu chỉnh thực nghiệm |
+| `SENSOR_HISTORY_INTERVAL` | Chu kỳ ghi `sensor_history` vào SQLite, mặc định `10` s |
 | `ALLOW_REGISTER` | `1` cho đăng ký, `0` tắt đăng ký |
 | `ADMIN_REGISTER_CODE` | Mã đăng ký khởi tạo khi cấu hình DB chưa tồn tại |
 
