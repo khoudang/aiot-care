@@ -1233,6 +1233,11 @@ def detect_fall(landmarks, w, h):
 
         abnormal_posture = angle > FALL_TORSO_DEG or aspect > FALL_ASPECT
         recent_descent = now <= _fall_motion_until
+
+        # Sau khi đã xác nhận té ngã, giữ trạng thái cho tới khi tư thế trở lại
+        # bình thường; không để cửa sổ vận tốc tự xóa cờ té ngã.
+        if AI.get("fall"):
+            return abnormal_posture
         return abnormal_posture and recent_descent
     except Exception:
         _prev_hip_y, _prev_hip_ts = None, None
