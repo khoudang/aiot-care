@@ -20,10 +20,13 @@ bool deviceConnected = false;
 // Pinout theo sơ đồ Excel
 const int PIN_SDA = 8;
 const int PIN_SCL = 9;
-const int PIN_PIR = 10;
+const int PIN_PRESENCE = 10;       // HLK-LD2420 OT2
 const int PIN_LIGHT_RELAY = 7;
 const int PIN_FAN_IN1 = 1;
 const int PIN_FAN_IN2 = 2;
+const int PIN_LD2420_RX = 20;      // ESP RX <- HLK-LD2420 OT1/UART_TX
+const int PIN_LD2420_TX = 21;      // ESP TX -> HLK-LD2420 UART_RX
+const int LD2420_BAUD = 115200;
 
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
 BH1750 lightMeter;
@@ -74,7 +77,7 @@ void setup() {
   Serial.println("\n--- BOOTING LIVING NODE ---");
 
   Serial.println("[1] Init Pins...");
-  pinMode(PIN_PIR, INPUT);
+  pinMode(PIN_PRESENCE, INPUT);
   pinMode(PIN_LIGHT_RELAY, OUTPUT);
   pinMode(PIN_FAN_IN1, OUTPUT);
   pinMode(PIN_FAN_IN2, OUTPUT);
@@ -83,8 +86,9 @@ void setup() {
   digitalWrite(PIN_FAN_IN1, LOW);
   digitalWrite(PIN_FAN_IN2, LOW);
 
-  Serial.println("[2] Init I2C Sensors...");
+  Serial.println("[2] Init I2C Sensors & LD2420 UART...");
   Wire.begin(PIN_SDA, PIN_SCL);
+  Serial1.begin(LD2420_BAUD, SERIAL_8N1, PIN_LD2420_RX, PIN_LD2420_TX);
   if (!sht31.begin(0x44)) {
     Serial.println("    -> Warning: Couldn't find SHT31");
   } else {
@@ -128,10 +132,15 @@ void loop() {
     float t = sht31.readTemperature();
     float h = sht31.readHumidity();
     float lux = lightMeter.readLightLevel();
-    bool motion = digitalRead(PIN_PIR) == HIGH;
+    bool presence = digitalRead(PIN_PRESENCE) == HIGH;
+
+    // OT2 drives the automation. UART is wired for configuration/diagnostics.
+    while (Serial1.available()) {
+      Serial1.read();
+    }
 
     // Local automation runs even when BLE is disconnected.
-    living.update(millis(), motion, lux, t, h, auto_mode, lightOn, fanPwm);
+    living.update(millis(), presence, lux, t, h, auto_mode, lightOn, fanPwm);
     digitalWrite(PIN_LIGHT_RELAY, lightOn ? HIGH : LOW);
     analogWrite(PIN_FAN_IN1, fanPwm);
     digitalWrite(PIN_FAN_IN2, LOW);
@@ -141,8 +150,8 @@ void loop() {
 
     char payload[256];
     snprintf(payload, sizeof(payload),
-      "{\"room\":\"living\",\"temp\":%.1f,\"hum\":%.1f,\"lux\":%d,\"motion\":%s,\"light\":%s,\"fan\":%s,\"fan_speed\":%d,\"auto\":%s}",
-      t, h, (int)lux, motion ? "true" : "false", lightOn ? "true" : "false",
+      "{\"room\":\"living\",\"temp\":%.1f,\"hum\":%.1f,\"lux\":%d,\"presence\":%s,\"light\":%s,\"fan\":%s,\"fan_speed\":%d,\"auto\":%s}",
+      t, h, (int)lux, presence ? "true" : "false", lightOn ? "true" : "false",
       fanPwm > 0 ? "true" : "false", (fanPwm * 100 + 127) / 255, auto_mode ? "true" : "false");
 
     notifyJson(pNotifyChar, payload);
