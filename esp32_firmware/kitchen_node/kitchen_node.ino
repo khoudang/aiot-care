@@ -57,6 +57,12 @@ bool handleCommand(const String &value) {
       if (value.length() > 0) {
         StaticJsonDocument<384> doc;
         if (!deserializeJson(doc, value)) {
+          const char *cmd = doc["cmd"] | "";
+          if (strcmp(cmd, "confirm_safe") == 0) {
+            applied = kitchen.confirmSafe();
+            if (applied) applyOutputs();
+            return applied;
+          }
           // Commands cannot override the local emergency latch/recovery window.
           if (emergency) return false;
           bool enabled;
@@ -139,11 +145,11 @@ void loop() {
     char payload[256];
     snprintf(payload, sizeof(payload),
       "{\"room\":\"kitchen\",\"gas\":%d,\"smoke\":%s,\"flame\":%s,"
-      "\"window\":%s,\"exhaust\":%s,\"light\":%s,\"buzzer\":%s,\"emergency\":%s}",
+      "\"window\":%s,\"exhaust\":%s,\"light\":%s,\"buzzer\":%s,\"emergency\":%s,\"awaiting_confirm\":%s}",
       gas, smoke ? "true" : "false", flame ? "true" : "false",
       windowOpen ? "true" : "false", exhaustOn ? "true" : "false",
       lightOn ? "true" : "false", (buzzerOn || warningGas) ? "true" : "false",
-      emergency ? "true" : "false");
+      emergency ? "true" : "false", kitchen.awaitingConfirm ? "true" : "false");
     notifyJson(pNotifyChar, payload);
   }
 }
