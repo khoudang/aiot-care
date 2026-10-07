@@ -39,9 +39,9 @@ struct LivingState {
   uint32_t lastMotion = 0;
   bool seenMotion = false;
 
-  void update(uint32_t now, bool motion, float lux, float temp, float hum,
+  void update(uint32_t now, bool presence, float lux, float temp, float hum,
               bool automatic, bool &light, int &pwm) {
-    if (motion) { lastMotion = now; seenMotion = true; }
+    if (presence) { lastMotion = now; seenMotion = true; }
     if (!automatic) return;
     if (!seenMotion || uint32_t(now - lastMotion) >= 120000) {
       light = false; pwm = 0;
