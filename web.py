@@ -36,6 +36,7 @@ from database import (
     clear_login_logs,
     clear_audit_logs,
     fetch_kitchen_alerts,
+    fetch_sensor_history,
 )
 
 
@@ -183,6 +184,18 @@ def register_web(app, socketio):
     @login_required
     def api_state():
         return jsonify(iot.snapshot_all())
+
+    @app.route("/api/sensor_history")
+    @login_required
+    def api_sensor_history():
+        room = (request.args.get("room") or "").strip() or None
+        if room is not None and room not in ("patient", "living", "kitchen"):
+            return jsonify({"ok": False, "message": "Phòng không hợp lệ."}), 400
+        try:
+            limit = int(request.args.get("limit", "300"))
+        except ValueError:
+            limit = 300
+        return jsonify({"ok": True, "history": fetch_sensor_history(room=room, limit=limit)})
 
 
     # ---- Ánh xạ cử chỉ (Yêu cầu 2) ----
