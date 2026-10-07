@@ -117,7 +117,9 @@ CAMERA_MOTION_TIMEOUT = float(os.getenv("CAMERA_MOTION_TIMEOUT", "20"))  # giây
 # Phát hiện té ngã (heuristic từ pose)
 FALL_HOLD_SEC = float(os.getenv("FALL_HOLD_SEC", "3.5"))      # giữ tư thế bất thường bao lâu mới báo
 FALL_TORSO_DEG = float(os.getenv("FALL_TORSO_DEG", "55"))     # góc thân so với phương đứng
-FALL_ASPECT = float(os.getenv("FALL_ASPECT", "1.1"))         # tỉ lệ rộng/cao bbox
+FALL_ASPECT = float(os.getenv("FALL_ASPECT", "1.1"))          # tỉ lệ rộng/cao bbox
+FALL_HIP_VEL = float(os.getenv("FALL_HIP_VEL", "0.35"))       # vận tốc hông theo trục y chuẩn hóa / giây
+FALL_MOTION_WINDOW_SEC = float(os.getenv("FALL_MOTION_WINDOW_SEC", "5.0"))  # giữ dấu vết pha rơi
 
 
 # ------------------------------------------------------------------ #
@@ -126,6 +128,7 @@ FALL_ASPECT = float(os.getenv("FALL_ASPECT", "1.1"))         # tỉ lệ rộng/
 COMMAND_DEBOUNCE_SEC = float(os.getenv("COMMAND_DEBOUNCE_SEC", "1.0"))
 GESTURE_COOLDOWN_SEC = float(os.getenv("GESTURE_COOLDOWN_SEC", "1.2"))
 MAX_HISTORY = int(os.getenv("MAX_HISTORY", "30"))
+SENSOR_HISTORY_INTERVAL = float(os.getenv("SENSOR_HISTORY_INTERVAL", "10"))
 ALERT_COOLDOWN_SEC = float(os.getenv("ALERT_COOLDOWN_SEC", "60"))
 
 # Ngưỡng khí gas (đơn vị ADC/ppm tùy cảm biến). Lọc bằng trung bình trượt trong iot.py.
