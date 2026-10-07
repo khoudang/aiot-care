@@ -929,27 +929,28 @@ def _observe_restoration(room, payload):
             now - _kitchen_sample_at > KITCHEN_SAMPLE_TIMEOUT_SEC):
         _restoration_seen.clear()
         return
-    if room not in _emergency_snapshot or not NODE_ONLINE.get(room):
-        return
-    with _delivery_lock:
-        if _pending_commands[room]:
-            return
-    saved = _emergency_snapshot[room]
-    expected = {"fan": saved["fan"],
-                "fan_speed": int(saved["fan_speed"]) if saved["fan"] else 0}
-    if room == "living":
-        expected.update(light=saved["light"], auto=saved["auto"])
-        if saved["auto"]:
-            expected = {"auto": True}
-    else:
-        expected["buzzer"] = _patient_buzzer_target()
-    matches = all(type(payload.get(key)) is type(value) and payload[key] == value
-                  for key, value in expected.items())
-    if matches:
-        _restoration_seen[room] = now
-    else:
-        _restoration_seen.pop(room, None)
-    if set(_restoration_seen) == {"patient", "living"}:
+    if room in _emergency_snapshot and NODE_ONLINE.get(room):
+        with _delivery_lock:
+            pending = bool(_pending_commands[room])
+        if not pending:
+            saved = _emergency_snapshot[room]
+            expected = {"fan": saved["fan"],
+                        "fan_speed": int(saved["fan_speed"]) if saved["fan"] else 0}
+            if room == "living":
+                expected.update(light=saved["light"], auto=saved["auto"])
+                if saved["auto"]:
+                    expected = {"auto": True}
+            else:
+                expected["buzzer"] = _patient_buzzer_target()
+            matches = all(type(payload.get(key)) is type(value) and payload[key] == value
+                          for key, value in expected.items())
+            if matches:
+                _restoration_seen[room] = now
+            else:
+                _restoration_seen.pop(room, None)
+
+    kitchen_confirmed = (not _kitchen_emergency and not _kitchen_awaiting_confirm)
+    if set(_restoration_seen) == {"patient", "living"} and kitchen_confirmed:
         _emergency_snapshot = None
         _restoration_started = None
         _restoration_seen.clear()
