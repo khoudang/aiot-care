@@ -4,7 +4,7 @@
 
 struct KitchenState {
   bool windowOpen = false, exhaustOn = false, lightOn = false, buzzerOn = false;
-  bool emergency = false, warningGas = false, recovering = false;
+  bool emergency = false, warningGas = false, recovering = false, awaitingConfirm = false;
   bool savedWindow = false, savedExhaust = false, savedLight = false, savedBuzzer = false;
   uint32_t safeSince = 0;
 
@@ -15,19 +15,37 @@ struct KitchenState {
       savedWindow = windowOpen; savedExhaust = exhaustOn;
       savedLight = lightOn; savedBuzzer = buzzerOn;
       emergency = true;
+      awaitingConfirm = false;
     }
     if (!emergency) return;
-    if (danger || warningGas) recovering = false;
-    else if (!recovering) { recovering = true; safeSince = now; }
-    if (recovering && uint32_t(now - safeSince) >= 10000) {
-      emergency = false;
+
+    if (danger || warningGas) {
       recovering = false;
-      windowOpen = savedWindow; exhaustOn = savedExhaust;
-      lightOn = savedLight; buzzerOn = savedBuzzer;
-    } else {
-      windowOpen = true; exhaustOn = true;
-      lightOn = false; buzzerOn = true;
+      awaitingConfirm = false;
+    } else if (!recovering && !awaitingConfirm) {
+      recovering = true;
+      safeSince = now;
     }
+    if (recovering && uint32_t(now - safeSince) >= 10000) {
+      recovering = false;
+      awaitingConfirm = true;
+    }
+
+    // Giữ trạng thái an toàn cho tới khi gateway/người dùng xác nhận.
+    windowOpen = true;
+    exhaustOn = true;
+    lightOn = false;
+    buzzerOn = true;
+  }
+
+  bool confirmSafe() {
+    if (!emergency || !awaitingConfirm) return false;
+    emergency = false;
+    awaitingConfirm = false;
+    recovering = false;
+    windowOpen = savedWindow; exhaustOn = savedExhaust;
+    lightOn = savedLight; buzzerOn = savedBuzzer;
+    return true;
   }
 
   bool sound(uint32_t now) const {
