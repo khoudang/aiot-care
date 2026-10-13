@@ -142,7 +142,8 @@ ROOMS = {
     },
     "kitchen": {
         "gas": None, "smoke": False, "flame": False,
-        "window": False, "exhaust": False, "light": False, "buzzer": False,
+        "window": False, "exhaust": False, "exhaust_speed": None,
+        "light": False, "buzzer": False,
         "updated_at": 0,
     },
 }
@@ -256,6 +257,7 @@ _NUMERIC_ALIASES = {
     "gas": "gas", "ppm": "gas",
     "lux": "lux", "light_level": "light_level", "brightness": "light_level",
     "fan_speed": "fan_speed", "speed": "fan_speed",
+    "exhaust_speed": "exhaust_speed",
 }
 _BOOL_KEYS = ["motion", "light", "fan", "buzzer", "smoke", "flame", "window", "exhaust", "auto"]
 
@@ -418,7 +420,9 @@ async def _discover_ble_devices(force=False):
     if _ble_discovery_lock is None:
         _ble_discovery_lock = asyncio.Lock()
     async with _ble_discovery_lock:
-        if not force and _ble_devices and time.monotonic() - _ble_devices_seen_at < 10:
+        # A recent scan is useful even when it found no devices. Without this,
+        # absent nodes trigger back-to-back scans and starve the other nodes.
+        if not force and time.monotonic() - _ble_devices_seen_at < 10:
             return list(_ble_devices.values())
         devices = await BleakScanner.discover(timeout=5.0)
         _ble_devices.clear()
@@ -428,12 +432,7 @@ async def _discover_ble_devices(force=False):
 
 
 async def _find_ble_device(mac):
-    devices = await _discover_ble_devices()
-    device = _ble_devices.get(mac.upper())
-    if device is not None:
-        return device
-    # Refresh once if the cached scan did not see this node.
-    await _discover_ble_devices(force=True)
+    await _discover_ble_devices()
     return _ble_devices.get(mac.upper())
 
 
@@ -614,6 +613,10 @@ def set_device(room, device, state=None, value=None, source="manual", user_id=No
     now = now_ts()
     if prev and prev[0] == sig and (now - prev[1]) < COMMAND_DEBOUNCE_SEC and source != "auto":
         return
+    # Fan sliders can produce many values in quick succession. Keep only the
+    # newest desired speed so stale pending writes cannot fill the BLE queue.
+    if device in ("fan", "exhaust"):
+        _cancel_commands(room, device)
     if not enqueue_command(room, json.dumps(cmd, ensure_ascii=False)):
         _emit("command_error", {"room": room, "device": device, "message": "Command queue full"})
         return False

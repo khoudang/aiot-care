@@ -29,6 +29,7 @@ Servo windowServo;
 KitchenState kitchen;
 bool &windowOpen = kitchen.windowOpen;
 bool &exhaustOn = kitchen.exhaustOn;
+int &exhaustPwm = kitchen.exhaustPwm;
 bool &lightOn = kitchen.lightOn;
 bool &buzzerOn = kitchen.buzzerOn;
 bool &emergency = kitchen.emergency;
@@ -36,7 +37,7 @@ bool &warningGas = kitchen.warningGas;
 
 void applyOutputs() {
   windowServo.write(windowOpen ? 90 : 0);
-  digitalWrite(PIN_EXHAUST_IN1, exhaustOn ? HIGH : LOW);
+  analogWrite(PIN_EXHAUST_IN1, exhaustOn ? constrain(exhaustPwm, 0, 255) : 0);
   digitalWrite(PIN_EXHAUST_IN2, LOW);
   digitalWrite(PIN_LIGHT_RELAY, lightOn ? HIGH : LOW);
   // Mild gas warning pulses; emergency remains continuously audible.
@@ -69,7 +70,22 @@ bool handleCommand(const String &value) {
           }
           bool enabled;
           if (commandSwitch(doc, "window", enabled)) { windowOpen = enabled; applied = true; }
-          if (commandSwitch(doc, "exhaust", enabled)) { exhaustOn = enabled; applied = true; }
+          if (commandSwitch(doc, "exhaust", enabled)) {
+            exhaustOn = enabled;
+            exhaustPwm = enabled ? 255 : 0;
+            applied = true;
+          }
+          const char *cmd = doc["cmd"] | "";
+          if (strcmp(cmd, "exhaust") == 0 && doc.containsKey("value")) {
+            if (!doc["value"].is<int>()) return false;
+            int value = doc["value"].as<int>();
+            if (value < 0 || value > 255) return false;
+            bool enabled = true;
+            if (doc.containsKey("state") && !readSwitch(doc["state"], enabled)) return false;
+            exhaustPwm = enabled ? value : 0;
+            exhaustOn = exhaustPwm > 0;
+            applied = true;
+          }
           if (commandSwitch(doc, "light", enabled)) { lightOn = enabled; applied = true; }
           if (commandSwitch(doc, "buzzer", enabled)) { buzzerOn = enabled; applied = true; }
           applyOutputs();
@@ -148,9 +164,10 @@ void loop() {
     char payload[256];
     snprintf(payload, sizeof(payload),
       "{\"room\":\"kitchen\",\"gas\":%d,\"smoke\":%s,\"flame\":%s,"
-      "\"window\":%s,\"exhaust\":%s,\"light\":%s,\"buzzer\":%s,\"emergency\":%s}",
+      "\"window\":%s,\"exhaust\":%s,\"exhaust_speed\":%d,\"light\":%s,\"buzzer\":%s,\"emergency\":%s}",
       gas, smoke ? "true" : "false", flame ? "true" : "false",
       windowOpen ? "true" : "false", exhaustOn ? "true" : "false",
+      (exhaustOn ? exhaustPwm * 100 / 255 : 0),
       lightOn ? "true" : "false", (buzzerOn || warningGas) ? "true" : "false",
       emergency ? "true" : "false");
     notifyJson(pNotifyChar, payload);

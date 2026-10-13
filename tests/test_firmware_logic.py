@@ -21,6 +21,8 @@ class FirmwareLogicTests(unittest.TestCase):
 int main() {
   KitchenState k;
   k.lightOn = true;
+  k.exhaustOn = true;
+  k.exhaustPwm = 128;
   k.update(0, 1499, false, false);
   assert(!k.warningGas && !k.emergency);
   k.update(100, 1500, false, false);
@@ -35,7 +37,7 @@ int main() {
   k.update(20399, 0, false, false);
   assert(k.emergency);
   k.update(20400, 0, false, false);
-  assert(!k.emergency && k.lightOn && !k.exhaustOn && !k.windowOpen);
+  assert(!k.emergency && k.lightOn && k.exhaustOn && k.exhaustPwm == 128 && !k.windowOpen);
   k.update(20500, 0, false, true);
   assert(k.emergency);
   LivingState living;

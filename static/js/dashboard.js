@@ -87,7 +87,24 @@
     const el=document.getElementById(id),tile=document.getElementById(tileId);
     el.addEventListener('change',()=>{tile.classList.toggle('on',el.checked);const st=document.getElementById(id.replace('-toggle','-status'));if(st)st.textContent=el.checked?onTxt:offTxt;cb&&cb(el.checked);});
   }
-  function bindRange(id,valId,cb){const el=document.getElementById(id),v=document.getElementById(valId);el.addEventListener('input',()=>{v.textContent=el.value;cb&&cb(+el.value);});}
+  function bindRange(id,valId,cb){
+    const el=document.getElementById(id),v=document.getElementById(valId);
+    let timer=null,editingTimer=null,lastSentAt=0,lastSentValue=null,pendingValue=0;
+    const send=value=>{cb&&cb(value);lastSentAt=performance.now();lastSentValue=value;};
+    el.addEventListener('input',()=>{
+      clearTimeout(editingTimer);clearTimeout(el._userEditTimeout);el.dataset.userEditing='1';el.dataset.desiredValue=el.value;v.textContent=el.value;pendingValue=+el.value;
+      const wait=Math.max(0,120-(performance.now()-lastSentAt));
+      if(wait===0){if(timer){clearTimeout(timer);timer=null;}send(pendingValue);}
+      else if(!timer)timer=setTimeout(()=>{timer=null;send(pendingValue);},wait);
+    });
+    el.addEventListener('change',()=>{
+      if(timer){clearTimeout(timer);timer=null;}
+      pendingValue=+el.value;v.textContent=el.value;
+      if(pendingValue!==lastSentValue)send(pendingValue);
+      editingTimer=setTimeout(()=>{delete el.dataset.userEditing;delete el.dataset.desiredValue;},2200);
+      el._userEditTimeout=editingTimer;
+    });
+  }
   bindToggle('pt-light-toggle','pt-light-tile','Đang bật','Đang tắt',on=>emitSet('patient','light',{state:on}));
   bindToggle('pt-buzzer-toggle','pt-buzzer-tile','Đang kêu','Im lặng',on=>emitSet('patient','buzzer',{state:on}));
   bindToggle('pt-fan-toggle','pt-fan-tile','Đang chạy','Đang tắt',on=>{const r=document.getElementById('pt-fan-range');if(!on){r.value=0;document.getElementById('pt-fan-val').textContent=0;}emitSet('patient','fan',{state:on,value:on?(+r.value||100):0});});
@@ -97,7 +114,8 @@
   bindRange('lv-fan-range','lv-fan-val',v=>{const t=document.getElementById('lv-fan-toggle');t.checked=v>0;document.getElementById('lv-fan-tile').classList.toggle('on',v>0);document.getElementById('lv-fan-status').textContent=v>0?('Tốc độ '+v+'%'):'Đang tắt';emitSet('living','fan',{state:v>0,value:v});});
   bindToggle('lv-auto-toggle','lv-auto-tile','Bật đèn khi có người buổi tối','Đã tắt tự động',on=>emitSet('living','auto',{state:on}));
   bindToggle('kt-window-toggle','kt-window-tile','Đang mở','Đang đóng',on=>emitSet('kitchen','window',{state:on}));
-  bindToggle('kt-exhaust-toggle','kt-exhaust-tile','Đang hút','Đang tắt',on=>emitSet('kitchen','exhaust',{state:on}));
+  bindToggle('kt-exhaust-toggle','kt-exhaust-tile','Đang hút','Đang tắt',on=>{const r=document.getElementById('kt-exhaust-range'),v=on?(+r.value||100):0;r.value=v;document.getElementById('kt-exhaust-val').textContent=v;emitSet('kitchen','exhaust',{state:on,value:v});});
+  bindRange('kt-exhaust-range','kt-exhaust-val',v=>{const on=v>0,t=document.getElementById('kt-exhaust-toggle');t.checked=on;document.getElementById('kt-exhaust-tile').classList.toggle('on',on);document.getElementById('kt-exhaust-status').textContent=on?'Đang hút':'Đang tắt';emitSet('kitchen','exhaust',{state:on,value:v});});
   bindToggle('kt-light-toggle','kt-light-tile','Đang bật','Đang tắt',on=>emitSet('kitchen','light',{state:on}));
   bindToggle('kt-buzzer-toggle','kt-buzzer-tile','Đang kêu','Im lặng',on=>emitSet('kitchen','buzzer',{state:on}));
 
@@ -112,7 +130,7 @@
     if(d.gas!=null){document.getElementById('pt-gas').textContent=Math.round(d.gas);spark('sp-pt-gas',d.gas,'#d6982c');document.getElementById('pt-gas-card').classList.toggle('alarm',d.gas>=2500);}
     if(d.motion!=null)document.getElementById('oc-pir').innerHTML='<i class="fas fa-person-walking"></i> PIR: '+(d.motion?'có chuyển động':'yên tĩnh');
     if(d.buzzer!=null){document.getElementById('pt-buzzer-toggle').checked=!!d.buzzer;document.getElementById('pt-buzzer-tile').classList.toggle('alarm',!!d.buzzer);document.getElementById('pt-buzzer-status').textContent=d.buzzer?'Đang kêu':'Im lặng';}
-    if(d.fan_speed!=null){const r=document.getElementById('pt-fan-range');r.value=d.fan_speed;document.getElementById('pt-fan-val').textContent=d.fan_speed;const on=d.fan_speed>0;document.getElementById('pt-fan-toggle').checked=on;document.getElementById('pt-fan-tile').classList.toggle('on',on);document.getElementById('pt-fan-status').textContent=on?'Đang chạy':'Đang tắt';}
+    if(d.fan_speed!=null){const r=document.getElementById('pt-fan-range'),v=document.getElementById('pt-fan-val');if(r.dataset.userEditing&&Math.abs(+d.fan_speed-(+r.dataset.desiredValue))<=1){clearTimeout(r._userEditTimeout);delete r.dataset.userEditing;delete r.dataset.desiredValue;}if(!r.dataset.userEditing){r.value=d.fan_speed;v.textContent=d.fan_speed;}const on=d.fan_speed>0;document.getElementById('pt-fan-toggle').checked=on;document.getElementById('pt-fan-tile').classList.toggle('on',on);document.getElementById('pt-fan-status').textContent=on?'Đang chạy':'Đang tắt';}
     touch();
   }
   function applyLiving(d){
@@ -121,7 +139,7 @@
     if(d.lux!=null){document.getElementById('lv-lux').textContent=Math.round(d.lux);spark('sp-lv-lux',d.lux,'#e0a52e');}
     if(d.motion!=null){const t=d.motion?'Có người':'Không có người';document.getElementById('lv-motion-status').textContent=t;document.getElementById('lv-motion-tile').classList.toggle('on',!!d.motion);document.getElementById('ov-living-motion').textContent=t;}
     if(d.light!=null){setToggle('lv-light-toggle','lv-light-tile',d.light,'Đang bật','Đang tắt');document.getElementById('ov-living-light').textContent=d.light?'Bật':'Tắt';}
-    if(d.fan_speed!=null){const r=document.getElementById('lv-fan-range');r.value=d.fan_speed;document.getElementById('lv-fan-val').textContent=d.fan_speed;const on=d.fan_speed>0;document.getElementById('lv-fan-toggle').checked=on;document.getElementById('lv-fan-tile').classList.toggle('on',on);document.getElementById('lv-fan-status').textContent=on?('Tốc độ '+d.fan_speed+'%'):'Đang tắt';}
+    if(d.fan_speed!=null){const r=document.getElementById('lv-fan-range'),v=document.getElementById('lv-fan-val');if(r.dataset.userEditing&&Math.abs(+d.fan_speed-(+r.dataset.desiredValue))<=1){clearTimeout(r._userEditTimeout);delete r.dataset.userEditing;delete r.dataset.desiredValue;}if(!r.dataset.userEditing){r.value=d.fan_speed;v.textContent=d.fan_speed;}const on=d.fan_speed>0;document.getElementById('lv-fan-toggle').checked=on;document.getElementById('lv-fan-tile').classList.toggle('on',on);document.getElementById('lv-fan-status').textContent=on?('Tốc độ '+d.fan_speed+'%'):'Đang tắt';}
     if(d.auto!=null){document.getElementById('lv-auto-toggle').checked=!!d.auto;document.getElementById('lv-auto-tile').classList.toggle('on',!!d.auto);}
     touch();
   }
@@ -135,6 +153,7 @@
     if(d.smoke!=null){document.getElementById('kt-smoke-status').textContent=d.smoke?'PHÁT HIỆN KHÓI':'Không phát hiện';document.getElementById('kt-smoke-tile').classList.toggle('alarm',!!d.smoke);document.getElementById('ov-kitchen-smoke').textContent=d.smoke?'Có':'Không';}
     if(d.flame!=null){document.getElementById('kt-flame-status').textContent=d.flame?'PHÁT HIỆN LỬA':'Không phát hiện';document.getElementById('kt-flame-tile').classList.toggle('alarm',!!d.flame);document.getElementById('ov-kitchen-flame').textContent=d.flame?'Có':'Không';}
     if(d.window!=null)setToggle('kt-window-toggle','kt-window-tile',d.window,'Đang mở','Đang đóng');
+    if(d.exhaust_speed!=null){const r=document.getElementById('kt-exhaust-range'),v=document.getElementById('kt-exhaust-val');if(r.dataset.userEditing&&Math.abs(+d.exhaust_speed-(+r.dataset.desiredValue))<=1){clearTimeout(r._userEditTimeout);delete r.dataset.userEditing;delete r.dataset.desiredValue;}if(!r.dataset.userEditing){r.value=d.exhaust_speed;v.textContent=d.exhaust_speed;}}
     if(d.exhaust!=null)setToggle('kt-exhaust-toggle','kt-exhaust-tile',d.exhaust,'Đang hút','Đang tắt');
     if(d.light!=null)setToggle('kt-light-toggle','kt-light-tile',d.light,'Đang bật','Đang tắt');
     if(d.buzzer!=null)setToggle('kt-buzzer-toggle','kt-buzzer-tile',d.buzzer,'Đang kêu','Im lặng');
@@ -207,9 +226,21 @@
   }
 
   /* ================= SOCKET ================= */
+  async function refreshNodeStatus(){
+    try{
+      const r=await fetch('/api/state',{cache:'no-store',credentials:'same-origin'});
+      if(!r.ok)return;
+      const s=await r.json();
+      if(s.nodes)Object.keys(nodeState).forEach(room=>{
+        if(s.nodes[room]!=null)setNode(room,!!s.nodes[room]);
+      });
+    }catch(e){}
+  }
+  refreshNodeStatus();
+  setInterval(refreshNodeStatus,3000);
   if(socket){
     socket.on('connect',()=>{setConn(true);socket.emit('request_initial_state');loadKitchenAlerts();});
-    socket.on('disconnect',()=>{setConn(false);Object.keys(nodeState).forEach(room=>setNode(room,false));document.getElementById('state-chip').textContent='Mất kết nối';document.getElementById('state-chip').className='chip';document.getElementById('state-desc').textContent='Dữ liệu có thể đã cũ. Đang kết nối lại…';document.getElementById('confirm-btn').disabled=true;});
+    socket.on('disconnect',()=>{setConn(false);document.getElementById('state-chip').textContent='Mất kết nối realtime';document.getElementById('state-chip').className='chip';document.getElementById('state-desc').textContent='Trạng thái node được cập nhật qua API khi realtime gián đoạn.';document.getElementById('confirm-btn').disabled=true;});
     socket.on('command_error',e=>{showSys(e.message||'Không gửi được lệnh.','light');socket.emit('request_initial_state');});
     socket.on('bootstrap',s=>{
       if(s.rooms){applyPatient(s.rooms.patient||{});applyLiving(s.rooms.living||{});applyKitchen(s.rooms.kitchen||{});}

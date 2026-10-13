@@ -15,8 +15,10 @@ def build_command(room, device, state=None, value=None):
                                   type(state) is int and state in (0, 1)):
         raise ValueError("state must be boolean or 0/1")
     if value is not None:
-        if device != "fan" or type(value) is not int or not 0 <= value <= 100:
-            raise ValueError("Only fan accepts integer percent 0..100")
+        pwm_device = (device == "fan" and room in ("patient", "living") or
+                      device == "exhaust" and room == "kitchen")
+        if not pwm_device or type(value) is not int or not 0 <= value <= 100:
+            raise ValueError("Fan and kitchen exhaust accept integer percent 0..100")
     if state is None and value is None:
         raise ValueError("Missing state/value")
     command = {"cmd": device}

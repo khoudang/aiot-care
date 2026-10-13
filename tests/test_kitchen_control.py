@@ -133,6 +133,32 @@ class KitchenControlTests(unittest.TestCase):
     def setUp(self):
         self.iot = load_iot()
 
+    def test_latest_fan_speed_replaces_older_pending_slider_command(self):
+        iot = self.iot
+        iot.set_device('patient', 'fan', state=True, value=20, silent=True)
+        iot.set_device('patient', 'fan', state=True, value=90, silent=True)
+        pending = list(iot._pending_commands['patient'].values())
+        queued = [json.loads(iot.command_queues['patient'].get_nowait())]
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(len(queued), 1)
+        self.assertEqual(pending[0]['text'], json.dumps(queued[0], separators=(',', ':')))
+        self.assertEqual(queued[0]['value'], 230)
+
+    def test_latest_kitchen_exhaust_pwm_replaces_older_pending_command(self):
+        iot = self.iot
+        iot.set_device('kitchen', 'exhaust', state=True, value=20, silent=True)
+        iot.set_device('kitchen', 'exhaust', state=True, value=85, silent=True)
+        pending = list(iot._pending_commands['kitchen'].values())
+        queued = [json.loads(iot.command_queues['kitchen'].get_nowait())]
+        self.assertEqual((len(pending), len(queued)), (1, 1))
+        self.assertEqual(queued[0]['value'], 217)
+
+    def test_missing_exhaust_pwm_telemetry_does_not_assume_zero(self):
+        self.iot.apply_node_payload('kitchen', {'exhaust': True})
+        self.assertIsNone(self.iot.ROOMS['kitchen']['exhaust_speed'])
+        self.iot.apply_node_payload('kitchen', {'exhaust_speed': 73})
+        self.assertEqual(self.iot.ROOMS['kitchen']['exhaust_speed'], 73)
+
     def test_commands_wait_for_telemetry(self):
         iot = self.iot
         for device in ('light', 'buzzer', 'window', 'exhaust'):
@@ -150,6 +176,8 @@ class KitchenControlTests(unittest.TestCase):
             self.assertEqual((room, cmd['value']), ('patient', pwm))
         self.assertEqual(build_command('living', 'light', state=True)[1]['state'], 1)
         self.assertEqual(build_command('patient', 'light', state=True)[1]['light'], True)
+        room, cmd = build_command('kitchen', 'exhaust', state=True, value=40)
+        self.assertEqual((room, cmd['value'], cmd['exhaust']), ('kitchen', 102, True))
         for args in (('living', 'fan', 'false'),
                      ('living', 'fan', True, True), ('living', 'fan', True, 101),
                      ('living', 'light', True, 50)):

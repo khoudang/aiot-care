@@ -18,7 +18,7 @@ Tên BLE: `AIoT_Kitchen_Node`. MAC dự kiến: **`E8:3D:C1:9D:A5:16`**;
 | Cảm biến lửa | DO | GPIO2 | LOW = phát hiện lửa |
 | Servo SG90 cửa sổ | Signal | GPIO4 | 0° đóng, 90° mở theo lệnh servo |
 | Buzzer chủ động | Signal | GPIO5 | HIGH bật, LOW tắt; loại đã thử có tiếng |
-| Driver quạt hút | IN1 | GPIO7 | HIGH khi chạy |
+| Driver quạt hút | IN1/PWM | GPIO7 | PWM 0–255; 255 khi cảnh báo khẩn cấp |
 | Driver quạt hút | IN2 | GPIO8 | LOW |
 | Relay đèn | IN | GPIO20 | HIGH bật, LOW tắt theo code |
 

@@ -251,8 +251,9 @@
 <div class="section-intro"><h3>Điều khiển thiết bị</h3></div>
 <div class="kitchen-controls">            <div class="tile" id="kt-window-tile"><div class="ic"><i class="fas fa-window-maximize"></i></div><div class="meta"><h4>Cửa sổ</h4><p id="kt-window-status">Đang đóng</p></div>
               <label class="sw"><input type="checkbox" id="kt-window-toggle" aria-label="Cửa sổ bếp"><span class="tr"></span></label></div>
-            <div class="tile" id="kt-exhaust-tile"><div class="ic"><i class="fas fa-fan"></i></div><div class="meta"><h4>Quạt hút</h4><p id="kt-exhaust-status">Đang tắt</p></div>
+            <div class="tile tile-col" id="kt-exhaust-tile"><div class="head"><div class="ic"><i class="fas fa-fan"></i></div><div class="meta"><h4>Quạt hút</h4><p id="kt-exhaust-status">Đang tắt</p></div>
               <label class="sw"><input type="checkbox" id="kt-exhaust-toggle" aria-label="Quạt hút bếp"><span class="tr"></span></label></div>
+              <div class="slider-row"><input type="range" id="kt-exhaust-range" aria-label="Tốc độ quạt hút bếp" min="0" max="100" value="0"><span class="v"><span id="kt-exhaust-val">0</span>%</span></div></div>
             <div class="tile light" id="kt-light-tile"><div class="ic"><i class="fas fa-lightbulb"></i></div><div class="meta"><h4>Đèn bếp</h4><p id="kt-light-status">Đang tắt</p></div>
               <label class="sw"><input type="checkbox" id="kt-light-toggle" aria-label="Đèn bếp"><span class="tr"></span></label></div>
             <div class="tile" id="kt-buzzer-tile"><div class="ic"><i class="fas fa-bell"></i></div><div class="meta"><h4>Còi báo động bếp</h4><p id="kt-buzzer-status">Im lặng</p></div>
@@ -349,7 +350,7 @@
     <button data-room="kitchen"><i class="fas fa-kitchen-set"></i>Bếp<span class="bn-dot" id="bn-kitchen-dot"></span></button>
   </nav>
 
-  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}?v=6"></script>
 
   {% if role == 'admin' %}
   <script src="{{ url_for('static', filename='js/admin.js') }}"></script>

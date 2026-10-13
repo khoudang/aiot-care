@@ -4,8 +4,10 @@
 
 struct KitchenState {
   bool windowOpen = false, exhaustOn = false, lightOn = false, buzzerOn = false;
+  int exhaustPwm = 0;
   bool emergency = false, warningGas = false, recovering = false, alarmMuted = false;
   bool savedWindow = false, savedExhaust = false, savedLight = false, savedBuzzer = false;
+  int savedExhaustPwm = 0;
   uint32_t safeSince = 0;
 
   void update(uint32_t now, int gas, bool smoke, bool flame) {
@@ -14,7 +16,7 @@ struct KitchenState {
     if (!warningGas && !danger) alarmMuted = false;
     if (danger && !emergency) {
       alarmMuted = false;
-      savedWindow = windowOpen; savedExhaust = exhaustOn;
+      savedWindow = windowOpen; savedExhaust = exhaustOn; savedExhaustPwm = exhaustPwm;
       savedLight = lightOn; savedBuzzer = buzzerOn;
       emergency = true;
     }
@@ -25,10 +27,10 @@ struct KitchenState {
       emergency = false;
       recovering = false;
       alarmMuted = false;
-      windowOpen = savedWindow; exhaustOn = savedExhaust;
+      windowOpen = savedWindow; exhaustOn = savedExhaust; exhaustPwm = savedExhaustPwm;
       lightOn = savedLight; buzzerOn = savedBuzzer;
     } else {
-      windowOpen = true; exhaustOn = true;
+      windowOpen = true; exhaustOn = true; exhaustPwm = 255;
       lightOn = false; buzzerOn = true;
     }
   }

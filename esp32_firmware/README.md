@@ -49,6 +49,7 @@ Quạt nhận PWM 0–255 trên đường BLE; backend đổi phần trăm 0–1
 
 - Gas ADC ≥ 1500: còi cảnh báo nhịp 300 ms mỗi 2 giây.
 - Gas ADC ≥ 2500, có khói hoặc có lửa: mở cửa, bật quạt hút và còi, **tắt đèn**.
+- Quạt hút bếp nhận PWM 0–255; web điều chỉnh 0–100%. Cảnh báo khẩn cấp luôn chạy quạt 100%.
 - Trong trạng thái khẩn cấp, node từ chối lệnh điều khiển thủ công.
 - Khi hết cả nguy hiểm và cảnh báo liên tục 10 giây, node khôi phục trạng thái
   các đầu ra đã lưu trước khẩn cấp.
