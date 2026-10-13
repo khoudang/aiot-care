@@ -35,18 +35,19 @@ Tên BLE: `AIoT_Patient_Node`. Cấu hình địa chỉ thực tế bằng `BLE_
 
 | Thiết bị | Tín hiệu | ESP32-C3 | Ghi chú |
 | --- | --- | --- | --- |
-| SHT30/SHT31 | SDA | GPIO8 | I²C, địa chỉ code dùng `0x44` |
-| SHT30/SHT31 | SCL | GPIO9 | Chung bus I²C |
+| SHT30/SHT31 | SDA | GPIO3 | I²C, địa chỉ code dùng `0x44` |
+| SHT30/SHT31 | SCL | GPIO4 | Chung bus I²C |
 | PIR | OUT | GPIO5 | HIGH = có chuyển động |
 | Buzzer | Signal | GPIO0 | HIGH bật, LOW tắt |
-| Driver quạt | IN1 / IN2 | GPIO1 / GPIO2 | PWM trên IN1; IN2 LOW |
+| Driver quạt | IN1 / IN2 | GPIO9 / GPIO10 | PWM trên IN1; IN2 LOW |
+| Relay đèn | IN | GPIO8 | HIGH bật, LOW tắt theo code |
 | Servo camera | Signal | GPIO6 | Khởi động ở 90° |
 | UART từ gateway | RX | GPIO20 | Nối TX của Pi/USB–UART vào đây |
 | UART về gateway | TX | GPIO21 | Nối RX của Pi/USB–UART nếu cần |
 
 UART dùng **115200 baud, 8N1**, chuỗi ví dụ `A90\n` (kết thúc bằng ký tự xuống dòng).
 Nối chung GND. `UART_PORT` phải là cổng thực tế; USB dùng nạp sketch không mặc nhiên
-là UART1 trên GPIO20/21. Chưa gán chân relay đèn cho phòng bệnh.
+là UART1 trên GPIO20/21.
 
 ## Phòng khách — `living`
 

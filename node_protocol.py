@@ -1,7 +1,7 @@
 """Three-node command contract; UI percentages become PWM bytes on the wire."""
 
 DEVICES = {
-    "patient": {"fan", "buzzer"},  # Light GPIO has not been documented yet.
+    "patient": {"light", "fan", "buzzer"},
     "living": {"light", "fan", "auto"},
     "kitchen": {"light", "buzzer", "window", "exhaust"},
 }

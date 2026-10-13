@@ -57,8 +57,16 @@ bool handleCommand(const String &value) {
       if (value.length() > 0) {
         StaticJsonDocument<384> doc;
         if (!deserializeJson(doc, value)) {
-          // Commands cannot override the local emergency latch/recovery window.
-          if (emergency) return false;
+          // During emergency, only a buzzer-off command is allowed; safety outputs stay latched.
+          if (emergency || warningGas) {
+            bool mute = false;
+            if (commandSwitch(doc, "buzzer", mute) && !mute) {
+              kitchen.alarmMuted = true;
+              applyOutputs();
+              return true;
+            }
+            return false;
+          }
           bool enabled;
           if (commandSwitch(doc, "window", enabled)) { windowOpen = enabled; applied = true; }
           if (commandSwitch(doc, "exhaust", enabled)) { exhaustOn = enabled; applied = true; }
@@ -128,7 +136,8 @@ void loop() {
   if (now - lastSample >= 100) {
     lastSample = now;
     gas = analogRead(PIN_MQ2_AO);
-    smoke = digitalRead(PIN_MQ2_DO) == HIGH;
+    // MQ-2 LM393 comparator output on this module is active LOW.
+    smoke = digitalRead(PIN_MQ2_DO) == LOW;
     flame = digitalRead(PIN_FLAME_DO) == LOW;
     kitchen.update(now, gas, smoke, flame);
   }

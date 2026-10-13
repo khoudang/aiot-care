@@ -17,7 +17,7 @@ cập nhật dashboard theo thời gian thực. Laptop Windows có thể dùng �
 
 Dashboard có tổng quan ba phòng, trạng thái kết nối, cảnh báo, lịch sử cảm biến,
 và trang quản trị tài khoản. Dự án **không sử dụng vòng đeo tay**.
-Đèn phòng bệnh chưa có GPIO được gán nên chưa hỗ trợ điều khiển.
+Đèn phòng bệnh điều khiển qua relay GPIO8 của node ESP32-C3.
 
 ## Kiến trúc
 

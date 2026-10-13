@@ -88,6 +88,7 @@
     el.addEventListener('change',()=>{tile.classList.toggle('on',el.checked);const st=document.getElementById(id.replace('-toggle','-status'));if(st)st.textContent=el.checked?onTxt:offTxt;cb&&cb(el.checked);});
   }
   function bindRange(id,valId,cb){const el=document.getElementById(id),v=document.getElementById(valId);el.addEventListener('input',()=>{v.textContent=el.value;cb&&cb(+el.value);});}
+  bindToggle('pt-light-toggle','pt-light-tile','Đang bật','Đang tắt',on=>emitSet('patient','light',{state:on}));
   bindToggle('pt-buzzer-toggle','pt-buzzer-tile','Đang kêu','Im lặng',on=>emitSet('patient','buzzer',{state:on}));
   bindToggle('pt-fan-toggle','pt-fan-tile','Đang chạy','Đang tắt',on=>{const r=document.getElementById('pt-fan-range');if(!on){r.value=0;document.getElementById('pt-fan-val').textContent=0;}emitSet('patient','fan',{state:on,value:on?(+r.value||100):0});});
   bindRange('pt-fan-range','pt-fan-val',v=>{const t=document.getElementById('pt-fan-toggle');t.checked=v>0;document.getElementById('pt-fan-tile').classList.toggle('on',v>0);document.getElementById('pt-fan-status').textContent=v>0?'Đang chạy':'Đang tắt';emitSet('patient','fan',{state:v>0,value:v});});
@@ -105,6 +106,7 @@
   function setToggle(id,tileId,on,onTxt,offTxt){const el=document.getElementById(id);el.checked=!!on;document.getElementById(tileId).classList.toggle('on',!!on);const st=document.getElementById(id.replace('-toggle','-status'));if(st)st.textContent=on?onTxt:offTxt;}
 
   function applyPatient(d){
+    if(d.light!=null)setToggle('pt-light-toggle','pt-light-tile',d.light,'Đang bật','Đang tắt');
     if(d.temp!=null){document.getElementById('pt-temp').textContent=d.temp;document.getElementById('ov-patient-temp').textContent=d.temp;spark('sp-pt-temp',d.temp,'#4c9be8');}
     if(d.hum!=null){document.getElementById('pt-humi').textContent=d.hum;document.getElementById('ov-patient-humi').textContent=d.hum;spark('sp-pt-humi',d.hum,'#3ba55d');}
     if(d.gas!=null){document.getElementById('pt-gas').textContent=Math.round(d.gas);spark('sp-pt-gas',d.gas,'#d6982c');document.getElementById('pt-gas-card').classList.toggle('alarm',d.gas>=2500);}
@@ -170,11 +172,13 @@
     const map={normal:['ok','Bình thường','Hệ thống đang ở trạng thái bình thường'],light:['bad','Cảnh báo nhẹ','Khí gas tăng cao hơn mức bình thường'],emergency:['bad','Khẩn cấp','Phát hiện khói/lửa hoặc gas rất cao — đang xử lý'],awaiting:['bad','Chờ xác nhận','Điều kiện đã an toàn — cần xác nhận để khôi phục']};
     document.getElementById('state-card').dataset.level=level;
     const m=map[level];chip.className='chip '+(level==='normal'?'ok':'bad');chip.innerHTML='<i class="fas fa-circle"></i> '+m[1];desc.textContent=m[2];
-    document.getElementById('emg').classList.toggle('show',level==='emergency'||level==='awaiting');
+    document.getElementById('emg').classList.toggle('show',level==='light'||level==='emergency'||level==='awaiting');
+    document.getElementById('silence-btn').classList.toggle('show',level==='light'||level==='emergency'||level==='awaiting');
     document.getElementById('confirm-btn').classList.toggle('show',level==='awaiting');
     if(msg)showSys(msg,level==='light'?'light':'');
   }
   document.getElementById('confirm-btn').addEventListener('click',()=>{if(socket)socket.emit('confirm_safe',{});});
+  document.getElementById('silence-btn').addEventListener('click',()=>{if(socket)socket.emit('silence_alert',{});});
   document.getElementById('sysbar-x').addEventListener('click',()=>document.getElementById('sysbar').classList.remove('show'));
   function showSys(msg,lvl){const box=document.getElementById('sysbar');document.getElementById('sysbar-text').textContent=msg;box.className='sysbar show'+(lvl==='light'?' light':'');clearTimeout(showSys._t);showSys._t=setTimeout(()=>box.classList.remove('show'),9000);}
 

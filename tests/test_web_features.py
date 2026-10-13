@@ -71,7 +71,8 @@ class WebFeaturesTests(unittest.TestCase):
         socket = self.socketio.test_client(self.app, flask_test_client=self.client)
         self.addCleanup(socket.disconnect)
         self.assertTrue(socket.is_connected())
-        for room, device in (('patient', 'fan'), ('living', 'light'), ('kitchen', 'buzzer')):
+        for room, device in (('patient', 'fan'), ('patient', 'light'),
+                             ('living', 'light'), ('kitchen', 'buzzer')):
             socket.emit('set_device', {'room': room, 'device': device, 'state': True})
             self.iot.set_device.assert_called_with(
                 room=room, device=device, state=True, value=None,

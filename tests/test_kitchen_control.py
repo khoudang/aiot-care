@@ -149,7 +149,8 @@ class KitchenControlTests(unittest.TestCase):
             room, cmd = build_command('bed', 'fan', value=percent)
             self.assertEqual((room, cmd['value']), ('patient', pwm))
         self.assertEqual(build_command('living', 'light', state=True)[1]['state'], 1)
-        for args in (('patient', 'light', True), ('living', 'fan', 'false'),
+        self.assertEqual(build_command('patient', 'light', state=True)[1]['light'], True)
+        for args in (('living', 'fan', 'false'),
                      ('living', 'fan', True, True), ('living', 'fan', True, 101),
                      ('living', 'light', True, 50)):
             with self.assertRaises(ValueError):

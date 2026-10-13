@@ -36,7 +36,7 @@ Camera stream không tự quyết định chế độ camera; chế độ đư�
 | `set_tracking` | `{"enabled":true}` | Theo dõi bằng servo |
 | `confirm_safe` | `{}` | Yêu cầu xác nhận an toàn; backend kiểm tra điều kiện |
 
-Thiết bị hợp lệ: patient → `fan`, `buzzer`; living → `light`, `fan`, `auto`;
+Thiết bị hợp lệ: patient → `light`, `fan`, `buzzer`; living → `light`, `fan`, `auto`;
 kitchen → `light`, `buzzer`, `window`, `exhaust`. Xem [node_protocol.py](../node_protocol.py).
 `control_device` là sự kiện cũ nhận trường `command`, không dùng payload room/device
 của `set_device`.

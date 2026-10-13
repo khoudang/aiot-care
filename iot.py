@@ -171,6 +171,7 @@ _restoration_seen = {}
 _kitchen_safe_since = None
 _kitchen_sample_at = None
 _kitchen_emergency = False
+_alarm_silenced = False
 _fall_buzzer_saved = None
 _fall_restore_target = None
 _safety_retry_at = {}
@@ -202,6 +203,9 @@ ble_clients = {room: None for room in ROOMS}
 ble_loop = None
 BLE_MAC_CONFIG_KEYS = {room: f"ble_mac_{room}" for room in ROOMS}
 _ble_reconfigure = {room: threading.Event() for room in ROOMS}
+_ble_devices = {}
+_ble_devices_seen_at = 0.0
+_ble_discovery_lock = None
 
 # UART
 uart = None
@@ -403,9 +407,34 @@ def ble_node_settings():
 
 
 async def _scan_ble_devices():
-    devices = await BleakScanner.discover(timeout=5.0)
+    devices = await _discover_ble_devices(force=True)
     return sorted([{"name": device.name or "Thiết bị BLE", "mac": device.address.upper()}
                    for device in devices], key=lambda device: (device["name"], device["mac"]))
+
+
+async def _discover_ble_devices(force=False):
+    """Cache BLEDevice objects so concurrent clients don't start implicit scans."""
+    global _ble_discovery_lock, _ble_devices_seen_at
+    if _ble_discovery_lock is None:
+        _ble_discovery_lock = asyncio.Lock()
+    async with _ble_discovery_lock:
+        if not force and _ble_devices and time.monotonic() - _ble_devices_seen_at < 10:
+            return list(_ble_devices.values())
+        devices = await BleakScanner.discover(timeout=5.0)
+        _ble_devices.clear()
+        _ble_devices.update({device.address.upper(): device for device in devices})
+        _ble_devices_seen_at = time.monotonic()
+        return list(_ble_devices.values())
+
+
+async def _find_ble_device(mac):
+    devices = await _discover_ble_devices()
+    device = _ble_devices.get(mac.upper())
+    if device is not None:
+        return device
+    # Refresh once if the cached scan did not see this node.
+    await _discover_ble_devices(force=True)
+    return _ble_devices.get(mac.upper())
 
 
 def scan_ble_devices():
@@ -445,7 +474,10 @@ async def _node_loop(node):
                 print("[BLE] MAC not configured; waiting for node", room)
                 continue
             print(f"[BLE {room}] connecting to {mac} ...")
-            async with BleakClient(mac) as client:
+            device = await _find_ble_device(mac)
+            if device is None:
+                raise RuntimeError(f"BLE scan did not find configured device {mac}")
+            async with BleakClient(device) as client:
                 if _ble_reconfigure[room].is_set() or _configured_mac(node).upper() != mac.upper():
                     continue
                 ble_clients[room] = client
@@ -752,6 +784,8 @@ def _fail_restoration(room):
 
 def _patient_buzzer_target():
     """Resolve active alerts, acknowledged recovery intent, then saved baseline."""
+    if _alarm_silenced:
+        return False
     if AI.get("fall"):
         return True
     if _emergency_snapshot is not None and _restoration_started is None:
@@ -775,7 +809,7 @@ def _resync_safety(room):
             set_device(room, "light", state=False, source="auto", silent=True)
         set_device(room, "fan", state=False, source="auto", silent=True)
         if room == "patient":
-            set_device(room, "buzzer", state=True, source="auto", silent=True)
+            set_device(room, "buzzer", state=_patient_buzzer_target(), source="auto", silent=True)
     elif room == "patient" and (AI.get("fall") or _fall_buzzer_saved is not None):
         _cancel_commands(room)
         set_device(room, "buzzer", state=_patient_buzzer_target(),
@@ -791,7 +825,7 @@ def _reconcile_safety(room):
         if room == "living":
             desired = {"auto": False, "light": False, "fan": False}
         elif room == "patient":
-            desired = {"fan": False, "buzzer": True}
+            desired = {"fan": False, "buzzer": _patient_buzzer_target()}
     elif room == "patient" and (AI.get("fall") or _fall_buzzer_saved is not None):
         desired = {"buzzer": _patient_buzzer_target()}
     now = time.monotonic()
@@ -821,7 +855,8 @@ def _observe_fall_restoration(room, payload):
 
 def _enter_emergency():
     """Kitchen owns local outputs; gateway quiets other rooms and saves state."""
-    global _emergency_snapshot, _restoration_started
+    global _emergency_snapshot, _restoration_started, _alarm_silenced
+    _alarm_silenced = False
     _restoration_started = None
     _restoration_seen.clear()
     for room in ("patient", "living"):
@@ -840,6 +875,19 @@ def _enter_emergency():
     set_device("patient", "buzzer", state=True, source="auto", silent=True)
     # đảm bảo camera bật để quan sát người bệnh
     set_camera_mode("on", user_id=None)
+
+
+def silence_alert(user_id=None):
+    """Mute audible alarms while keeping hazard detection and safety actions active."""
+    global _alarm_silenced
+    _alarm_silenced = True
+    if _emergency_snapshot is not None:
+        set_device("patient", "buzzer", state=False, source="auto", silent=True)
+    if _kitchen_emergency or alert_level == "light":
+        set_device("kitchen", "buzzer", state=False, source="auto", silent=True)
+    log_audit("Tắt tiếng còi cảnh báo (giám sát nguy hiểm vẫn hoạt động)", user_id=user_id)
+    _emit("alert_state", {"level": alert_level,
+                          "message": "Đã tắt tiếng còi; hệ thống vẫn tiếp tục giám sát nguy hiểm."})
 
 
 def confirm_safe(user_id=None):

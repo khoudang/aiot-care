@@ -4,14 +4,16 @@
 
 struct KitchenState {
   bool windowOpen = false, exhaustOn = false, lightOn = false, buzzerOn = false;
-  bool emergency = false, warningGas = false, recovering = false;
+  bool emergency = false, warningGas = false, recovering = false, alarmMuted = false;
   bool savedWindow = false, savedExhaust = false, savedLight = false, savedBuzzer = false;
   uint32_t safeSince = 0;
 
   void update(uint32_t now, int gas, bool smoke, bool flame) {
     warningGas = gas >= 1500;
     bool danger = gas >= 2500 || smoke || flame;
+    if (!warningGas && !danger) alarmMuted = false;
     if (danger && !emergency) {
+      alarmMuted = false;
       savedWindow = windowOpen; savedExhaust = exhaustOn;
       savedLight = lightOn; savedBuzzer = buzzerOn;
       emergency = true;
@@ -22,6 +24,7 @@ struct KitchenState {
     if (recovering && uint32_t(now - safeSince) >= 10000) {
       emergency = false;
       recovering = false;
+      alarmMuted = false;
       windowOpen = savedWindow; exhaustOn = savedExhaust;
       lightOn = savedLight; buzzerOn = savedBuzzer;
     } else {
@@ -31,7 +34,8 @@ struct KitchenState {
   }
 
   bool sound(uint32_t now) const {
-    return emergency || buzzerOn || (warningGas && now % 2000 < 300);
+    return (emergency && !alarmMuted) || (!emergency && buzzerOn) ||
+           (!alarmMuted && !emergency && warningGas && now % 2000 < 300);
   }
 };
 

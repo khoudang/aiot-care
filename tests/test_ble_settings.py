@@ -26,12 +26,12 @@ class BleSettingsTests(unittest.TestCase):
             first, second = asyncio.Event(), asyncio.Event()
 
             class Client:
-                def __init__(self, mac):
-                    self.mac = mac
+                def __init__(self, device):
+                    self.device = device
                     self.is_connected = True
 
                 async def __aenter__(self):
-                    addresses.append(self.mac)
+                    addresses.append(self.device.address)
                     (first if len(addresses) == 1 else second).set()
                     return self
 
@@ -42,6 +42,9 @@ class BleSettingsTests(unittest.TestCase):
                     pass
 
             iot.BleakClient = Client
+            iot.BleakScanner.discover = AsyncMock(side_effect=lambda **_kwargs: [
+                SimpleNamespace(name='ESP', address=selected[0])
+            ])
             task = asyncio.create_task(iot._node_loop(node))
             try:
                 await asyncio.wait_for(first.wait(), 1)
@@ -84,9 +87,9 @@ class BleSettingsTests(unittest.TestCase):
             connected = asyncio.Event()
 
             class Client:
-                def __init__(self, mac):
+                def __init__(self, device):
                     self.is_connected = True
-                    addresses.append(mac)
+                    addresses.append(device.address)
 
                 async def __aenter__(self):
                     connected.set()
@@ -99,6 +102,9 @@ class BleSettingsTests(unittest.TestCase):
                     pass
 
             iot.BleakClient = Client
+            iot.BleakScanner.discover = AsyncMock(side_effect=lambda **_kwargs: [
+                SimpleNamespace(name='ESP', address=selected[0])
+            ])
             task = asyncio.create_task(iot._node_loop({
                 'room': 'living', 'mac': '', 'notify_uuid': 'notify',
                 'command_uuid': 'command',

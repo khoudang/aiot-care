@@ -4,7 +4,7 @@
 
 | Sketch | Tên quảng bá BLE | Vai trò |
 | --- | --- | --- |
-| `patient_node/patient_node.ino` | `AIoT_Patient_Node` | SHT, PIR, quạt, buzzer, servo qua UART |
+| `patient_node/patient_node.ino` | `AIoT_Patient_Node` | SHT, PIR, đèn, quạt, buzzer, servo qua UART |
 | `living_node/living_node.ino` | `AIoT_Living_Node` | SHT, BH1750, PIR, đèn, quạt tự động |
 | `kitchen_node/kitchen_node.ino` | `AIoT_Kitchen_Node` | Gas, khói, lửa, cửa sổ, quạt hút, đèn, buzzer |
 
@@ -67,7 +67,7 @@ thì tắt đèn/quạt. Lệnh đèn hoặc quạt thủ công tắt `auto`; l�
 
 ### Phòng bệnh
 
-Quạt và buzzer nhận lệnh BLE. Servo nhận góc qua UART1 trên GPIO20/21, không qua
+Đèn, quạt và buzzer nhận lệnh BLE. Servo nhận góc qua UART1 trên GPIO20/21, không qua
 lệnh servo BLE. Camera và xử lý AI chạy trên gateway.
 
 Các hành vi trên mô tả mã nguồn hiện tại, không khẳng định tất cả board đang được

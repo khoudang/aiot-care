@@ -474,6 +474,12 @@ def register_web(app, socketio):
             return
         iot.confirm_safe(user_id=session.get("user_id"))
 
+    @socketio.on("silence_alert")
+    def handle_silence_alert(_data):
+        if not socket_auth_required():
+            return
+        iot.silence_alert(user_id=session.get("user_id"))
+
     # ---- Tương thích ngược ----
     @socketio.on("toggle_camera_state")
     def handle_camera(data):
