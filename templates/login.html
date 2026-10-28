@@ -4,27 +4,36 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Đăng nhập — AIoT Care Station</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/type-system.css') }}?v=20261028_6">
 </head>
 <body class="auth-page login-page">
   <div class="shell">
+    <!-- Left Hero: Unboxed, prominent branding and typography -->
     <div class="left">
       <div class="brand">
         <div class="brand-mark"><i class="fas fa-house-medical"></i></div>
-        <div><h1>AIoT Care Station</h1><span>Giám sát chăm sóc người bệnh</span></div>
+        <div>
+          <h1>AIoT Care Station</h1>
+          <span>Giám sát chăm sóc người bệnh</span>
+        </div>
       </div>
       <div class="hero">
         <h2>An tâm chăm sóc.<br>Dù ở bất cứ đâu.</h2>
-        <p class="lead">Theo dõi cảm biến ba phòng qua BLE, điều khiển thiết bị và nhận cảnh báo an toàn theo thời gian thực.</p>
         <div class="flist">
           <div class="fitem"><i class="fas fa-shield-heart"></i><span>Cảnh báo gas – khói – lửa và phát hiện té ngã cho người bệnh.</span></div>
-          <div class="fitem"><i class="fas fa-user-group"></i><span>Tài khoản riêng cho từng thành viên và quản trị viên.</span></div>
-          <div class="fitem"><i class="fas fa-lock"></i><span>Mật khẩu được băm trước khi lưu vào cơ sở dữ liệu.</span></div>
+          <div class="fitem"><i class="fas fa-user-group"></i><span>Tài khoản phân quyền cho từng thành viên và quản trị viên.</span></div>
+          <div class="fitem"><i class="fas fa-lock"></i><span>Bảo mật dữ liệu và kết nối thời gian thực qua WebSockets.</span></div>
         </div>
         <div class="status">
-          <div class="sh"><span class="t"><i class="fab fa-bluetooth-b" style="color:#7ab8f0;margin-right:6px"></i>Không gian được kết nối</span>
-            <span class="b"><i class="fas fa-circle-check"></i> AIoT Care</span></div>
+          <div class="sh">
+            <span class="t"><i class="fab fa-bluetooth-b" style="color:var(--primary);margin-right:6px"></i>Không gian được kết nối</span>
+            <span class="b"><i class="fas fa-circle-check"></i> Trực tuyến</span>
+          </div>
           <div class="rooms">
             <div class="sroom"><span class="d"></span><span class="n">Phòng<b>Người bệnh</b></span></div>
             <div class="sroom"><span class="d"></span><span class="n">Phòng<b>Khách</b></span></div>
@@ -34,6 +43,7 @@
       </div>
     </div>
 
+    <!-- Right Side: Clean Form Box -->
     <div class="right">
       <div class="form-card">
         <div class="fc-icon"><i class="fas fa-right-to-bracket"></i></div>

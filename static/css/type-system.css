@@ -1,0 +1,176 @@
+/* Shared type hierarchy: headings, labels, and regular body text. */
+:root{--type-main:28px;--type-sub:16px;--type-value:22px}
+body{font-size:var(--type-sub)!important;line-height:1.5}
+body :where(p,span,small,b,strong,label,a,button,input,select,textarea,td,th,div,li){font-size:var(--type-sub)!important}
+body :where(p,small,label,a,button,input,select,textarea,td,th,li),
+body :where(.chip,.rb,.badge,.entity-label,.entity-reading small,.ha-area-heading p,.overview-heading p,.overview-data-note,.app-footer,.rsc-footer,.area-open,.bsc-name,.bsc-sub,.device-meta-info p,.cam-stat-pill,.fb-item-title,.fb-section-title,.fb-user-role,.u-name,.u-role,.sub,.bottom,.note,.alert,.fld,.submit,.seg button,.nav li,.logout){font-size:var(--type-sub)!important}
+body :where(h1,.overview-heading h1,.page-title h2,.form-card h3,.head h2,.left>h2){font-size:var(--type-main)!important;font-weight:700!important;line-height:1.3}
+body :where(h2,h3,h4,h5,h6,.ha-area-heading h2,.room-section-header h3,.bsc-name,.device-meta-info h5,.cam-title-group h4,.fb-user-name,.sidebar-top-brand,.entity-label,.fld label,th){font-size:var(--type-sub)!important;font-weight:700!important}
+body :where(p,small,.entity-label,.entity-reading small,.bsc-sub,.device-meta-info p,.ha-area-heading p,.overview-data-note,.fb-user-role,.u-role,.nav li,.chip,.rb,.badge,.area-open){font-weight:400!important}
+body .entity-label{font-weight:700!important}
+body :where(.entity-reading,.bsc-val,.sensor .sv,.rsc-val){font-size:var(--type-value)!important;font-weight:400!important}
+body :where(.entity-reading,.bsc-val,.sensor .sv,.rsc-val)>span{font-size:inherit!important}
+body :where(.entity-wide .entity-reading,.status-val){font-size:var(--type-sub)!important;font-weight:400!important}
+/* Icons retain their shape and color without decorative backgrounds. */
+body :where(.ha-area-icon,.entity-symbol,.device-icon-wrapper,.status-symbol,.ha-brand-icon,.brand-mark,.fc-icon,.head .icon,.fb-item-icon,.fb-avatar,.user-av,.ha-room-icon,.sensor .si,.tile .ic){background:transparent!important;border:0!important;box-shadow:none!important}
+body .ha-area-heading{gap:8px;align-items:center;flex-wrap:wrap}
+body .ha-area-heading>div{flex:1;min-width:120px}
+body .ha-area-heading>.room-conn-status{margin-left:auto;align-self:center;background:transparent!important;border:0!important;border-radius:0;padding:0;white-space:normal;text-align:right;max-width:140px}
+body .ha-area-state:empty{display:none}
+body .ha-area-state{min-height:0;margin:0 0 10px}
+body .ha-area-icon{width:28px;flex-shrink:0}
+body .entity-symbol{width:27px;flex-shrink:0}
+body .overview-sections{gap:24px}
+body .ha-entity{align-items:flex-start;gap:8px;padding:16px 12px}
+body .entity-copy{overflow-wrap:anywhere}
+@media(max-width:680px){:root{--type-main:28px}.ha-area-heading>.room-conn-status{max-width:130px}}
+/* Balanced overview columns, unboxed statuses and compact safety line. */
+body #overview .overview-badges .chip,body #overview .ha-area-heading .rb{background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;border-radius:0!important}
+body #overview .overview-sections{gap:0;grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch}
+body #overview .ha-area{padding:0 24px;display:flex;flex-direction:column}
+body #overview .ha-area:first-child{padding-left:0}body #overview .ha-area:last-child{padding-right:0}
+body #overview .ha-area+.ha-area{border-left:1px solid var(--border)}
+body #overview .ha-area-heading{min-height:100px;align-content:start;margin-bottom:12px}
+body #overview .ha-area-state{min-height:24px;margin-bottom:10px}
+body #overview .ha-entity-grid{grid-template-columns:1fr;grid-auto-rows:100px;gap:10px}
+body #overview .ha-entity,body #overview .ha-entity.entity-wide{grid-column:auto;min-height:0;height:100%;align-items:center}
+body #overview .area-open{margin-top:12px;min-height:52px}
+body #overview .overview-alert-line{display:none;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0 12px;margin-bottom:12px;color:#a32b32;border:0;background:transparent;box-shadow:none}
+body #overview .overview-alert-line.show{display:flex}
+body #overview .overview-alert-line>span{flex:1;min-width:180px}
+body #overview .overview-alert-line button{display:none;margin:0;padding:3px 6px;min-height:0;width:auto;border:0;border-radius:0;background:transparent;color:inherit;text-decoration:none;cursor:pointer;font-weight:400}
+body #overview .overview-alert-line button.show{display:inline-flex}
+body #overview.has-warning{background:#fff1f1;border-radius:12px;padding:16px;--surface:#fff8f8;--border:#edcece;--accent:#b73b43;--accent-soft:#fce3e3;--muted:#865c60}
+body .main-wrap:has(#overview.active.has-warning){background:#fff1f1}
+@media(max-width:1250px){body #overview .ha-area{padding:0 16px}.ha-area-heading>.room-conn-status{max-width:none!important}}
+@media(max-width:850px){body #overview .overview-sections{grid-template-columns:1fr}body #overview .ha-area{padding:22px 0!important}body #overview .ha-area+.ha-area{border-left:0;border-top:1px solid var(--border)}body #overview .ha-area-heading{min-height:0}body #overview .ha-entity-grid{grid-template-columns:1fr;grid-auto-rows:90px}}
+/* Center the supplied brand artwork in the navigation header. */
+body .sidebar-top-brand{justify-content:center;padding:0 0 6px;min-height:0}
+body .sidebar-brand-logo{display:block;width:100%;max-width:224px;height:auto;object-fit:contain;margin:0 auto}
+/* Navy brand palette shared by the dashboard and authentication pages. */
+:root{--accent:#084575;--accent-soft:#edf3f9;--accent-line:#b6cde0;--primary:#084575;--primary-light:#edf3f9;--bg:#f4f7fb;--surface:#fff;--surface-2:#f0f4f8;--surface-3:#e2e9f1;--border:#d9e2ec;--border-2:#bccbda;--text:#20354b;--muted:#64768a;--faint:#7c8da0;--ok:#084575;--ok-soft:#edf3f9}
+body .nav li.active{background:#e5eef7;color:var(--accent)}body .nav li.active i{color:var(--accent)}body .nav li:not(.active):hover{background:#edf3f9;color:var(--accent)}
+body .sidebar-top-brand,body .mtop .mt-brand{color:var(--accent)}body .sidebar{border-color:var(--border)}body .user-av{background:transparent;color:var(--accent)}
+body .btn.accent,body .gmap-add,body .submit,body .seg button.on{background:var(--accent);border-color:var(--accent);color:#fff}body .btn.accent:hover,body .gmap-add:hover,body .submit:hover{background:#06365c}
+body .sw input:checked+.tr{background:var(--accent)}body input[type=range]{accent-color:var(--accent)}body .device-card-modern.on{background:#f2f6fb;border-color:#b6cde0}
+body .entity-symbol,body .ha-area-icon,body .device-icon-wrapper,body .fb-item-icon{color:var(--accent)}body .area-open:hover{background:var(--accent-soft);border-color:var(--accent-line)}
+body .chip.ok,body .rb.ok,body .badge.ok{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-line)}
+body .logout,body .rsc-footer,body .bottom a{color:var(--accent)}body .logout:hover{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+body .main-wrap:has(#overview.active.has-warning){background:var(--bg)}body #overview.has-warning{background:transparent;padding:0;border-radius:0;--surface:#fff;--border:#d9e2ec;--accent:#084575;--accent-soft:#edf3f9;--muted:#64768a}
+body .note{background:var(--surface-2);color:var(--muted)}body .iw input{background:var(--surface-2);color:var(--text);border-color:var(--border)}body .iw input:focus{border-color:var(--accent);outline-color:var(--accent)}
+body a:focus-visible,body button:focus-visible,body input:focus-visible,body select:focus-visible{outline-color:var(--accent)}
+/* Each room is one complete, keyboard-accessible navigation card. */
+body #overview .overview-sections{gap:20px}
+body #overview .ha-area.ovr,body #overview .ha-area.ovr:first-child,body #overview .ha-area.ovr:last-child{display:flex;flex-direction:column;padding:20px!important;border:1px solid var(--border);border-radius:14px;background:var(--surface);box-shadow:0 2px 6px #173a5910;cursor:pointer;min-width:0;transition:border-color .15s,box-shadow .15s}
+body #overview .ha-area.ovr:hover{border-color:var(--accent);box-shadow:0 4px 14px #173a591a;transform:none}
+body #overview .ha-area.ovr:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+body #overview .ha-area.ovr .ha-entity{border:0;border-radius:0;box-shadow:none;background:transparent;padding:12px 0}
+body #overview .ha-area.ovr .ha-entity+.ha-entity{border-top:1px solid var(--border)}
+body #overview .ha-area.ovr .ha-area-heading{border-bottom:1px solid var(--border);padding-bottom:14px}
+@media(max-width:850px){body #overview .ha-area.ovr{padding:20px!important}}
+/* Text states use body size; only numeric readings use the larger value size. */
+body #overview .ha-area[data-goto="kitchen"] .entity-reading:not(:has(small)){font-size:var(--type-sub)!important;font-weight:400!important}
+body #overview .ha-area[data-goto="kitchen"] .entity-reading:not(:has(small))>span{font-size:inherit!important}
+/* Compact overview spacing for a single desktop viewport. */
+body #overview .overview-heading{margin:0 0 18px;gap:12px}
+body #overview .overview-heading h1{margin:0;line-height:1.25}
+body #overview .overview-sections{gap:16px}
+body #overview .ha-area.ovr,body #overview .ha-area.ovr:first-child,body #overview .ha-area.ovr:last-child{padding:16px!important;gap:0}
+body #overview .ha-area-heading{min-height:76px;margin-bottom:6px;padding-bottom:10px!important;gap:6px}
+body #overview .ha-area-heading h2{line-height:1.3}
+body #overview .ha-area-heading p{margin-top:2px;line-height:1.35}
+body #overview .ha-area-state{min-height:0;margin:0 0 4px;line-height:1.3}
+body #overview .ha-area-state:not(:has(.area-attention:not([hidden]))){display:none}
+body #overview .ha-entity-grid{grid-auto-rows:76px;gap:0}
+body #overview .ha-area.ovr .ha-entity{padding:8px 0;gap:10px;min-height:0}
+body #overview .entity-label{line-height:1.3}
+body #overview .entity-reading{margin-top:2px;line-height:1.3}
+body .main:has(>#overview.active){padding-top:22px;padding-bottom:18px}
+body .main:has(>#overview.active)>.app-footer{margin-top:18px;padding-top:10px;line-height:1.35}
+@media(max-width:850px){body #overview .overview-sections{gap:12px}body #overview .ha-area-heading{min-height:0}body #overview .ha-entity-grid{grid-auto-rows:68px}}
+/* Neutral navy dark mode, aligned with the blue brand. */
+body.dark-mode{color-scheme:dark;--bg:#121820;--surface:#1b232e;--surface-2:#242e3b;--surface-3:#303c4b;--border:#344152;--border-2:#4a5a6d;--text:#e6edf5;--muted:#acb9ca;--faint:#91a0b3;--accent:#8bbcf0;--accent-soft:#263b53;--accent-line:#4e7199;--primary:#8bbcf0;--primary-light:#263b53;--ok:#8bbcf0;--ok-soft:#263b53;--warn:#edc56d;--warn-soft:#3d3423;--bad:#f3949c;--bad-soft:#412a32;background:var(--bg);color:var(--text)}
+body.dark-mode :is(.main-wrap,.main,.app){background:var(--bg);color:var(--text)}
+body.dark-mode :is(.sidebar,.mtop,.right-drawer-panel,.card,.balanced-sensor-card,.device-card-modern,.ha-area.ovr,.ha-entity,.ha-topbar,.room-summary-card){background:var(--surface);border-color:var(--border);color:var(--text)}
+body.dark-mode #overview .ha-area.ovr{background:var(--surface);border-color:var(--border);box-shadow:0 2px 8px #0002}
+body.dark-mode #overview .ha-area.ovr .ha-entity{background:transparent;border-color:var(--border)}
+body.dark-mode :is(.nav li.active,.nav li:not(.active):hover,.area-open:hover,.fb-menu-item:hover,.logout:hover){background:var(--accent-soft);color:var(--accent)}
+body.dark-mode :is(.sidebar-top-brand,.nav li.active i,.logout,.fb-item-icon,.entity-symbol,.ha-area-icon,.device-icon-wrapper,.rsc-footer){color:var(--accent)}
+body.dark-mode :is(.nav li,.nav li i,.u-role,.fb-user-role,.app-footer,.bsc-sub,.device-meta-info p){color:var(--muted)}
+body.dark-mode :is(.user-row .u-name,.fb-menu-item,.fb-user-name,.cam-title-group h4){color:var(--text)}
+body.dark-mode :is(.device-card-modern.on,.tile.on){background:#233348;border-color:var(--accent-line)}
+body.dark-mode :is(.device-card-modern.alarm,.balanced-sensor-card.alarm,.tile.alarm){background:var(--bad-soft);border-color:#915462}
+body.dark-mode :is(.chip.ok,.rb.ok,.badge.ok){color:var(--accent);background:var(--accent-soft);border-color:var(--accent-line)}
+body.dark-mode :is(.chip.warn,.rb.warn,.badge.warn){color:var(--warn);background:var(--warn-soft);border-color:#75613c}
+body.dark-mode :is(.chip.bad,.rb.bad,.badge.bad){color:var(--bad);background:var(--bad-soft);border-color:#81505e}
+body.dark-mode :is(.btn.accent,.gmap-add,.submit,.seg button.on){background:#356faa;border-color:#356faa;color:#fff}
+body.dark-mode :is(.btn,.seg,input,select,textarea,.atable th,.atable td){background:var(--surface-2);color:var(--text);border-color:var(--border)}
+body.dark-mode :is(.sw .tr,.device-card-modern .sw .tr){background:#526071}
+body.dark-mode .sw input:checked+.tr{background:#497fb5}
+body.dark-mode :is(.ble-row input,.iw input,.note){background:var(--surface-2);border-color:var(--border);color:var(--text)}
+body.dark-mode #overview .overview-alert-line,body.dark-mode .area-attention{color:var(--bad)}
+body.dark-mode .video-placeholder-box{color:#e0e8f2}body.dark-mode .video-placeholder-box p{color:#aabace}
+body.dark-mode #overview.has-warning{background:transparent;--surface:#1b232e;--border:#344152;--accent:#8bbcf0;--accent-soft:#263b53;--muted:#acb9ca}
+body.dark-mode .main-wrap:has(#overview.active.has-warning){background:var(--bg)}
+/* Navigation selection is indicated by weight, without a filled tile. */
+body .sidebar .nav li{text-transform:none;font-weight:400!important;background:transparent!important}
+body .sidebar .nav li.active{font-weight:700!important;background:transparent!important}
+body .sidebar .nav li.active .nav-text{font-weight:700!important}
+body .sidebar .nav li:not(.active) .nav-text{font-weight:400!important}
+body .sidebar .nav li:hover,body.dark-mode .sidebar .nav li:hover{background:transparent!important}
+body .sidebar .nav li.active::before{display:none!important}
+body .sidebar-brand-logo.brand-logo-dark{display:none}
+body.dark-mode .sidebar-brand-logo.brand-logo-light{display:none}
+body.dark-mode .sidebar-brand-logo.brand-logo-dark{display:block}
+/* Overview readings: label and value on one line. */
+body #overview .entity-copy{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 6px;flex:1;min-width:0}
+body #overview .entity-label::after{content:':' }
+body #overview .entity-reading,body #overview .entity-wide .entity-reading{display:inline; margin:0;font-size:var(--type-sub)!important;font-weight:400!important;line-height:1.4}
+body #overview .entity-reading>span{font-size:inherit!important}
+body #overview .entity-reading small{font-size:inherit!important}
+/* Room detail pages share the overview's cards, typography and brand tokens. */
+body .detail-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 24px}
+body .detail-heading h1{margin:0 0 6px}body .detail-heading p{color:var(--muted);margin:0}
+body .detail-connection{color:var(--muted);flex-shrink:0}body .detail-connection.online{color:var(--accent)}
+body .detail-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+body .detail-patient-layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;align-items:start}
+body .detail-side{display:grid;gap:20px;min-width:0}.detail-camera{min-width:0}
+body .detail-group{min-width:0;padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:14px}
+body .detail-group>h2{padding-bottom:14px;margin:0 0 2px;border-bottom:1px solid var(--border)}
+body .detail-room :is(.sensor-cards-grid,.devices-card-grid,.living-2cards-grid){display:flex;flex-direction:column;gap:0}
+body .detail-room .balanced-sensor-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 0;min-height:68px;border:0;border-bottom:1px solid var(--border);border-radius:0;box-shadow:none;background:transparent}
+body .detail-room .balanced-sensor-card:last-child{border-bottom:0}
+body .detail-room .bsc-header{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+body .detail-room .bsc-sub,body .detail-room .spark{display:none}
+body .detail-room .bsc-val{display:flex;gap:4px;align-items:baseline;flex-wrap:wrap;margin:0!important;font-size:var(--type-sub)!important;text-align:right}
+body .detail-room .bsc-val small{margin:0;font-size:inherit!important;color:var(--muted)}
+body .detail-room .device-card-modern{display:grid;grid-template-columns:30px minmax(0,1fr) 44px;align-items:center;gap:4px 12px;min-height:84px;padding:16px 0;border:0;border-bottom:1px solid var(--border);border-radius:0;box-shadow:none;background:transparent}
+body .detail-room .device-card-modern:last-child{border-bottom:0}
+body .detail-room .device-card-top{display:contents}
+body .detail-room .device-icon-wrapper{grid-column:1;grid-row:1;width:28px;height:28px;color:var(--accent)}
+body .detail-room .device-card-top .sw{grid-column:3;grid-row:1;justify-self:end}
+body .detail-room .device-meta-info{grid-column:2;grid-row:1;min-width:0}
+body .detail-room .device-meta-info h5{margin:0;line-height:1.4}
+body .detail-room .device-meta-info p{margin:3px 0 0;color:var(--muted);line-height:1.4}
+body .detail-room .device-slider-control{grid-column:2/4;display:flex;align-items:center;gap:12px;margin-top:8px}
+body .detail-room input[type=range]{width:100%;min-width:0;accent-color:var(--accent)}
+body .detail-room .ha-range-control{display:grid;margin-top:10px;gap:6px}
+body .detail-room .device-card-modern.on .device-icon-wrapper{color:var(--accent)}
+body .detail-room .balanced-sensor-card.alarm{background:var(--bad-soft);color:var(--bad);padding-inline:10px;border-radius:8px}
+body .detail-room .card-camera-preview{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--surface)}
+body .detail-room .cam-header-row{padding:18px;align-items:flex-start;flex-wrap:wrap;background:var(--surface)}
+body .detail-room .cam-title-group p{color:var(--muted);margin-top:5px}
+body .detail-room .live-feed-container{border-radius:0;aspect-ratio:16/10;min-height:260px}
+body .detail-room .live-feed-container img{display:block;width:100%;height:100%;object-fit:contain}
+body .detail-room .video-placeholder-box{padding:20px;line-height:1.5}
+body .detail-room .cam-overlay-stats{position:static;display:grid;grid-template-columns:1fr 1fr;gap:0;padding:8px 18px;background:var(--surface);pointer-events:auto}
+body .detail-room .cam-stat-pill{padding:8px 0;background:transparent;color:var(--muted);border-radius:0;overflow-wrap:anywhere}
+body .detail-room .cam-stat-pill.alarm{color:var(--bad);background:transparent;font-weight:700}
+body .detail-room .seg{background:var(--surface-2)}
+body .detail-history{margin-top:20px}body .detail-history>.card{margin:0!important;padding:20px!important;border-radius:14px;background:var(--surface);border:1px solid var(--border)}
+body .detail-history .card-h{align-items:flex-start;gap:12px;flex-wrap:wrap}
+body .detail-history .card-h p{margin-top:5px;color:var(--muted)}
+body .detail-room .sensor-cards-grid+.sensor-cards-grid{border-top:1px solid var(--border)}
+@media(max-width:1250px){body .detail-patient-layout{grid-template-columns:1fr}body .detail-side{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){body .detail-columns,body .detail-side{grid-template-columns:1fr}body .detail-heading{align-items:flex-start;flex-direction:column;gap:8px}body .detail-group{padding:16px}body .detail-room .cam-header-row{flex-direction:column}body .detail-room .live-feed-container{min-height:240px}}
+body .detail-room .balanced-sensor-card .bsc-name::after{content:':' }

@@ -1,10 +1,21 @@
 /* ================= AIoT Care Station — client (BLE, không MQTT) ================= */
   const socket = (typeof io !== 'undefined') ? io() : null;
 
+  function updateGreeting(){
+    const heading=document.getElementById('dynamic-greeting');
+    if(!heading)return;
+    const hour=Number(new Intl.DateTimeFormat('en-GB',{hour:'numeric',hourCycle:'h23',timeZone:'Asia/Ho_Chi_Minh'}).format(new Date()));
+    const period=hour<11?'sáng':hour<14?'trưa':hour<18?'chiều':'tối';
+    heading.textContent=`Chào buổi ${period}, ${document.body.dataset.username||'Người dùng'}.`;
+  }
+  updateGreeting();
+  setInterval(updateGreeting,60000);
+
   (function(){
     const b=document.body;
-    document.getElementById('side-username').textContent=b.dataset.username||'Người dùng';
-    document.getElementById('side-role').textContent=(b.dataset.role==='admin'?'Quản trị viên':'Thành viên');
+    const username=document.getElementById('side-username'),role=document.getElementById('side-role');
+    if(username)username.textContent=b.dataset.username||'Người dùng';
+    if(role)role.textContent=(b.dataset.role==='admin'?'Quản trị viên':'Thành viên');
   })();
 
   /* ---- Drawer / navigation ---- */
@@ -12,8 +23,23 @@
   function openDrawer(){sidebar.classList.add('open');scrim.classList.add('show')}
   function closeDrawer(){sidebar.classList.remove('open');scrim.classList.remove('show')}
   document.getElementById('burger').addEventListener('click',openDrawer);
-  document.getElementById('drawer-close').addEventListener('click',closeDrawer);
+  document.getElementById('drawer-close')?.addEventListener('click',closeDrawer);
   scrim.addEventListener('click',closeDrawer);
+
+  /* Account panel is a modal drawer, never footer content. */
+  (function(){
+    const panel=document.getElementById('right-drawer-panel'),overlay=document.getElementById('right-drawer-overlay'),trigger=document.getElementById('side-user-btn'),close=document.getElementById('right-drawer-close');
+    if(!panel||!overlay||!trigger||!close)return;
+    function dismiss(){panel.hidden=true;overlay.classList.remove('show');document.body.classList.remove('drawer-open');trigger.setAttribute('aria-expanded','false');trigger.focus();}
+    function open(){closeDrawer();panel.hidden=false;overlay.classList.add('show');document.body.classList.add('drawer-open');trigger.setAttribute('aria-expanded','true');close.focus();}
+    trigger.addEventListener('click',open);
+    trigger.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});
+    close.addEventListener('click',dismiss);overlay.addEventListener('click',dismiss);
+    panel.querySelectorAll('[data-room]').forEach(el=>el.addEventListener('click',dismiss));
+    document.addEventListener('keydown',e=>{if(panel.hidden)return;if(e.key==='Escape')dismiss();if(e.key==='Tab'){const items=[...panel.querySelectorAll('button,a,input,[tabindex="0"]')].filter(el=>el.getClientRects().length);const first=items[0],last=items[items.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});
+    const dark=document.getElementById('dark-mode-toggle');
+    if(dark)dark.addEventListener('change',()=>document.body.classList.toggle('dark-mode',dark.checked));
+  })();
 
   const rooms=document.querySelectorAll('.room');
   const titles={
@@ -21,6 +47,7 @@
     patient:['Phòng người bệnh','Camera bám người, cảm biến và thiết bị chăm sóc'],
     living:['Phòng khách','Cảm biến hiện diện, ánh sáng và thiết bị'],
     kitchen:['Phòng bếp','Giám sát gas – khói – lửa và thông gió khẩn cấp'],
+    gestures:['Tùy chỉnh cử chỉ','Ánh xạ cử chỉ để điều khiển thiết bị'],
     'admin-users':['Quản lý tài khoản','Tài khoản truy cập hệ thống'],
     'admin-logs':['Nhật ký & cảnh báo','Lịch sử đăng nhập, hoạt động và cảnh báo'],
     'admin-settings':['Cấu hình hệ thống','Tài khoản, Telegram và kết nối ESP'],
@@ -28,10 +55,10 @@
   function goTo(room){
     document.querySelectorAll('[data-room]').forEach(i=>i.classList.toggle('active',i.dataset.room===room));
     rooms.forEach(r=>r.classList.toggle('active',r.id===room));
-    const t=titles[room];if(t){document.getElementById('pt-title').textContent=t[0];document.getElementById('pt-sub').textContent=t[1]||'';}
+    const t=titles[room];if(t){const title=document.getElementById('pt-title'),sub=document.getElementById('pt-sub');if(title)title.textContent=t[0];if(sub)sub.textContent=t[1]||'';}
     closeDrawer();
     if(room==='kitchen'&&typeof loadKitchenAlerts==='function')loadKitchenAlerts();
-    window.scrollTo({top:0,behavior:'smooth'});
+    document.querySelector('.main-wrap')?.scrollTo({top:0,behavior:'smooth'});
   }
   document.querySelectorAll('[data-room]').forEach(i=>i.addEventListener('click',()=>goTo(i.dataset.room)));
   document.querySelectorAll('[data-goto]').forEach(el=>el.addEventListener('click',()=>goTo(el.dataset.goto)));
@@ -64,6 +91,8 @@
 
   /* ---- camera ---- */
   const videoFeed=document.getElementById('video-feed'),videoPh=document.getElementById('video-ph');
+  const cameraStats=document.querySelector('.cam-overlay-stats');
+  if(cameraStats&&videoFeed)videoFeed.parentElement.after(cameraStats);
   let camActive=false,camMode='auto';
   function setCameraUI(active,mode){
     camActive=active;if(mode)camMode=mode;
@@ -85,10 +114,12 @@
   function emitSet(room,device,payload){if(!socket||!socket.connected){showSys('Mất kết nối. Chưa gửi lệnh điều khiển.','light');return;}socket.emit('set_device',Object.assign({room,device},payload));}
   function bindToggle(id,tileId,onTxt,offTxt,cb){
     const el=document.getElementById(id),tile=document.getElementById(tileId);
+    if(!el||!tile)return;
     el.addEventListener('change',()=>{tile.classList.toggle('on',el.checked);const st=document.getElementById(id.replace('-toggle','-status'));if(st)st.textContent=el.checked?onTxt:offTxt;cb&&cb(el.checked);});
   }
   function bindRange(id,valId,cb){
     const el=document.getElementById(id),v=document.getElementById(valId);
+    if(!el||!v)return;
     let timer=null,editingTimer=null,lastSentAt=0,lastSentValue=null,pendingValue=0;
     const send=value=>{cb&&cb(value);lastSentAt=performance.now();lastSentValue=value;};
     el.addEventListener('input',()=>{
@@ -121,6 +152,24 @@
 
   /* ---- apply data ---- */
   function badge(el,cls,txt){el.className='rb '+cls;el.textContent=txt;}
+  function syncOverviewWarning(){
+    const overview=document.getElementById('overview'),line=document.getElementById('emg');
+    const safety=overview.dataset.alertLevel&&overview.dataset.alertLevel!=='normal';
+    const fall=document.querySelector('.ovr[data-goto="patient"].needs-attention');
+    const warning=!!(safety||fall);
+    overview.classList.remove('has-warning');
+    line.classList.toggle('show',warning);
+    if(fall&&!safety)document.getElementById('emg-desc').textContent='Phòng người bệnh: phát hiện té ngã. Cần kiểm tra ngay.';
+  }
+  function markRoomAttention(room,message,level){
+    const card=document.querySelector('.ovr[data-goto="'+room+'"]'),marker=document.getElementById('attn-'+room);
+    if(!card||!marker)return;
+    const active=!!message;
+    card.classList.toggle('needs-attention',active);
+    if(active){card.dataset.attention=level||'warn';marker.hidden=false;marker.lastChild.textContent=' '+message;}
+    else{delete card.dataset.attention;marker.hidden=true;}
+    syncOverviewWarning();
+  }
   function setToggle(id,tileId,on,onTxt,offTxt){const el=document.getElementById(id);el.checked=!!on;document.getElementById(tileId).classList.toggle('on',!!on);const st=document.getElementById(id.replace('-toggle','-status'));if(st)st.textContent=on?onTxt:offTxt;}
 
   function applyPatient(d){
@@ -137,36 +186,43 @@
     if(d.temp!=null){document.getElementById('lv-temp').textContent=d.temp;document.getElementById('ov-living-temp').textContent=d.temp;spark('sp-lv-temp',d.temp,'#4c9be8');}
     if(d.hum!=null){document.getElementById('lv-humi').textContent=d.hum;spark('sp-lv-humi',d.hum,'#3ba55d');}
     if(d.lux!=null){document.getElementById('lv-lux').textContent=Math.round(d.lux);spark('sp-lv-lux',d.lux,'#e0a52e');}
-    if(d.motion!=null){const t=d.motion?'Có người':'Không có người';document.getElementById('lv-motion-status').textContent=t;document.getElementById('lv-motion-tile').classList.toggle('on',!!d.motion);document.getElementById('ov-living-motion').textContent=t;}
-    if(d.light!=null){setToggle('lv-light-toggle','lv-light-tile',d.light,'Đang bật','Đang tắt');document.getElementById('ov-living-light').textContent=d.light?'Bật':'Tắt';}
+    if(d.motion!=null){const t=d.motion?'Có người':'Không có người';document.getElementById('lv-motion-status').textContent=t;document.getElementById('lv-motion-tile').classList.toggle('on',!!d.motion);document.getElementById('ov-living-motion').textContent=nodeState&&nodeState.living?t:'--';}
+    if(d.light!=null){setToggle('lv-light-toggle','lv-light-tile',d.light,'Đang bật','Đang tắt');document.getElementById('ov-living-light').textContent=nodeState&&nodeState.living?(d.light?'Bật':'Tắt'):'--';}
     if(d.fan_speed!=null){const r=document.getElementById('lv-fan-range'),v=document.getElementById('lv-fan-val');if(r.dataset.userEditing&&Math.abs(+d.fan_speed-(+r.dataset.desiredValue))<=1){clearTimeout(r._userEditTimeout);delete r.dataset.userEditing;delete r.dataset.desiredValue;}if(!r.dataset.userEditing){r.value=d.fan_speed;v.textContent=d.fan_speed;}const on=d.fan_speed>0;document.getElementById('lv-fan-toggle').checked=on;document.getElementById('lv-fan-tile').classList.toggle('on',on);document.getElementById('lv-fan-status').textContent=on?('Tốc độ '+d.fan_speed+'%'):'Đang tắt';}
     if(d.auto!=null){document.getElementById('lv-auto-toggle').checked=!!d.auto;document.getElementById('lv-auto-tile').classList.toggle('on',!!d.auto);}
     touch();
   }
   function applyKitchen(d){
-    if(d.gas!=null){const g=Math.round(d.gas);document.getElementById('kt-gas').textContent=g;document.getElementById('ov-kitchen-gas').textContent=g;setGauge(d.gas);
+    const kitchenConnected=!!(nodeState&&nodeState.kitchen);
+    if(d.gas!=null&&(kitchenConnected||d.gas>=1500)){const g=Math.round(d.gas);document.getElementById('kt-gas').textContent=g;document.getElementById('ov-kitchen-gas').textContent=g;setGauge(d.gas);
       const st=document.getElementById('kt-gas-state'),card=document.getElementById('kt-gas-card');
       if(d.gas>=2500){st.className='badge bad';st.innerHTML='<i class="fas fa-triangle-exclamation"></i> Nguy hiểm';card.classList.add('alarm');}
       else if(d.gas>=1500){st.className='badge warn';st.innerHTML='<i class="fas fa-circle-exclamation"></i> Tăng cao';card.classList.remove('alarm');}
       else{st.className='badge ok';st.innerHTML='<i class="fas fa-circle-check"></i> An toàn';card.classList.remove('alarm');}
     }
-    if(d.smoke!=null){document.getElementById('kt-smoke-status').textContent=d.smoke?'PHÁT HIỆN KHÓI':'Không phát hiện';document.getElementById('kt-smoke-tile').classList.toggle('alarm',!!d.smoke);document.getElementById('ov-kitchen-smoke').textContent=d.smoke?'Có':'Không';}
-    if(d.flame!=null){document.getElementById('kt-flame-status').textContent=d.flame?'PHÁT HIỆN LỬA':'Không phát hiện';document.getElementById('kt-flame-tile').classList.toggle('alarm',!!d.flame);document.getElementById('ov-kitchen-flame').textContent=d.flame?'Có':'Không';}
+    if(d.smoke!=null&&(kitchenConnected||d.smoke)){document.getElementById('kt-smoke-status').textContent=d.smoke?'PHÁT HIỆN KHÓI':'Không phát hiện';document.getElementById('kt-smoke-tile').classList.toggle('alarm',!!d.smoke);document.getElementById('ov-kitchen-smoke').textContent=d.smoke?'Có':'Không';}
+    if(d.flame!=null&&(kitchenConnected||d.flame)){document.getElementById('kt-flame-status').textContent=d.flame?'PHÁT HIỆN LỬA':'Không phát hiện';document.getElementById('kt-flame-tile').classList.toggle('alarm',!!d.flame);document.getElementById('ov-kitchen-flame').textContent=d.flame?'Có':'Không';}
     if(d.window!=null)setToggle('kt-window-toggle','kt-window-tile',d.window,'Đang mở','Đang đóng');
     if(d.exhaust_speed!=null){const r=document.getElementById('kt-exhaust-range'),v=document.getElementById('kt-exhaust-val');if(r.dataset.userEditing&&Math.abs(+d.exhaust_speed-(+r.dataset.desiredValue))<=1){clearTimeout(r._userEditTimeout);delete r.dataset.userEditing;delete r.dataset.desiredValue;}if(!r.dataset.userEditing){r.value=d.exhaust_speed;v.textContent=d.exhaust_speed;}}
     if(d.exhaust!=null)setToggle('kt-exhaust-toggle','kt-exhaust-tile',d.exhaust,'Đang hút','Đang tắt');
     if(d.light!=null)setToggle('kt-light-toggle','kt-light-tile',d.light,'Đang bật','Đang tắt');
     if(d.buzzer!=null)setToggle('kt-buzzer-toggle','kt-buzzer-tile',d.buzzer,'Đang kêu','Im lặng');
     const danger=d.flame||d.smoke||(d.gas!=null&&d.gas>=2500),warn=(d.gas!=null&&d.gas>=1500);
-    badge(document.getElementById('ov-kitchen-badge'),danger?'bad':(warn?'warn':'ok'),danger?'Nguy hiểm':(warn?'Cảnh báo':'An toàn'));
+    badge(document.getElementById('ov-kitchen-badge'),danger?'bad':(warn?'warn':(kitchenConnected?'ok':'')),danger?'Nguy hiểm':(warn?'Cảnh báo':(kitchenConnected?'An toàn':'Chưa kết nối')));
+    if(danger||warn||kitchenConnected)markRoomAttention('kitchen',danger?'Cần kiểm tra phòng bếp':warn?'Kiểm tra khí gas':'',danger?'danger':'warn');
     touch();
   }
   function applyAI(a){
     if(a.gesture!=null){document.getElementById('oc-gesture').textContent='Cử chỉ: '+(a.gesture||'—');document.querySelectorAll('#gesture-table tr[data-g]').forEach(r=>r.classList.toggle('live',r.dataset.g===a.gesture));}
     if(a.fps!=null)document.getElementById('ai-fps').textContent=a.fps;
-    if(a.latency!=null)document.getElementById('ai-latency').textContent=a.latency;
-    if(a.fall!=null){const oc=document.getElementById('oc-fall');oc.innerHTML=a.fall?'<i class="fas fa-person-falling"></i> TÉ NGÃ':'Bình thường';oc.classList.toggle('alarm',!!a.fall);
-      document.getElementById('ov-patient-fall').textContent=a.fall?'TÉ NGÃ':'Bình thường';badge(document.getElementById('ov-patient-badge'),a.fall?'bad':'ok',a.fall?'Té ngã':'An toàn');}
+    if(a.latency!=null){const latency=document.getElementById('ai-latency');if(latency)latency.textContent=a.latency;}
+    if(a.fall!=null){const oc=document.getElementById('oc-fall');oc.classList.toggle('alarm',!!a.fall);
+      if(a.fall)markRoomAttention('patient','Cảnh báo té ngã','danger');
+      else if(nodeState&&nodeState.patient)markRoomAttention('patient','','');
+      const connected=!!(nodeState&&nodeState.patient),cameraOff=connected&&a.camera===false;
+      oc.innerHTML=a.fall?'<i class="fas fa-person-falling"></i> TÉ NGÃ':(connected?(cameraOff?'Camera tắt':'Bình thường'):'Chưa có dữ liệu');
+      document.getElementById('ov-patient-fall').textContent=a.fall?'TÉ NGÃ':(connected?(cameraOff?'Camera tắt':'Bình thường'):'Chưa có dữ liệu');
+      badge(document.getElementById('ov-patient-badge'),a.fall?'bad':(cameraOff?'warn':(connected?'ok':'')),a.fall?'Té ngã':(cameraOff?'Camera tắt':(connected?'Đang giám sát':'Chưa kết nối')));}
   }
 
   /* ---- lịch sử cảnh báo bếp (Yêu cầu 4) ---- */
@@ -188,13 +244,19 @@
     const idx=STEPS.indexOf(level);if(idx<0)return;
     document.getElementById('confirm-btn').disabled=false;
     const chip=document.getElementById('state-chip'),desc=document.getElementById('state-desc');
-    const map={normal:['ok','Bình thường','Hệ thống đang ở trạng thái bình thường'],light:['bad','Cảnh báo nhẹ','Khí gas tăng cao hơn mức bình thường'],emergency:['bad','Khẩn cấp','Phát hiện khói/lửa hoặc gas rất cao — đang xử lý'],awaiting:['bad','Chờ xác nhận','Điều kiện đã an toàn — cần xác nhận để khôi phục']};
-    document.getElementById('state-card').dataset.level=level;
-    const m=map[level];chip.className='chip '+(level==='normal'?'ok':'bad');chip.innerHTML='<i class="fas fa-circle"></i> '+m[1];desc.textContent=m[2];
-    document.getElementById('emg').classList.toggle('show',level==='light'||level==='emergency'||level==='awaiting');
+    const allRoomsConnected=Object.values(nodeState).every(Boolean);
+    const displayLevel=level==='normal'&&!allRoomsConnected?'unknown':level;
+    const map={normal:['ok','Chưa có cảnh báo','Chưa có cảnh báo nào được ghi nhận.'],unknown:['warn','Chưa đủ dữ liệu','Không thể xác nhận tình trạng an toàn khi một hoặc nhiều phòng chưa kết nối.'],light:['bad','Cảnh báo nhẹ','Khí gas tăng cao hơn mức bình thường'],emergency:['bad','Khẩn cấp','Phát hiện khói/lửa hoặc gas rất cao — đang xử lý'],awaiting:['bad','Chờ xác nhận','Điều kiện đã an toàn — cần xác nhận để khôi phục']};
+    document.getElementById('state-card').dataset.level=displayLevel;
+    if(level==='normal'){if(nodeState.kitchen)markRoomAttention('kitchen','','');}
+    else markRoomAttention('kitchen',level==='light'?'Kiểm tra khí gas':'Cảnh báo an toàn',level==='light'?'warn':'danger');
+    const m=map[displayLevel];chip.className='chip '+(displayLevel==='normal'?'ok':(displayLevel==='unknown'?'warn':'bad'));chip.innerHTML='<i class="fas fa-circle"></i> '+m[1];desc.textContent=m[2];
+    document.getElementById('overview').dataset.alertLevel=level;
+    document.getElementById('emg-desc').textContent=msg||map[level][2];
+    syncOverviewWarning();
     document.getElementById('silence-btn').classList.toggle('show',level==='light'||level==='emergency'||level==='awaiting');
     document.getElementById('confirm-btn').classList.toggle('show',level==='awaiting');
-    if(msg)showSys(msg,level==='light'?'light':'');
+    // The persistent overview line displays safety alerts without a duplicate banner.
   }
   document.getElementById('confirm-btn').addEventListener('click',()=>{if(socket)socket.emit('confirm_safe',{});});
   document.getElementById('silence-btn').addEventListener('click',()=>{if(socket)socket.emit('silence_alert',{});});
@@ -211,18 +273,27 @@
     if(!online&&roomBadge){roomBadge.className='rb';roomBadge.textContent='Chưa kết nối';}
     if(online&&roomBadge&&roomBadge.textContent==='Chưa kết nối'){roomBadge.className='rb ok';roomBadge.textContent='Đã kết nối';}
     if(room==='kitchen'){document.getElementById('kitchen-dot').classList.toggle('show',!online);document.getElementById('bn-kitchen-dot').classList.toggle('show',!online);}
+    document.querySelectorAll('[data-node-label]').forEach(label=>{if(label.dataset.nodeLabel===room){label.textContent=online?'Đã kết nối':'Chưa kết nối';label.classList.toggle('online',online);}});
     nodeState[room]=online;updateNodeChip();
   }
   function updateNodeChip(){
     const n=Object.values(nodeState).filter(Boolean).length;
     const c=document.getElementById('node-chip');c.innerHTML='<i class="fas fa-diagram-project"></i> '+n+'/'+Object.keys(nodeState).length+' phòng';
-    c.className='chip nodes'+(n===Object.keys(nodeState).length?' ok':(n===0?' bad':''));
+    c.className='chip nodes'+(n===Object.keys(nodeState).length?' ok':' warn');
+    const state=document.getElementById('state-card'),chip=document.getElementById('state-chip'),desc=document.getElementById('state-desc');
+    if(state.dataset.level==='normal'||state.dataset.level==='unknown'){
+      const complete=n===Object.keys(nodeState).length;
+      state.dataset.level=complete?'normal':'unknown';
+      chip.className='chip '+(complete?'ok':'warn');
+      chip.innerHTML='<i class="fas fa-circle"></i> '+(complete?'Chưa có cảnh báo':'Chưa đủ dữ liệu');
+      desc.textContent=complete?'Chưa có cảnh báo nào được ghi nhận.':'Không thể xác nhận tình trạng an toàn khi một hoặc nhiều phòng chưa kết nối.';
+    }
   }
   function setConn(ok){
     document.querySelectorAll('.sw input:not(#pt-light-toggle), input[type="range"], #cam-seg button').forEach(el=>el.disabled=!ok);
     const c=document.getElementById('conn-chip'),m=document.getElementById('mt-conn');
     c.className='chip '+(ok?'ok':'bad');c.innerHTML='<i class="fas fa-circle"></i> '+(ok?'Đã kết nối':'Mất kết nối');
-    m.className='mt-conn '+(ok?'ok':'bad');
+    if(m)m.className='mt-conn '+(ok?'ok':'bad');
   }
 
   /* ================= SOCKET ================= */
@@ -243,8 +314,8 @@
     socket.on('disconnect',()=>{setConn(false);document.getElementById('state-chip').textContent='Mất kết nối realtime';document.getElementById('state-chip').className='chip';document.getElementById('state-desc').textContent='Trạng thái node được cập nhật qua API khi realtime gián đoạn.';document.getElementById('confirm-btn').disabled=true;});
     socket.on('command_error',e=>{showSys(e.message||'Không gửi được lệnh.','light');socket.emit('request_initial_state');});
     socket.on('bootstrap',s=>{
-      if(s.rooms){applyPatient(s.rooms.patient||{});applyLiving(s.rooms.living||{});applyKitchen(s.rooms.kitchen||{});}
       if(s.nodes){['patient','living','kitchen'].forEach(r=>setNode(r,!!s.nodes[r]));}
+      if(s.rooms){applyPatient(s.rooms.patient||{});applyLiving(s.rooms.living||{});applyKitchen(s.rooms.kitchen||{});}
       if(s.ai)applyAI(s.ai);
       if(s.camera){setCameraUI(!!s.camera.active,s.camera.mode);}
       if(s.alert)setAlert(s.alert.level);
