@@ -12,7 +12,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}?v=20261003_living_fullscreen">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard-refresh.css') }}?v=20261028_9">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/type-system.css') }}?v=20261028_rooms1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/type-system.css') }}?v=20261029_personal11">
 </head>
 <body data-username="{{ username }}" data-role="{{ role }}">
   <a class="skip-link" href="#main-content">Đến nội dung chính</a>
@@ -43,17 +43,18 @@
           <span class="nav-text">Phòng bếp</span>
           <span class="dot-alert" id="kitchen-dot"></span>
         </li>
-        <li data-room="gestures" title="Tùy chỉnh cử chỉ">
-          <i class="fa-solid fa-hand"></i>
-          <span class="nav-text">Tùy chỉnh cử chỉ</span>
-        </li>
-
         {% if role == 'admin' %}
         <div class="nav-divider"></div>
         <li data-room="admin-users" title="Quản lý tài khoản">
           <i class="fa-solid fa-users-gear"></i>
           <span class="nav-text">Quản lý tài khoản</span>
         </li>
+        {% endif %}
+        <li data-room="gestures" title="Tùy chỉnh cử chỉ">
+          <i class="fa-solid fa-hand"></i>
+          <span class="nav-text">Tùy chỉnh cử chỉ</span>
+        </li>
+        {% if role == 'admin' %}
         <li data-room="admin-logs" title="Nhật ký & Cảnh báo">
           <i class="fa-solid fa-clipboard-list"></i>
           <span class="nav-text">Nhật ký &amp; Cảnh báo</span>
@@ -66,14 +67,15 @@
       </ul>
 
       <div class="side-foot">
-        <div class="user-row" id="side-user-btn" title="Hồ sơ & Cài đặt cá nhân" role="button" tabindex="0" aria-controls="right-drawer-panel" aria-expanded="false">
-          <div class="user-av"><i class="fa-solid fa-user"></i></div>
+        <div class="user-row" id="side-user-btn" title="Thông tin tài khoản">
+          <div class="user-av account-avatar" data-account-avatar><span>{{ username[0]|upper }}</span><img alt="" hidden></div>
           <div class="user-meta" style="display:none">
             <div class="u-name" id="side-username">{{ username }}</div>
             <div class="u-role" id="side-role">{{ 'Quản trị viên' if role == 'admin' else 'Thành viên' }}</div>
           </div>
           <i class="fa-solid fa-gear user-gear-icon" style="display:none"></i>
         </div>
+        <label class="sidebar-theme"><span>Chế độ tối</span><input type="checkbox" id="dark-mode-toggle" aria-label="Chế độ tối"></label>
         <a class="logout" href="{{ url_for('logout') }}" title="Đăng xuất">
           <i class="fa-solid fa-arrow-right-from-bracket"></i>
           <span class="logout-text" style="display:none">Đăng xuất</span>
@@ -111,20 +113,72 @@
           <div id="node-kitchen"><span class="nd"></span><span class="nsub"></span></div>
         </div>
 
-        <!-- =================================================================
-             OVERVIEW SECTION (Greeting + Hero + iOS Weather + 3 Rooms Bottom)
-             ================================================================= -->
+        <!-- Overview: live monitoring followed by project context. -->
         <section id="overview" class="room active">
           <div class="overview-alert-line" id="emg" role="status" aria-live="polite"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i><span id="emg-desc">Có cảnh báo cần kiểm tra.</span><button class="silence-btn" id="silence-btn" type="button">Tắt âm cảnh báo</button><button class="confirm-btn" id="confirm-btn" type="button">Xác nhận an toàn</button></div>
-          <header class="overview-heading"><div><h1 id="dynamic-greeting">Xin chào, {{ username }}.</h1></div><div class="overview-badges"><span class="chip bad" id="conn-chip">Đang kết nối…</span><span class="chip nodes" id="node-chip">0/3 phòng</span></div></header>
+          <section class="overview-weather" aria-label="Thời tiết và trạng thái hệ thống">
+            <header class="overview-heading"><div><h1 id="dynamic-greeting">Xin chào, {{ username }}.</h1><p id="overview-date"></p></div><div class="overview-badges"><span class="chip nodes" id="node-chip">0/3 phòng</span></div></header>
+            <div id="weather-data" hidden>
+              <div id="weather-current"><p class="weather-place">Ngoài trời, <span id="weather-location">Chưa cấu hình địa điểm</span></p><div class="weather-temperature"><span id="weather-temperature">--</span><small>°C</small></div><p class="weather-condition"><i id="weather-icon" class="fas fa-cloud" aria-hidden="true"></i> <strong id="weather-condition">--</strong></p><p class="weather-humidity">Độ ẩm <strong id="weather-humidity">--</strong></p></div>
+              <button type="button" class="weather-expand" id="weather-expand" aria-expanded="false" aria-controls="weather-outlook"><span>Xem thêm dự báo</span><i class="fas fa-chevron-down" aria-hidden="true"></i></button>
+              <div class="weather-outlook" id="weather-outlook">
+                <div class="weather-outlook-heading"><h2 id="weather-mode-title">Nhiệt độ</h2><div class="weather-modes" role="group" aria-label="Thông số dự báo"><span class="weather-mode-slider" aria-hidden="true"></span><button type="button" data-weather-mode="temperature" aria-pressed="true" aria-label="Nhiệt độ" title="Nhiệt độ"><i class="fas fa-cloud-sun" aria-hidden="true"></i></button><button type="button" data-weather-mode="rain" aria-pressed="false" aria-label="Lượng mưa" title="Lượng mưa"><i class="fas fa-droplet" aria-hidden="true"></i></button><button type="button" data-weather-mode="wind" aria-pressed="false" aria-label="Gió" title="Gió"><i class="fas fa-wind" aria-hidden="true"></i></button></div></div>
+                <ul id="weather-hourly" aria-label="Dự báo theo giờ" tabindex="0"></ul>
+                <h3 class="weather-days-title">Ba ngày tới</h3><ul id="weather-forecast" aria-label="Dự báo ba ngày"></ul>
+              </div>
+            </div>
+            <p id="weather-status" class="weather-message" role="status" aria-live="polite"></p>
+          </section>
           <div hidden id="state-card" data-level="unknown"><span id="state-desc"></span><span id="state-chip"></span></div>
+          <section class="overview-monitor" aria-label="Dữ liệu ba phòng">
           <div class="overview-sections">
-<section class="ha-area ovr" data-goto="patient" aria-labelledby="area-patient"><header class="ha-area-heading"><span class="ha-area-icon"><i class="fas fa-bed-pulse" aria-hidden="true"></i></span><div><h2 id="area-patient">Phòng người bệnh</h2><p>Chăm sóc & an toàn</p></div><span class="room-conn-status rb" id="ov-patient-badge">Chưa kết nối</span></header><div class="ha-area-state"><span id="attn-patient" class="area-attention" hidden><i class="fas fa-triangle-exclamation"></i> Cần kiểm tra</span></div><div class="ha-entity-grid"><div class="ha-entity"><span class="entity-symbol"><i class="fas fa-temperature-half" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Nhiệt độ</span><div class="entity-reading"><span id="ov-patient-temp">--</span><small>°C</small></div></div></div><div class="ha-entity"><span class="entity-symbol"><i class="fas fa-droplet" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Độ ẩm</span><div class="entity-reading"><span id="ov-patient-humi">--</span><small>%</small></div></div></div><div class="ha-entity entity-wide"><span class="entity-symbol"><i class="fas fa-person-falling" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Phát hiện té ngã</span><div class="entity-reading"><span id="ov-patient-fall">Chưa có dữ liệu</span></div></div></div></div></section><section class="ha-area ovr" data-goto="living" aria-labelledby="area-living"><header class="ha-area-heading"><span class="ha-area-icon"><i class="fas fa-couch" aria-hidden="true"></i></span><div><h2 id="area-living">Phòng khách</h2><p>Hiện diện & môi trường</p></div><span class="room-conn-status rb" id="ov-living-badge">Chưa kết nối</span></header><div class="ha-area-state"><span id="attn-living" class="area-attention" hidden><i class="fas fa-triangle-exclamation"></i> Cần kiểm tra</span></div><div class="ha-entity-grid"><div class="ha-entity"><span class="entity-symbol"><i class="fas fa-temperature-half" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Nhiệt độ</span><div class="entity-reading"><span id="ov-living-temp">--</span><small>°C</small></div></div></div><div class="ha-entity"><span class="entity-symbol"><i class="fas fa-person-walking" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Hiện diện</span><div class="entity-reading"><span id="ov-living-motion">Chưa có dữ liệu</span></div></div></div><div class="ha-entity entity-wide"><span class="entity-symbol"><i class="fas fa-lightbulb" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Đèn phòng</span><div class="entity-reading"><span id="ov-living-light">Chưa có dữ liệu</span></div></div></div></div></section><section class="ha-area ovr" data-goto="kitchen" aria-labelledby="area-kitchen"><header class="ha-area-heading"><span class="ha-area-icon"><i class="fas fa-kitchen-set" aria-hidden="true"></i></span><div><h2 id="area-kitchen">Phòng bếp</h2><p>Giám sát gas, khói & lửa</p></div><span class="room-conn-status rb" id="ov-kitchen-badge">Chưa kết nối</span></header><div class="ha-area-state"><span id="attn-kitchen" class="area-attention" hidden><i class="fas fa-triangle-exclamation"></i> Cần kiểm tra</span></div><div class="ha-entity-grid"><div class="ha-entity"><span class="entity-symbol"><i class="fas fa-wind" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Nồng độ gas</span><div class="entity-reading"><span id="ov-kitchen-gas">--</span><small>ADC</small></div></div></div><div class="ha-entity"><span class="entity-symbol"><i class="fas fa-smog" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Phát hiện khói</span><div class="entity-reading"><span id="ov-kitchen-smoke">Chưa có dữ liệu</span></div></div></div><div class="ha-entity entity-wide"><span class="entity-symbol"><i class="fas fa-fire-flame-curved" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Phát hiện lửa</span><div class="entity-reading"><span id="ov-kitchen-flame">Chưa có dữ liệu</span></div></div></div></div></section></div></section>
+            <section class="ha-area ovr" data-goto="patient" aria-labelledby="area-patient">
+              <header class="ha-area-heading">
+                <span class="ha-area-icon"><i class="fas fa-bed-pulse" aria-hidden="true"></i></span>
+                <div><h2 id="area-patient">PHÒNG BỆNH</h2></div>
+                <span class="room-conn-status rb" id="ov-patient-badge">Chưa kết nối</span>
+              </header>
+              <div class="ha-area-state"><span id="attn-patient" class="area-attention" hidden><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> Cần kiểm tra</span></div>
+              <div class="ha-entity-grid">
+                <div class="ha-entity"><span class="entity-symbol"><i class="fas fa-temperature-half" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Nhiệt độ</span><div class="entity-reading"><span id="ov-patient-temp">--</span><small>°C</small></div></div></div>
+                <div class="ha-entity"><span class="entity-symbol"><i class="fas fa-droplet" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Độ ẩm</span><div class="entity-reading"><span id="ov-patient-humi">--</span><small>%</small></div></div></div>
+                <div class="ha-entity entity-wide"><span class="entity-symbol"><i class="fas fa-person-falling" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Phát hiện té ngã</span><div class="entity-reading"><span id="ov-patient-fall">Chưa có dữ liệu</span></div></div></div>
+              </div>
+            </section>
+            <section class="ha-area ovr" data-goto="living" aria-labelledby="area-living">
+              <header class="ha-area-heading">
+                <span class="ha-area-icon"><i class="fas fa-couch" aria-hidden="true"></i></span>
+                <div><h2 id="area-living">PHÒNG KHÁCH</h2></div>
+                <span class="room-conn-status rb" id="ov-living-badge">Chưa kết nối</span>
+              </header>
+              <div class="ha-area-state"><span id="attn-living" class="area-attention" hidden><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> Cần kiểm tra</span></div>
+              <div class="ha-entity-grid">
+                <div class="ha-entity"><span class="entity-symbol"><i class="fas fa-temperature-half" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Nhiệt độ</span><div class="entity-reading"><span id="ov-living-temp">--</span><small>°C</small></div></div></div>
+                <div class="ha-entity"><span class="entity-symbol"><i class="fas fa-person-walking" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Hiện diện</span><div class="entity-reading"><span id="ov-living-motion">Chưa có dữ liệu</span></div></div></div>
+                <div class="ha-entity entity-wide"><span class="entity-symbol"><i class="fas fa-lightbulb" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Đèn phòng</span><div class="entity-reading"><span id="ov-living-light">Chưa có dữ liệu</span></div></div></div>
+              </div>
+            </section>
+            <section class="ha-area ovr" data-goto="kitchen" aria-labelledby="area-kitchen">
+              <header class="ha-area-heading">
+                <span class="ha-area-icon"><i class="fas fa-kitchen-set" aria-hidden="true"></i></span>
+                <div><h2 id="area-kitchen">PHÒNG BẾP</h2></div>
+                <span class="room-conn-status rb" id="ov-kitchen-badge">Chưa kết nối</span>
+              </header>
+              <div class="ha-area-state"><span id="attn-kitchen" class="area-attention" hidden><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> Cần kiểm tra</span></div>
+              <div class="ha-entity-grid">
+                <div class="ha-entity"><span class="entity-symbol"><i class="fas fa-wind" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Nồng độ gas</span><div class="entity-reading"><span id="ov-kitchen-gas">--</span><small>ADC</small></div></div></div>
+                <div class="ha-entity"><span class="entity-symbol"><i class="fas fa-smog" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Phát hiện khói</span><div class="entity-reading"><span id="ov-kitchen-smoke">Chưa có dữ liệu</span></div></div></div>
+                <div class="ha-entity entity-wide"><span class="entity-symbol"><i class="fas fa-fire-flame-curved" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Phát hiện lửa</span><div class="entity-reading"><span id="ov-kitchen-flame">Chưa có dữ liệu</span></div></div></div>
+              </div>
+            </section>
+          </div>
+          </section>
+        </section>
 
         <!-- =================================================================
              PATIENT ROOM SECTION (Left: Camera Stream, Right: 3 Sensors + 3 Devices)
              ================================================================= -->
-        <section id="patient" class="room detail-room"><header class="detail-heading"><span class="detail-connection" data-node-label="patient">Chưa kết nối</span></header><div class="detail-patient-layout"><div class="detail-camera"><div class="card card-camera-preview">
+        <section id="patient" class="room detail-room"><header class="detail-heading"><h1>Phòng người bệnh</h1><span class="detail-connection" data-node-label="patient">Chưa kết nối</span></header><div class="detail-patient-layout"><div class="detail-camera"><div class="card card-camera-preview">
                 <div class="cam-header-row">
                   <div class="cam-title-group">
                     <h4>Camera phòng người bệnh</h4>
@@ -144,9 +198,8 @@
                     <h5>Camera đang ở chế độ chờ</h5>
                     <p>Tự động bật khi cảm biến PIR phát hiện có chuyển động</p>
                   </div>
-                  <div class="badge-live-pulse" id="cam-live-badge">LIVE</div>
                   <div class="cam-overlay-stats">
-                    <div class="cam-stat-pill" id="oc-fps"><i class="fas fa-gauge"></i> <b id="ai-fps">--</b> FPS</div>
+                    <div class="cam-stat-pill" id="oc-fps"><i class="fas fa-gauge"></i> <b id="ai-fps">--</b> FPS · <b id="ai-latency">--</b> ms</div>
                     <div class="cam-stat-pill" id="oc-pir"><i class="fas fa-person-walking"></i> PIR: --</div>
                     <div class="cam-stat-pill" id="oc-gesture">Cử chỉ: —</div>
                     <div class="cam-stat-pill" id="oc-fall">An toàn</div>
@@ -221,21 +274,21 @@
                   </div>
 
                   <!-- Đèn phòng bệnh -->
-                  <div class="device-card-modern" id="pt-light-tile" style="opacity:0.65">
+                  <div class="device-card-modern" id="pt-light-tile">
                     <div class="device-card-top">
                       <div class="device-icon-wrapper"><i class="fas fa-lightbulb"></i></div>
                       <label class="sw">
-                        <input type="checkbox" id="pt-light-toggle" aria-label="Đèn phòng bệnh" disabled>
+                        <input type="checkbox" id="pt-light-toggle" aria-label="Đèn phòng bệnh">
                         <span class="tr"></span>
                       </label>
                     </div>
                     <div class="device-meta-info">
                       <h5>Đèn phòng bệnh</h5>
-                      <p id="pt-light-status">Chưa gán GPIO</p>
+                      <p id="pt-light-status">Đang tắt</p>
                     </div>
                   </div>
                 </div></section></div></div></section>
-<section id="living" class="room detail-room"><header class="detail-heading"><span class="detail-connection" data-node-label="living">Chưa kết nối</span></header><div class="detail-columns"><section class="detail-group"><h2>Môi trường & hiện diện</h2><div class="living-2cards-grid">
+<section id="living" class="room detail-room"><header class="detail-heading"><h1>Phòng khách</h1><span class="detail-connection" data-node-label="living">Chưa kết nối</span></header><div class="detail-columns"><section class="detail-group"><h2>Môi trường & hiện diện</h2><div class="living-2cards-grid">
                   <div class="balanced-sensor-card">
                     <div class="bsc-header">
                       <div>
@@ -292,7 +345,7 @@
                     </div>
                   </div>
                 </div><div class="device-card-modern" id="lv-auto-tile"><div class="device-card-top"><div class="device-icon-wrapper"><i class="fas fa-wand-magic-sparkles"></i></div><label class="sw"><input type="checkbox" id="lv-auto-toggle" aria-label="Tự động bật đèn phòng khách" checked><span class="tr"></span></label></div><div class="device-meta-info"><h5>Tự động bật đèn</h5><p id="lv-auto-status">Bật đèn khi có người buổi tối</p></div></div></section></div></section>
-<section id="kitchen" class="room detail-room"><header class="detail-heading"><span class="detail-connection" data-node-label="kitchen">Chưa kết nối</span></header><div class="detail-columns"><section class="detail-group"><h2>Cảm biến an toàn</h2><div class="sensor-cards-grid">
+<section id="kitchen" class="room detail-room"><header class="detail-heading"><h1>Phòng bếp</h1><span class="detail-connection" data-node-label="kitchen">Chưa kết nối</span></header><div class="detail-columns"><section class="detail-group"><h2>Cảm biến an toàn</h2><div class="sensor-cards-grid">
             <div class="balanced-sensor-card" id="kt-gas-card">
               <div class="bsc-header">
                 <div>
@@ -400,19 +453,15 @@
         <!-- =================================================================
              GESTURES SECTION (Tùy chỉnh cử chỉ tay AI MediaPipe)
              ================================================================= -->
-        <section id="gestures" class="room">
-          <div class="room-section-header" style="margin-bottom:18px">
-            <h2>Tùy chỉnh cử chỉ tay AI (MediaPipe)</h2>
-            <p style="color:var(--text-sub);font-size:0.86rem;margin-top:3px">Thiết lập ánh xạ nhận diện cử chỉ bàn tay từ Camera để điều khiển thiết bị không chạm theo thời gian thực</p>
-          </div>
+        <section id="gestures" class="room"><header class="detail-heading"><h1>Tùy chỉnh cử chỉ</h1></header>
 
           <div class="gestures-grid-layout">
             <!-- 1. Form Thiết lập ánh xạ -->
             <div class="card gesture-form-card" style="padding:22px">
               <div class="card-h" style="border:none;padding:0 0 16px">
                 <div>
-                  <h3>Thiết lập ánh xạ cử chỉ</h3>
-                  <p>Chọn cử chỉ bàn tay và hành động điều khiển tương ứng</p>
+                  <h3>Thiết lập ánh xạ</h3>
+                  <p>Chọn cử chỉ, thiết bị và hành động cần thực hiện.</p>
                 </div>
               </div>
 
@@ -433,8 +482,9 @@
                 </div>
 
                 <button class="btn accent" id="gm-add" style="justify-content:center;padding:12px;font-weight:700;margin-top:6px">
-                  <i class="fas fa-plus"></i> Lưu &amp; Kích hoạt ánh xạ
+                  <i class="fas fa-check"></i> Lưu ánh xạ
                 </button>
+                <p id="gm-message" role="status" aria-live="polite"></p>
               </div>
             </div>
 
@@ -442,8 +492,8 @@
             <div class="card gesture-list-card" style="padding:22px">
               <div class="card-h" style="border:none;padding:0 0 16px">
                 <div>
-                  <h3>Ánh xạ đang kích hoạt</h3>
-                  <p>Hệ thống AI sẽ tự động phản hồi khi camera nhận diện</p>
+                  <h3>Ánh xạ hiện tại</h3>
+                  <p>Áp dụng khi camera nhận diện cử chỉ.</p>
                 </div>
                 <span class="badge" id="gcard-count-badge" style="background:var(--primary-light);color:var(--primary);padding:4px 10px;border-radius:12px;font-size:0.84rem;font-weight:750">0</span>
               </div>
@@ -459,7 +509,7 @@
         <!-- =================================================================
              ADMIN: USERS
              ================================================================= -->
-        <section id="admin-users" class="room">
+        <section id="admin-users" class="room"><header class="detail-heading"><h1>Quản lý tài khoản</h1></header>
           <div class="card" style="padding:22px">
             <div class="card-h" style="border:none;padding:0 0 16px">
               <div>
@@ -480,7 +530,7 @@
         <!-- =================================================================
              ADMIN: LOGS
              ================================================================= -->
-        <section id="admin-logs" class="room">
+        <section id="admin-logs" class="room"><header class="detail-heading"><h1>Nhật ký & cảnh báo</h1></header>
           <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(300px, 1fr));gap:20px">
             <div class="card" style="padding:22px">
               <div class="card-h" style="border:none;padding:0 0 16px">
@@ -521,8 +571,8 @@
         <!-- =================================================================
              ADMIN: SETTINGS
              ================================================================= -->
-        <section id="admin-settings" class="room">
-          <div class="card" style="padding:22px;max-width:700px">
+        <section id="admin-settings" class="room"><header class="detail-heading"><h1>Cấu hình hệ thống</h1></header>
+          <div class="settings-section">
             <div class="card-h" style="border:none;padding:0 0 16px">
               <div>
                 <h3>Cấu hình hệ thống</h3>
@@ -542,165 +592,70 @@
                 <label for="cfg-chat">Telegram Chat ID</label>
                 <input type="text" id="cfg-chat" placeholder="Chat ID nhận thông báo">
               </div>
-              <div style="display:flex;gap:12px;margin-top:10px">
+              <div class="settings-actions">
                 <button type="submit" class="btn accent"><i class="fas fa-floppy-disk"></i> Lưu cấu hình</button>
                 <button type="button" class="btn" id="reload-config"><i class="fas fa-rotate"></i> Nạp lại</button>
               </div>
             </form>
           </div>
-        </section>
+          <section class="settings-section weather-settings" aria-labelledby="weather-settings-title">
+            <h3 id="weather-settings-title">Địa điểm thời tiết</h3>
+            <p>Chọn nơi đặt hệ thống. Tất cả tài khoản cùng xem dự báo cho địa điểm này.</p>
+            <form id="weather-config-form"><label for="cfg-weather-city">Tỉnh / thành phố</label><select id="cfg-weather-city"><option value="">Chưa chọn địa điểm</option></select><button type="submit" class="btn accent" id="weather-save">Lưu địa điểm</button></form>
+            <p id="weather-config-message" role="status" aria-live="polite"></p>
+          </section>
+                  <div class="settings-section ble-settings">
+            <div class="card-h"><div><h3>Node BLE</h3><p>Đổi địa chỉ ESP và kết nối lại từng phòng</p></div>
+              <button type="button" class="btn sm" id="ble-scan"><i class="fas fa-magnifying-glass"></i> Quét thiết bị</button>
+            </div>
+            <div class="ble-list" id="ble-list"></div>
+            <p class="ble-note" id="ble-message" role="status" aria-live="polite">Quét rồi chọn thiết bị cho từng phòng, hoặc nhập MAC BLE thủ công. Nhấn Lưu để áp dụng.</p>
+          </div>
+</section>
         {% endif %}
+
+        <section id="personal" class="room personal-page" aria-label="Cá nhân">
+          <div class="personal-identity">
+            <div class="account-avatar personal-avatar" data-account-avatar><span>{{ username[0]|upper }}</span><img alt="Ảnh đại diện" hidden></div>
+            <div><h2>{{ username }}</h2><p>{{ 'Quản trị viên' if role == 'admin' else 'Thành viên' }}</p></div>
+          </div>
+          <nav class="personal-tools" aria-label="Chức năng tài khoản">
+            {% if role == 'admin' %}
+            <button type="button" data-room="admin-users"><i class="fas fa-users-gear" aria-hidden="true"></i><span>Quản lý tài khoản</span><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
+            {% endif %}
+            <button type="button" data-room="gestures"><i class="fas fa-hand" aria-hidden="true"></i><span>Tùy chỉnh cử chỉ</span><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
+            {% if role == 'admin' %}
+            <button type="button" data-room="admin-logs"><i class="fas fa-clipboard-list" aria-hidden="true"></i><span>Nhật ký &amp; cảnh báo</span><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
+            <button type="button" data-room="admin-settings"><i class="fas fa-sliders" aria-hidden="true"></i><span>Cấu hình hệ thống</span><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
+            {% endif %}
+            <label class="personal-theme"><i class="fas fa-moon" aria-hidden="true"></i><span>Chế độ tối</span><input type="checkbox" role="switch" id="personal-dark-toggle" aria-label="Chế độ tối"></label>
+            <a href="{{ url_for('logout') }}"><i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i><span>Đăng xuất</span><i class="fas fa-chevron-right" aria-hidden="true"></i></a>
+          </nav>
+          <p class="personal-copyright">AIoT Care Station &copy; 2026</p>
+        </section>
 
         <!-- Footer Timestamp -->
         <footer class="app-footer">
-          <div class="footer-sync"><i class="fas fa-clock"></i>Đồng bộ lần cuối: <b id="last-update">--:--:--</b></div>
+          <div class="footer-sync"><i class="fas fa-clock"></i>  Đồng bộ lần cuối: <b id="last-update">--:--:--</b></div>
           <div class="footer-copy">AIoT Care Station &copy; 2026</div>
         </footer>
       </main>
     </div>
   </div>
 
-  <!-- ============ FACEBOOK-STYLE ACCOUNT & SETTINGS DRAWER ============ -->
-  <div class="right-drawer-overlay" id="right-drawer-overlay"></div>
-  <aside class="right-drawer-panel" id="right-drawer-panel" role="dialog" aria-label="Tài khoản và cài đặt" aria-modal="true" hidden>
-    <!-- 1. Facebook Profile Header Card -->
-    <div class="fb-profile-card">
-      <div class="fb-profile-main">
-        <div class="fb-avatar">
-          <i class="fa-solid fa-user"></i>
-        </div>
-        <div class="fb-profile-info">
-          <h3 class="fb-user-name" id="drawer-username">{{ username }}</h3>
-          <p class="fb-user-role" id="drawer-role">{{ 'Quản trị viên' if role == 'admin' else 'Thành viên' }}</p>
-        </div>
-      </div>
-      <button id="right-drawer-close" type="button" aria-label="Đóng bảng tài khoản"><i class="fas fa-xmark" aria-hidden="true"></i></button>
-    </div>
-
-    <div class="fb-divider"></div>
-
-    <!-- 2. Danh sách các phòng (Full tên gọn gàng) -->
-    <div class="fb-section">
-      <div class="fb-section-title">Danh sách phòng giám sát</div>
-      <div class="fb-rooms-list">
-        <div class="fb-menu-item" data-room="overview">
-          <div class="fb-item-icon"><i class="fa-solid fa-house"></i></div>
-          <div class="fb-item-content">
-            <div class="fb-item-title">Tổng quan hệ thống</div>
-          </div>
-          <i class="fa-solid fa-chevron-right fb-item-arrow"></i>
-        </div>
-
-        <div class="fb-menu-item" data-room="patient">
-          <div class="fb-item-icon"><i class="fa-solid fa-bed-pulse"></i></div>
-          <div class="fb-item-content">
-            <div class="fb-item-title">Phòng người bệnh</div>
-          </div>
-          <i class="fa-solid fa-chevron-right fb-item-arrow"></i>
-        </div>
-
-        <div class="fb-menu-item" data-room="living">
-          <div class="fb-item-icon"><i class="fa-solid fa-couch"></i></div>
-          <div class="fb-item-content">
-            <div class="fb-item-title">Phòng khách</div>
-          </div>
-          <i class="fa-solid fa-chevron-right fb-item-arrow"></i>
-        </div>
-
-        <div class="fb-menu-item" data-room="kitchen">
-          <div class="fb-item-icon"><i class="fa-solid fa-kitchen-set"></i></div>
-          <div class="fb-item-content">
-            <div class="fb-item-title">Phòng bếp</div>
-          </div>
-          <i class="fa-solid fa-chevron-right fb-item-arrow"></i>
-        </div>
-
-        {% if role == 'admin' %}
-        <div class="fb-menu-item" data-room="admin-users">
-          <div class="fb-item-icon"><i class="fa-solid fa-user-gear"></i></div>
-          <div class="fb-item-content">
-            <div class="fb-item-title">Quản lý tài khoản</div>
-          </div>
-          <i class="fa-solid fa-chevron-right fb-item-arrow"></i>
-        </div>
-
-        <div class="fb-menu-item" data-room="admin-logs">
-          <div class="fb-item-icon"><i class="fa-solid fa-clipboard-list"></i></div>
-          <div class="fb-item-content">
-            <div class="fb-item-title">Nhật ký &amp; Cảnh báo</div>
-          </div>
-          <i class="fa-solid fa-chevron-right fb-item-arrow"></i>
-        </div>
-
-        <div class="fb-menu-item" data-room="admin-settings">
-          <div class="fb-item-icon"><i class="fa-solid fa-sliders"></i></div>
-          <div class="fb-item-content">
-            <div class="fb-item-title">Cấu hình hệ thống</div>
-          </div>
-          <i class="fa-solid fa-chevron-right fb-item-arrow"></i>
-        </div>
-        {% endif %}
-      </div>
-    </div>
-
-    <div class="fb-divider"></div>
-
-    <!-- 3. Cài đặt theo thứ tự: Dark Mode -> Tùy chỉnh cử chỉ -> Hệ thống -> Đăng xuất -->
-    <div class="fb-section">
-      <div class="fb-section-title">Cài đặt &amp; Tùy chọn</div>
-
-      <!-- 3.1 Chế độ tối (Dark mode) -->
-      <div class="fb-menu-item fb-toggle-item">
-        <div class="fb-item-icon"><i class="fa-solid fa-moon"></i></div>
-        <div class="fb-item-content">
-          <div class="fb-item-title">Chế độ tối (Dark mode)</div>
-        </div>
-        <label class="sw">
-          <input type="checkbox" id="dark-mode-toggle" aria-label="Chuyển chế độ tối">
-          <span class="tr"></span>
-        </label>
-      </div>
-
-      <!-- 3.2 Tùy chỉnh cử chỉ tay AI (Điều hướng trực tiếp tới trang cài đặt cử chỉ) -->
-      <div class="fb-menu-item" data-room="gestures">
-        <div class="fb-item-icon"><i class="fa-solid fa-hand"></i></div>
-        <div class="fb-item-content">
-          <div class="fb-item-title">Tùy chỉnh cử chỉ tay AI <span class="badge" id="gcard-count" style="background:var(--primary-light);color:var(--primary);padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:700">0</span></div>
-        </div>
-        <i class="fa-solid fa-chevron-right fb-item-arrow"></i>
-      </div>
-
-      <!-- 3.3 Hệ thống -->
-      <div class="fb-menu-item">
-        <div class="fb-item-icon"><i class="fa-solid fa-shield-halved"></i></div>
-        <div class="fb-item-content">
-          <div class="fb-item-title">Hệ thống &amp; Kết nối</div>
-        </div>
-        <span class="chip ok"><i class="fas fa-circle"></i> Trực tuyến</span>
-      </div>
-
-      <!-- 3.4 Đăng xuất -->
-      <a href="{{ url_for('logout') }}" class="fb-menu-item fb-logout-item">
-        <div class="fb-item-icon fb-logout-icon"><i class="fa-solid fa-arrow-right-from-bracket"></i></div>
-        <div class="fb-item-content">
-          <div class="fb-item-title fb-logout-text">Đăng xuất</div>
-        </div>
-        <i class="fa-solid fa-chevron-right fb-item-arrow"></i>
-      </a>
-    </div>
-  </aside>
-
   <!-- Mobile Bottom Nav -->
-  <nav class="botnav" id="botnav">
-    <button class="active" data-room="overview"><i class="fas fa-house"></i>Tổng quan</button>
-    <button data-room="patient"><i class="fas fa-bed-pulse"></i>Phòng bệnh</button>
-    <button data-room="living"><i class="fas fa-couch"></i>Phòng khách</button>
-    <button data-room="kitchen"><i class="fas fa-kitchen-set"></i>Phòng bếp<span class="dot-alert" id="bn-kitchen-dot" style="display:none"></span></button>
+  <nav class="botnav" id="botnav" aria-label="Điều hướng chính trên điện thoại">
+    <button type="button" class="active" data-room="overview"><i class="fas fa-house" aria-hidden="true"></i><span>Tổng quan</span></button>
+    <button type="button" data-room="patient"><i class="fas fa-bed-pulse" aria-hidden="true"></i><span>Người bệnh</span></button>
+    <button type="button" data-room="living"><i class="fas fa-couch" aria-hidden="true"></i><span>Khách</span></button>
+    <button type="button" data-room="kitchen"><i class="fas fa-kitchen-set" aria-hidden="true"></i><span>Bếp</span><span class="dot-alert" id="bn-kitchen-dot" style="display:none"></span></button>
+    <button type="button" data-room="personal" data-personal-tab aria-controls="personal"><i class="fas fa-user" aria-hidden="true"></i><span>Cá nhân</span></button>
   </nav>
 
-  <script src="{{ url_for('static', filename='js/dashboard.js') }}?v=20261028_rooms1"></script>
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}?v=20261029_personal11"></script>
+  <script src="{{ url_for('static', filename='js/overview-weather.js') }}?v=7" defer></script>
   {% if role == 'admin' %}
-  <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/admin.js') }}?v=20261029_weathersettings1"></script>
   {% endif %}
 </body>
 </html>

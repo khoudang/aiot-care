@@ -130,7 +130,7 @@ void setup() {
 }
 
 void loop() {
-  drainCommands(handleCommand, pNotifyChar);
+  const bool commandChanged = drainCommands(handleCommand, pNotifyChar);
   // Xử lý lệnh UART từ Pi để quay Servo
   if (Serial1.available()) {
     String cmd = Serial1.readStringUntil('\n');
@@ -145,7 +145,7 @@ void loop() {
 
   // Gửi BLE định kỳ (1s/lần)
   static unsigned long lastSend = 0;
-  if (deviceConnected && millis() - lastSend > 1000) {
+  if (deviceConnected && (commandChanged || millis() - lastSend > 1000)) {
     lastSend = millis();
 
     float t = sht31.readTemperature();

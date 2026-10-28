@@ -176,9 +176,9 @@ void loop() {
     latestGas = gas; latestFlame = flame;
     kitchen.update(now, gas, false, flame);
   }
-  drainCommands(handleCommand, pNotifyChar);
+  const bool commandChanged = drainCommands(handleCommand, pNotifyChar);
   applyOutputs();
-  if (deviceConnected && now - lastSend >= 1000) {
+  if (deviceConnected && (commandChanged || now - lastSend >= 1000)) {
     lastSend = now;
     char payload[256];
     snprintf(payload, sizeof(payload),

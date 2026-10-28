@@ -7,6 +7,8 @@
     const hour=Number(new Intl.DateTimeFormat('en-GB',{hour:'numeric',hourCycle:'h23',timeZone:'Asia/Ho_Chi_Minh'}).format(new Date()));
     const period=hour<11?'sáng':hour<14?'trưa':hour<18?'chiều':'tối';
     heading.textContent=`Chào buổi ${period}, ${document.body.dataset.username||'Người dùng'}.`;
+    const date=document.getElementById('overview-date');
+    if(date)date.textContent=new Intl.DateTimeFormat('vi-VN',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'Asia/Ho_Chi_Minh'}).format(new Date());
   }
   updateGreeting();
   setInterval(updateGreeting,60000);
@@ -26,23 +28,21 @@
   document.getElementById('drawer-close')?.addEventListener('click',closeDrawer);
   scrim.addEventListener('click',closeDrawer);
 
-  /* Account panel is a modal drawer, never footer content. */
-  (function(){
-    const panel=document.getElementById('right-drawer-panel'),overlay=document.getElementById('right-drawer-overlay'),trigger=document.getElementById('side-user-btn'),close=document.getElementById('right-drawer-close');
-    if(!panel||!overlay||!trigger||!close)return;
-    function dismiss(){panel.hidden=true;overlay.classList.remove('show');document.body.classList.remove('drawer-open');trigger.setAttribute('aria-expanded','false');trigger.focus();}
-    function open(){closeDrawer();panel.hidden=false;overlay.classList.add('show');document.body.classList.add('drawer-open');trigger.setAttribute('aria-expanded','true');close.focus();}
-    trigger.addEventListener('click',open);
-    trigger.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});
-    close.addEventListener('click',dismiss);overlay.addEventListener('click',dismiss);
-    panel.querySelectorAll('[data-room]').forEach(el=>el.addEventListener('click',dismiss));
-    document.addEventListener('keydown',e=>{if(panel.hidden)return;if(e.key==='Escape')dismiss();if(e.key==='Tab'){const items=[...panel.querySelectorAll('button,a,input,[tabindex="0"]')].filter(el=>el.getClientRects().length);const first=items[0],last=items[items.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});
-    const dark=document.getElementById('dark-mode-toggle');
-    if(dark)dark.addEventListener('change',()=>document.body.classList.toggle('dark-mode',dark.checked));
-  })();
-
+  /* Account settings share the main content navigation. */
+  const preferencePrefix='aiot-account-'+document.body.dataset.username+'-';
+  const dark=document.getElementById('dark-mode-toggle');
+  try{dark.checked=localStorage.getItem(preferencePrefix+'dark')==='true';}catch(_){}
+  document.body.classList.toggle('dark-mode',dark.checked);
+  dark.addEventListener('change',()=>{document.body.classList.toggle('dark-mode',dark.checked);try{localStorage.setItem(preferencePrefix+'dark',String(dark.checked));}catch(_){}});
+  const personalDark=document.getElementById('personal-dark-toggle');
+  personalDark.checked=dark.checked;
+  personalDark.addEventListener('change',()=>{dark.checked=personalDark.checked;dark.dispatchEvent(new Event('change'));});
+  dark.addEventListener('change',()=>{personalDark.checked=dark.checked;});
+  function renderAccountAvatar(src){document.querySelectorAll('[data-account-avatar]').forEach(el=>{const img=el.querySelector('img'),initial=el.querySelector('span');img.hidden=!src;initial.hidden=!!src;if(src)img.src=src;else img.removeAttribute('src');});}
+  try{const saved=localStorage.getItem(preferencePrefix+'avatar');if(saved&&/^data:image\/(png|jpeg|webp);base64,/.test(saved))renderAccountAvatar(saved);}catch(_){}
   const rooms=document.querySelectorAll('.room');
   const titles={
+    personal:['Cá nhân',''],
     overview:['Tổng quan','Theo dõi và điều khiển ba phòng.'],
     patient:['Phòng người bệnh','Camera bám người, cảm biến và thiết bị chăm sóc'],
     living:['Phòng khách','Cảm biến hiện diện, ánh sáng và thiết bị'],
@@ -53,7 +53,12 @@
     'admin-settings':['Cấu hình hệ thống','Tài khoản, Telegram và kết nối ESP'],
   };
   function goTo(room){
+    if(!Array.from(rooms).some(r=>r.id===room))return;
     document.querySelectorAll('[data-room]').forEach(i=>i.classList.toggle('active',i.dataset.room===room));
+    document.querySelectorAll('#botnav button').forEach(i=>{
+      const selected=i.dataset.room===room||(i.hasAttribute('data-personal-tab')&&['gestures','admin-settings','admin-users','admin-logs'].includes(room));
+      i.classList.toggle('active',selected);if(selected)i.setAttribute('aria-current','page');else i.removeAttribute('aria-current');
+    });
     rooms.forEach(r=>r.classList.toggle('active',r.id===room));
     const t=titles[room];if(t){const title=document.getElementById('pt-title'),sub=document.getElementById('pt-sub');if(title)title.textContent=t[0];if(sub)sub.textContent=t[1]||'';}
     closeDrawer();
@@ -63,7 +68,10 @@
   document.querySelectorAll('[data-room]').forEach(i=>i.addEventListener('click',()=>goTo(i.dataset.room)));
   document.querySelectorAll('[data-goto]').forEach(el=>el.addEventListener('click',()=>goTo(el.dataset.goto)));
 
-  function touch(){document.getElementById('last-update').textContent=new Date().toLocaleTimeString('vi-VN');}
+  function touch(){
+    const stamp=document.getElementById('last-update');
+    if(stamp)stamp.textContent=new Intl.DateTimeFormat('vi-VN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',timeZone:'Asia/Ho_Chi_Minh'}).format(new Date());
+  }
 
   /* ---- sparklines ---- */
   const sparks={};
@@ -95,23 +103,61 @@
   if(cameraStats&&videoFeed)videoFeed.parentElement.after(cameraStats);
   let camActive=false,camMode='auto';
   function setCameraUI(active,mode){
+    const wasActive=camActive;
     camActive=active;if(mode)camMode=mode;
     videoFeed.style.display=active?'block':'none';
     videoPh.style.display=active?'none':'block';
     document.querySelectorAll('#cam-seg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===camMode));
-    if(active){const want='/video_feed';if(!videoFeed.src.includes(want)||videoFeed.style.display==='none')videoFeed.src=want+'?'+Date.now();}
-    if(!active){videoFeed.parentElement.style.aspectRatio='';document.getElementById('oc-gesture').textContent='Cử chỉ: — (camera tắt)';}
+    if(active){const want='/video_feed';if(!wasActive||!videoFeed.getAttribute('src'))videoFeed.src=want+'?'+Date.now();}
+    if(!active){videoFeed.removeAttribute('src');videoFeed.parentElement.style.aspectRatio='';document.getElementById('oc-gesture').textContent='Cử chỉ: — (camera tắt)';}
   }
   document.querySelectorAll('#cam-seg button').forEach(b=>b.addEventListener('click',()=>{
     const m=b.dataset.mode;camMode=m;
     document.querySelectorAll('#cam-seg button').forEach(x=>x.classList.toggle('on',x===b));
-    if(socket)socket.emit('set_camera_mode',{mode:m});
+    if(socket&&socket.connected){
+      if(m==='on'){
+        // Open a fresh stream immediately; backend confirmation owns actual state.
+        camActive=false;
+        setCameraUI(true,m);
+      }else if(m==='off')setCameraUI(false,m);
+      socket.emit('set_camera_mode',{mode:m});
+    }else{
+      setCameraUI(false,m);
+      showSys('Mất kết nối. Chưa gửi lệnh camera.','light');
+    }
   }));
   videoFeed.addEventListener('load',()=>{if(camActive&&videoFeed.naturalWidth&&videoFeed.naturalHeight)videoFeed.parentElement.style.aspectRatio=videoFeed.naturalWidth+' / '+videoFeed.naturalHeight;});
-  videoFeed.addEventListener('error',()=>{videoFeed.style.display='none';videoPh.style.display='block';videoFeed.parentElement.style.aspectRatio='';});
+  videoFeed.addEventListener('error',()=>{videoFeed.style.display='none';videoPh.style.display='block';videoFeed.parentElement.style.aspectRatio='';camActive=false;});
 
   /* ---- device control ---- */
-  function emitSet(room,device,payload){if(!socket||!socket.connected){showSys('Mất kết nối. Chưa gửi lệnh điều khiển.','light');return;}socket.emit('set_device',Object.assign({room,device},payload));}
+  const pendingControls=new Map();
+  const roomPrefix={patient:'pt',living:'lv',kitchen:'kt'};
+  let controlSequence=0;
+  const controlSession=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
+  function emitSet(room,device,payload){
+    if(!socket||!socket.connected){showSys('Mất kết nối. Chưa gửi lệnh điều khiển.','light');return;}
+    const key=room+':'+device,previous=pendingControls.get(key);
+    if(previous)clearTimeout(previous.timer);
+    const status=document.getElementById(`${roomPrefix[room]}-${device}-status`);
+    const target={...payload,request_id:controlSession+'-'+(++controlSequence),acknowledged:false};
+    if(status)status.textContent='Đang chờ thiết bị…';
+    target.timer=setTimeout(()=>{if(pendingControls.get(key)!==target)return;pendingControls.delete(key);if(status)status.textContent='Chưa xác nhận';socket.emit('request_initial_state');},10000);
+    pendingControls.set(key,target);
+    socket.emit('set_device',Object.assign({room,device,request_id:target.request_id},payload));
+  }
+  function confirmedData(room,data){
+    const result={...data};
+    for(const [key,target] of pendingControls){
+      if(!key.startsWith(room+':'))continue;
+      const device=key.split(':')[1],speed=device==='fan'?'fan_speed':device==='exhaust'?'exhaust_speed':null;
+      const matches=speed?data[speed]!=null&&Math.abs(+data[speed]-(target.value||0))<=1:data[device]!=null&&!!data[device]===target.state;
+      if(matches&&target.acknowledged){clearTimeout(target.timer);pendingControls.delete(key);}
+      else{delete result[device];if(speed)delete result[speed];}
+    }
+    return result;
+  }
+  function clearPendingControls(){for(const target of pendingControls.values())clearTimeout(target.timer);pendingControls.clear();}
+
   function bindToggle(id,tileId,onTxt,offTxt,cb){
     const el=document.getElementById(id),tile=document.getElementById(tileId);
     if(!el||!tile)return;
@@ -173,6 +219,7 @@
   function setToggle(id,tileId,on,onTxt,offTxt){const el=document.getElementById(id);el.checked=!!on;document.getElementById(tileId).classList.toggle('on',!!on);const st=document.getElementById(id.replace('-toggle','-status'));if(st)st.textContent=on?onTxt:offTxt;}
 
   function applyPatient(d){
+    d=confirmedData('patient',d);
     if(d.light!=null)setToggle('pt-light-toggle','pt-light-tile',d.light,'Đang bật','Đang tắt');
     if(d.temp!=null){document.getElementById('pt-temp').textContent=d.temp;document.getElementById('ov-patient-temp').textContent=d.temp;spark('sp-pt-temp',d.temp,'#4c9be8');}
     if(d.hum!=null){document.getElementById('pt-humi').textContent=d.hum;document.getElementById('ov-patient-humi').textContent=d.hum;spark('sp-pt-humi',d.hum,'#3ba55d');}
@@ -183,6 +230,7 @@
     touch();
   }
   function applyLiving(d){
+    d=confirmedData('living',d);
     if(d.temp!=null){document.getElementById('lv-temp').textContent=d.temp;document.getElementById('ov-living-temp').textContent=d.temp;spark('sp-lv-temp',d.temp,'#4c9be8');}
     if(d.hum!=null){document.getElementById('lv-humi').textContent=d.hum;spark('sp-lv-humi',d.hum,'#3ba55d');}
     if(d.lux!=null){document.getElementById('lv-lux').textContent=Math.round(d.lux);spark('sp-lv-lux',d.lux,'#e0a52e');}
@@ -193,6 +241,7 @@
     touch();
   }
   function applyKitchen(d){
+    d=confirmedData('kitchen',d);
     const kitchenConnected=!!(nodeState&&nodeState.kitchen);
     if(d.gas!=null&&(kitchenConnected||d.gas>=1500)){const g=Math.round(d.gas);document.getElementById('kt-gas').textContent=g;document.getElementById('ov-kitchen-gas').textContent=g;setGauge(d.gas);
       const st=document.getElementById('kt-gas-state'),card=document.getElementById('kt-gas-card');
@@ -216,6 +265,11 @@
     if(a.gesture!=null){document.getElementById('oc-gesture').textContent='Cử chỉ: '+(a.gesture||'—');document.querySelectorAll('#gesture-table tr[data-g]').forEach(r=>r.classList.toggle('live',r.dataset.g===a.gesture));}
     if(a.fps!=null)document.getElementById('ai-fps').textContent=a.fps;
     if(a.latency!=null){const latency=document.getElementById('ai-latency');if(latency)latency.textContent=a.latency;}
+    if(a.ai_available===false){
+      const fall=document.getElementById('oc-fall');fall.textContent='AI chưa sẵn sàng';fall.classList.remove('alarm');
+      document.getElementById('ov-patient-fall').textContent='Chưa có nhận diện AI';
+      return;
+    }
     if(a.fall!=null){const oc=document.getElementById('oc-fall');oc.classList.toggle('alarm',!!a.fall);
       if(a.fall)markRoomAttention('patient','Cảnh báo té ngã','danger');
       else if(nodeState&&nodeState.patient)markRoomAttention('patient','','');
@@ -290,9 +344,9 @@
     }
   }
   function setConn(ok){
-    document.querySelectorAll('.sw input:not(#pt-light-toggle), input[type="range"], #cam-seg button').forEach(el=>el.disabled=!ok);
+    document.querySelectorAll('.sw input, input[type="range"], #cam-seg button').forEach(el=>el.disabled=!ok);
     const c=document.getElementById('conn-chip'),m=document.getElementById('mt-conn');
-    c.className='chip '+(ok?'ok':'bad');c.innerHTML='<i class="fas fa-circle"></i> '+(ok?'Đã kết nối':'Mất kết nối');
+    if(c){c.className='chip '+(ok?'ok':'bad');c.innerHTML='<i class="fas fa-circle"></i> '+(ok?'Đã kết nối':'Mất kết nối');}
     if(m)m.className='mt-conn '+(ok?'ok':'bad');
   }
 
@@ -302,6 +356,7 @@
       const r=await fetch('/api/state',{cache:'no-store',credentials:'same-origin'});
       if(!r.ok)return;
       const s=await r.json();
+      touch();
       if(s.nodes)Object.keys(nodeState).forEach(room=>{
         if(s.nodes[room]!=null)setNode(room,!!s.nodes[room]);
       });
@@ -310,9 +365,13 @@
   refreshNodeStatus();
   setInterval(refreshNodeStatus,3000);
   if(socket){
+    socket.on('command_result',result=>{
+      const target=pendingControls.get(result.room+':'+result.device);
+      if(target&&target.request_id===result.request_id&&result.status==='applied')target.acknowledged=true;
+    });
     socket.on('connect',()=>{setConn(true);socket.emit('request_initial_state');loadKitchenAlerts();});
-    socket.on('disconnect',()=>{setConn(false);document.getElementById('state-chip').textContent='Mất kết nối realtime';document.getElementById('state-chip').className='chip';document.getElementById('state-desc').textContent='Trạng thái node được cập nhật qua API khi realtime gián đoạn.';document.getElementById('confirm-btn').disabled=true;});
-    socket.on('command_error',e=>{showSys(e.message||'Không gửi được lệnh.','light');socket.emit('request_initial_state');});
+    socket.on('disconnect',()=>{clearPendingControls();setConn(false);document.getElementById('state-chip').textContent='Mất kết nối realtime';document.getElementById('state-chip').className='chip';document.getElementById('state-desc').textContent='Trạng thái node được cập nhật qua API khi realtime gián đoạn.';document.getElementById('confirm-btn').disabled=true;});
+    socket.on('command_error',e=>{clearPendingControls();showSys(e.message||'Không gửi được lệnh.','light');socket.emit('request_initial_state');});
     socket.on('bootstrap',s=>{
       if(s.nodes){['patient','living','kitchen'].forEach(r=>setNode(r,!!s.nodes[r]));}
       if(s.rooms){applyPatient(s.rooms.patient||{});applyLiving(s.rooms.living||{});applyKitchen(s.rooms.kitchen||{});}
@@ -336,8 +395,8 @@
     async function fj(url,opt={}){const r=await fetch(url,{headers:{'Content-Type':'application/json'},...opt});const d=await r.json().catch(()=>({}));if(!r.ok||d.ok===false)throw new Error(d.message||'Lỗi máy chủ.');return d;}
     function fillSelect(sel,arr){sel.innerHTML=arr.map(o=>`<option value="${o.key}">${o.label}</option>`).join('');}
     function renderList(ms){
-      const cnt=document.getElementById('gcard-count');if(cnt)cnt.textContent=(ms&&ms.length)||0;
-      if(!ms||!ms.length){list.innerHTML='<div class="empty">Chưa có ánh xạ nào — thêm ở trên.</div>';return;}
+      const cnt=document.getElementById('gcard-count-badge');if(cnt)cnt.textContent=(ms&&ms.length)||0;
+      if(!ms||!ms.length){list.innerHTML='<div class="empty">Chưa có ánh xạ. Chọn cử chỉ và lưu để bắt đầu.</div>';return;}
       list.innerHTML=ms.map(m=>{
         const gl=labels.gesture[m.gesture_name]||m.gesture_name,dl=labels.device[m.target_device]||m.target_device,al=labels.action[m.action]||m.action;
         return `<div class="gmap-item"><span class="gi-gesture">${gl}</span><i class="fas fa-arrow-right gi-arrow"></i><span class="gi-target"><b>${dl}</b> · ${al}</span><button class="gi-del" onclick="delGesture('${m.gesture_name}')"><i class="fas fa-xmark"></i></button></div>`;
@@ -352,7 +411,10 @@
       renderList(d.mappings);
     }
     document.getElementById('gm-add').addEventListener('click',async()=>{
-      try{const d=await fj('/api/gesture_mappings',{method:'POST',body:JSON.stringify({gesture_name:gEl.value,target_device:dEl.value,action:aEl.value})});renderList(d.mappings);}catch(e){alert(e.message);}
+      const button=document.getElementById('gm-add'),message=document.getElementById('gm-message');
+      if(button.disabled)return;
+      button.disabled=true;message.textContent='Đang lưu…';
+      try{const d=await fj('/api/gesture_mappings',{method:'POST',body:JSON.stringify({gesture_name:gEl.value,target_device:dEl.value,action:aEl.value})});renderList(d.mappings);message.textContent='Đã lưu ánh xạ.';}catch(e){message.textContent=e.message;}finally{button.disabled=false;}
     });
     window.delGesture=async g=>{if(!confirm('Xóa ánh xạ cử chỉ này?'))return;try{const d=await fj(`/api/gesture_mappings/${g}`,{method:'DELETE'});renderList(d.mappings);}catch(e){alert(e.message);}};
     /* Thu gọn / mở rộng panel cử chỉ + di chuyển khối dữ liệu (mặc định thu gọn để tránh chạm nhầm) */

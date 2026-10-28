@@ -37,14 +37,17 @@ inline void commandAck(BLECharacteristic *characteristic, const char *packet, co
   notifyJson(characteristic, reply);
 }
 
-inline void drainCommands(bool (*handle)(const String &), BLECharacteristic *characteristic) {
+inline bool drainCommands(bool (*handle)(const String &), BLECharacteristic *characteristic) {
+  bool changed = false;
   char packet[200];
   while (rejectedInbox && xQueueReceive(rejectedInbox, packet, 0) == pdTRUE)
     commandAck(characteristic, packet, "busy");
   while (commandInbox && xQueueReceive(commandInbox, packet, 0) == pdTRUE) {
     bool applied = handle(String(packet));
+    changed = changed || applied;
     commandAck(characteristic, packet, applied ? "applied" : "rejected");
   }
+  return changed;
 }
 
 // Reject strings, floats, nulls and out-of-range values instead of coercing them.

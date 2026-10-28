@@ -37,20 +37,31 @@
     async function loadConfig(){const c=(await fj('/api/admin/configs')).configs||{};$('cfg-code').value=c.admin_register_code||'';$('cfg-token').value=c.telegram_bot_token||'';$('cfg-chat').value=c.telegram_chat_id||'';}
     const bleNames={patient:'Phòng người bệnh',living:'Phòng khách',kitchen:'Phòng bếp'};
     const bleStatus=online=>online?'Đã kết nối':'Chưa kết nối';
+    let scannedBleDevices=[];
+    function fillBleChoices(select){
+      select.textContent='';
+      const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=scannedBleDevices.length?'Chọn thiết bị BLE đã quét…':'Chưa có kết quả quét';select.append(placeholder);
+      for(const device of scannedBleDevices){const option=document.createElement('option');option.value=device.mac;option.textContent=`${device.name||'Thiết bị BLE'} · ${device.mac}`;select.append(option);}
+      select.disabled=!scannedBleDevices.length;
+    }
     function paintBleNodes(nodes){
       const list=$('ble-list');list.textContent='';
       for(const node of nodes){
         const row=document.createElement('div');row.className='ble-row';row.dataset.room=node.room;
         const label=document.createElement('label');label.textContent=bleNames[node.room]||node.room;
         const status=document.createElement('span');status.className='ble-state';status.textContent=bleStatus(node.online);
-        const input=document.createElement('input');input.value=node.mac;input.setAttribute('list','ble-found');input.setAttribute('aria-label',`MAC BLE ${label.textContent}`);input.spellcheck=false;
+        const input=document.createElement('input');input.value=node.mac;input.setAttribute('aria-label',`MAC BLE ${label.textContent}`);input.spellcheck=false;
+        const picker=document.createElement('div');picker.className='ble-picker';
+        const select=document.createElement('select');select.className='ble-device-select';select.setAttribute('aria-label',`Thiết bị BLE ${label.textContent}`);fillBleChoices(select);
+        select.addEventListener('change',()=>{if(select.value){input.value=select.value;select.value='';}});
+        picker.append(input,select);
         const save=document.createElement('button');save.type='button';save.className='btn sm';save.textContent='Lưu';
         save.addEventListener('click',async()=>{save.disabled=true;try{const d=await fj(`/api/admin/ble-nodes/${node.room}`,{method:'POST',body:JSON.stringify({mac:input.value.trim()})});const current=(d.nodes||[]).find(item=>item.room===node.room);if(current){input.value=current.mac;status.textContent=bleStatus(current.online);}$('ble-message').textContent=d.message||'Đã lưu.';}catch(err){$('ble-message').textContent=err.message;}finally{save.disabled=false;}});
-        row.append(label,status,input,save);list.append(row);
+        row.append(label,status,picker,save);list.append(row);
       }
     }
     async function loadBleNodes(){paintBleNodes((await fj('/api/admin/ble-nodes')).nodes||[]);}
-    $('ble-scan').addEventListener('click',async()=>{const btn=$('ble-scan');btn.disabled=true;$('ble-message').textContent='Đang quét BLE…';try{const devices=(await fj('/api/admin/ble-scan')).devices||[];const found=$('ble-found');found.textContent='';for(const device of devices){const option=document.createElement('option');option.value=device.mac;option.label=`${device.name} · ${device.mac}`;found.append(option);}$('ble-message').textContent=devices.length?`Tìm thấy ${devices.length} thiết bị. Chọn MAC trong ô của phòng tương ứng.`:'Không tìm thấy thiết bị đang phát BLE.';}catch(err){$('ble-message').textContent=err.message;}finally{btn.disabled=false;}});
+    $('ble-scan').addEventListener('click',async()=>{const btn=$('ble-scan');btn.disabled=true;$('ble-message').textContent='Đang quét BLE…';try{const devices=(await fj('/api/admin/ble-scan')).devices||[];scannedBleDevices=devices;document.querySelectorAll('.ble-device-select').forEach(fillBleChoices);$('ble-message').textContent=devices.length?`Tìm thấy ${devices.length} thiết bị. Mở danh sách thiết bị ở phòng tương ứng, chọn MAC rồi nhấn Lưu.`:'Không tìm thấy thiết bị đang phát BLE.';}catch(err){$('ble-message').textContent=err.message;}finally{btn.disabled=false;}});
     if(typeof socket!=='undefined'&&socket)socket.on('node_status',statuses=>{document.querySelectorAll('.ble-row').forEach(row=>{row.querySelector('.ble-state').textContent=bleStatus(statuses[row.dataset.room]);});});
     window.editUser=async(id,cur)=>{const u=prompt('Username mới:',cur);if(u===null)return;const un=u.trim();if(!un){alert('Không được để trống.');return;}const p=prompt('Mật khẩu mới (trống nếu giữ nguyên):','');if(p===null)return;try{const d=await fj(`/api/admin/users/${id}/edit`,{method:'POST',body:JSON.stringify({username:un,password:p.trim()})});renderUsers(d.users||[]);loadLogs();alert(d.message||'Đã cập nhật.');}catch(e){alert(e.message);}};
     window.toggleSuspend=async id=>{try{const d=await fj(`/api/admin/users/${id}/suspend`,{method:'POST'});renderUsers(d.users||[]);loadLogs();alert(d.message||'Đã cập nhật.');}catch(e){alert(e.message);}};
@@ -64,6 +75,21 @@
     $('clear-audit').addEventListener('click',async()=>{if(!confirm('Xóa toàn bộ lịch sử hoạt động & cảnh báo?'))return;try{const d=await fj('/api/admin/logs',{method:'DELETE',body:JSON.stringify({target:'audit'})});auditExp=false;renderAudit(d.audit_logs||[]);renderLogin(d.login_logs||[]);}catch(e){alert(e.message);}});
     $('reload-config').addEventListener('click',()=>loadConfig().catch(e=>alert(e.message)));
     $('config-form').addEventListener('submit',async e=>{e.preventDefault();try{const d=await fj('/api/admin/configs',{method:'POST',body:JSON.stringify({admin_register_code:$('cfg-code').value.trim(),telegram_bot_token:$('cfg-token').value.trim(),telegram_chat_id:$('cfg-chat').value.trim()})});alert(d.message||'Đã lưu.');loadLogs();}catch(err){alert(err.message);}});
+    const weatherForm=$('weather-config-form'),weatherSelect=$('cfg-weather-city'),weatherMessage=$('weather-config-message');
+    if(weatherForm){
+      const weatherSave=$('weather-save');
+      weatherSave.disabled=true;
+      fj('/api/admin/weather-location').then(data=>{
+        for(const item of data.locations){const option=document.createElement('option');option.value=item.key;option.textContent=item.name;weatherSelect.append(option);}
+        weatherSelect.value=data.city||'';weatherSave.disabled=false;
+      }).catch(err=>{weatherMessage.textContent=err.message;});
+      weatherForm.addEventListener('submit',async event=>{
+        event.preventDefault();weatherSave.disabled=true;weatherMessage.textContent='Đang lưu…';
+        try{await fj('/api/admin/weather-location',{method:'POST',body:JSON.stringify({city:weatherSelect.value})});weatherMessage.textContent='Đã lưu địa điểm thời tiết cho hệ thống.';window.dispatchEvent(new Event('weather-location-changed'));}
+        catch(err){weatherMessage.textContent=err.message;}
+        finally{weatherSave.disabled=false;}
+      });
+    }
     loadBleNodes().catch(err=>{$('ble-message').textContent=err.message;});
     Promise.all([loadUsers(),loadLogs(),loadConfig()]).catch(()=>{usersBody.innerHTML='<tr><td colspan="6"><div class="empty">Không tải được dữ liệu — kiểm tra kết nối máy chủ.</div></td></tr>';});
   })();

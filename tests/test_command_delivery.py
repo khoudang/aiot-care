@@ -35,6 +35,30 @@ class DeliveryTests(unittest.TestCase):
     def setUp(self):
         self.iot = load_iot()
 
+    def test_ack_reports_the_original_browser_request(self):
+        iot = self.iot
+        iot.set_device('patient', 'light', False, request_id='browser-2')
+        ident = next(iter(iot._pending_commands['patient']))
+        iot._make_notify_handler('patient')(None, json.dumps(
+            {'ack': ident, 'status': 'applied'}).encode())
+        iot._emit.assert_called_with('command_result', {
+            'room': 'patient', 'device': 'light',
+            'request_id': 'browser-2', 'status': 'applied'})
+
+    def test_rapid_switches_keep_inflight_and_only_latest_unsent_target(self):
+        iot = self.iot
+        iot.set_device('living', 'light', True)
+        ident = next(iter(iot._pending_commands['living']))
+        iot._pending_commands['living'][ident]['sent'] = 1
+        for n in range(100):
+            iot.set_device('living', 'light', bool(n % 2))
+        pending = iot._pending_commands['living']
+        self.assertIn(ident, pending)
+        self.assertLessEqual(len(pending), 2)
+        self.assertEqual(json.loads(list(pending.values())[-1]['text'])['state'], 1)
+        self.assertFalse(any(call.args[0] == 'command_error' for call in iot._emit.call_args_list))
+        self.assertFalse(any(call.args[0] == 'room_update' for call in iot._emit.call_args_list))
+
     def test_write_failure_reconnect_busy_then_application_ack(self):
         iot = self.iot
         with patch.object(iot.time, 'monotonic', return_value=10):

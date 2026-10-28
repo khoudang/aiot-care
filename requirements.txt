@@ -1,9 +1,9 @@
 flask
 flask-socketio
-opencv-python
-mediapipe
+opencv-contrib-python==4.11.0.86
+mediapipe==0.10.21
 requests
 bleak
 pyserial
-numpy
+numpy==1.26.4
 python-dotenv

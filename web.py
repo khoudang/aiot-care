@@ -52,6 +52,43 @@ def is_admin_self_target(target_user_id):
 
 
 def register_web(app, socketio):
+    weather_locations = {
+        "hcm": ("TP. Hồ Chí Minh", 10.8231, 106.6297),
+        "hanoi": ("Hà Nội", 21.0285, 105.8542),
+        "danang": ("Đà Nẵng", 16.0544, 108.2022),
+        "cantho": ("Cần Thơ", 10.0452, 105.7469),
+        "hue": ("Huế", 16.4637, 107.5909),
+        "nhatrang": ("Nha Trang", 12.2388, 109.1967),
+        "haiphong": ("Hải Phòng", 20.8449, 106.6881),
+        "dalat": ("Đà Lạt", 11.9404, 108.4583),
+    }
+
+    @app.route("/api/weather-location")
+    @login_required
+    def weather_location():
+        city = get_config_value("weather_city", "")
+        item = weather_locations.get(city)
+        response = jsonify({"ok": True, "city": city if item else "",
+                            "name": item[0] if item else "",
+                            "latitude": item[1] if item else None,
+                            "longitude": item[2] if item else None})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.route("/api/admin/weather-location", methods=["GET", "POST"])
+    @admin_required
+    def admin_weather_location():
+        if request.method == "POST":
+            city = (request.get_json(silent=True) or {}).get("city")
+            if not isinstance(city, str) or city and city not in weather_locations:
+                return jsonify({"ok": False, "message": "Địa điểm không hợp lệ."}), 400
+            set_config_value("weather_city", city)
+            log_audit("Cập nhật địa điểm thời tiết", user_id=session.get("user_id"))
+        response = jsonify({"ok": True, "city": get_config_value("weather_city", ""),
+                            "locations": [{"key": key, "name": item[0]} for key, item in weather_locations.items()]})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     # ----------------------------------------------------------------- #
     #  Trang / xác thực
     # ----------------------------------------------------------------- #
@@ -450,6 +487,7 @@ def register_web(app, socketio):
             value=data.get("value"),
             source="manual",
             user_id=session.get("user_id"),
+            request_id=data.get("request_id"),
         )
 
     @socketio.on("set_camera_mode")

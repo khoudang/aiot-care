@@ -123,9 +123,9 @@ void setup() {
 }
 
 void loop() {
-  drainCommands(handleCommand, pNotifyChar);
+  const bool commandChanged = drainCommands(handleCommand, pNotifyChar);
   static unsigned long lastSend = 0;
-  if (millis() - lastSend > 1000) {
+  if (commandChanged || millis() - lastSend > 1000) {
     lastSend = millis();
 
     float t = sht31.readTemperature();

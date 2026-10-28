@@ -1,0 +1,55 @@
+[
+  {
+    "file": "home-living.jpg",
+    "author": "Peter Vang",
+    "source": "https://www.pexels.com/photo/bright-and-spacious-modern-living-room-interior-37184168/",
+    "download": "https://images.pexels.com/photos/37184168/pexels-photo-37184168.jpeg?auto=compress&cs=srgb&w=1600",
+    "license": "https://www.pexels.com/license/",
+    "bytes": 219654,
+    "purpose": "Stock home photograph; not a project installation."
+  },
+  {
+    "file": "home-kitchen.jpg",
+    "author": "Curtis Adams",
+    "source": "https://www.pexels.com/photo/modern-kitchen-interior-design-10827396/",
+    "download": "https://images.pexels.com/photos/10827396/pexels-photo-10827396.jpeg?auto=compress&cs=srgb&w=1600",
+    "license": "https://www.pexels.com/license/",
+    "bytes": 201474,
+    "purpose": "Stock home photograph; not a project installation."
+  },
+  {
+    "file": "home-bedroom.jpg",
+    "author": "Max Vakhtbovych",
+    "source": "https://www.pexels.com/photo/bedroom-interior-with-bed-against-window-in-house-6956623/",
+    "download": "https://images.pexels.com/photos/6956623/pexels-photo-6956623.jpeg?auto=compress&cs=srgb&w=1600",
+    "license": "https://www.pexels.com/license/",
+    "bytes": 140559,
+    "purpose": "Stock home photograph; not a project installation."
+  },
+  {
+    "file": "home-phone.jpg",
+    "author": "Polina Tankilevitch",
+    "source": "https://www.pexels.com/photo/a-person-holding-a-smartphone-6927559/",
+    "download": "https://images.pexels.com/photos/6927559/pexels-photo-6927559.jpeg?auto=compress&cs=srgb&w=1600",
+    "license": "https://www.pexels.com/license/",
+    "bytes": 80895,
+    "purpose": "Stock home photograph; not a project installation."
+  },
+  {
+    "file": "home-kitchen-detail.jpg",
+    "author": "Max Vakhtbovych",
+    "source": "https://www.pexels.com/photo/kitchen-interior-8089190/",
+    "download": "https://images.pexels.com/photos/8089190/pexels-photo-8089190.jpeg?auto=compress&cs=srgb&w=1600",
+    "license": "https://www.pexels.com/license/",
+    "bytes": 147503,
+    "purpose": "Stock home photograph; not a project installation."
+  },
+  {
+    "file": "home-office-bright.jpg",
+    "author": "Curtis Adams",
+    "source": "https://www.pexels.com/photo/comfortable-home-office-15242037/",
+    "download": "https://images.pexels.com/photos/15242037/pexels-photo-15242037.jpeg?auto=compress&cs=srgb&w=1600",
+    "license": "https://www.pexels.com/license/",
+    "purpose": "Stock home photograph; not a project installation."
+  }
+]

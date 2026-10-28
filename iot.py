@@ -1,18 +1,3 @@
-"""
-iot.py — Lớp IoT của AIoT Care Station.
-
-Chức năng:
-  * Kết nối BLE tới 3 node (patient / living / kitchen), nhận telemetry JSON,
-    gửi lệnh điều khiển thiết bị theo từng phòng.
-  * Camera phòng người bệnh: bật theo PIR (auto) hoặc toggle thủ công qua web;
-    chạy MediaPipe Pose để bám người (tracking) + phát hiện té ngã, và
-    MediaPipe Hands (giãn cách frame) để nhận cử chỉ điều khiển đèn/quạt.
-  * Gửi góc servo pan qua UART tới ESP(1) để camera bám người trái/phải.
-  * Máy trạng thái cảnh báo 3 mức (bình thường / nhẹ / khẩn cấp) + chờ xác nhận,
-    tích hợp Telegram.
-
-Không dùng MQTT. Toàn bộ realtime đẩy lên web bằng Socket.IO.
-"""
 
 import asyncio
 import json
@@ -376,6 +361,10 @@ def _make_notify_handler(room):
                         pending = _pending_commands[room].get(payload["ack"])
                         if pending and payload.get("status") in ("applied", "rejected"):
                             del _pending_commands[room][payload["ack"]]
+                            command = json.loads(pending["text"])
+                            if command.get("request_id"):
+                                _emit("command_result", {"room": room, "device": command["cmd"],
+                                      "request_id": command["request_id"], "status": payload["status"]})
                             if payload["status"] == "rejected":
                                 _fail_restoration(room)
                                 _emit("command_error", {"room": room, "message": "Node rejected command"})
@@ -519,14 +508,30 @@ def _ble_thread():
     ble_loop.run_until_complete(_ble_main())
 
 
-def enqueue_command(room, text):
+def enqueue_command(room, text, latest=False):
     global _command_sequence
     if room not in command_queues:
         return False
     with _delivery_lock:
+        command = json.loads(text)
+        if latest:
+            # Preserve the in-flight write; discard only obsolete unsent targets.
+            for ident, pending in list(_pending_commands[room].items()):
+                if pending["sent"] is None and json.loads(pending["text"])["cmd"] == command["cmd"]:
+                    del _pending_commands[room][ident]
+            retained = []
+            while not command_queues[room].empty():
+                queued = command_queues[room].get_nowait()
+                try:
+                    retain = json.loads(queued).get("id") in _pending_commands[room]
+                except (ValueError, AttributeError):
+                    retain = True
+                if retain:
+                    retained.append(queued)
+            for queued in retained:
+                command_queues[room].put_nowait(queued)
         if len(_pending_commands[room]) >= 20:
             return False
-        command = json.loads(text)
         _command_sequence = _command_sequence % 0xFFFFFFFF + 1
         command["id"] = _command_sequence
         text = json.dumps(command, separators=(",", ":"))
@@ -601,13 +606,15 @@ _DEVICE_LABELS = {
 }
 
 
-def set_device(room, device, state=None, value=None, source="manual", user_id=None, silent=False):
+def set_device(room, device, state=None, value=None, source="manual", user_id=None, silent=False, request_id=None):
     """Queue a validated command; only node telemetry confirms device state."""
     try:
         room, cmd = build_command(room, device, state, value)
     except ValueError as exc:
         _emit("command_error", {"room": room, "device": device, "message": str(exc)})
         return
+    if isinstance(request_id, str) and len(request_id) <= 80:
+        cmd["request_id"] = request_id
     if source != "auto" and (_emergency_snapshot is not None or
                              room == "patient" and device == "buzzer" and
                              (AI.get("fall") or _fall_buzzer_saved is not None)):
@@ -624,9 +631,9 @@ def set_device(room, device, state=None, value=None, source="manual", user_id=No
         return
     # Fan sliders can produce many values in quick succession. Keep only the
     # newest desired speed so stale pending writes cannot fill the BLE queue.
-    if device in ("fan", "exhaust"):
+    if source == "auto" and device in ("fan", "exhaust"):
         _cancel_commands(room, device)
-    if not enqueue_command(room, json.dumps(cmd, ensure_ascii=False)):
+    if not enqueue_command(room, json.dumps(cmd, ensure_ascii=False), latest=source != "auto"):
         _emit("command_error", {"room": room, "device": device, "message": "Command queue full"})
         return False
     _last_cmd[key] = (sig, now)
@@ -638,7 +645,7 @@ def set_device(room, device, state=None, value=None, source="manual", user_id=No
         suffix = " bằng cử chỉ" if source == "gesture" else ""
         log_audit(f"{act} {label}{detail}{suffix}", user_id=user_id)
 
-    _emit("room_update", {"room": room, "data": dict(ROOMS[room])})
+    # Device telemetry, not command acceptance, publishes the confirmed state.
 
 
 def queue_command(command, source="manual", gesture="manual_click", user_id=None):
@@ -1323,16 +1330,31 @@ def process_camera_stream():
     pose = None
     hands = None
     draw = None
-    if mp is not None:
-        draw = mp.solutions.drawing_utils
-        if ENABLE_TRACKING or ENABLE_FALL:
-            pose = mp.solutions.pose.Pose(model_complexity=0,
-                                          min_detection_confidence=0.5,
-                                          min_tracking_confidence=0.5)
-        if ENABLE_GESTURE:
-            hands = mp.solutions.hands.Hands(max_num_hands=2, model_complexity=0,
-                                             min_detection_confidence=0.65,
-                                             min_tracking_confidence=0.55)
+    ai_available = False
+    try:
+        if mp is None or not hasattr(mp, "solutions"):
+            raise RuntimeError("MediaPipe hiện tại không hỗ trợ solutions; camera chỉ hiển thị hình, chưa có nhận diện AI.")
+        if mp is not None:
+            draw = mp.solutions.drawing_utils
+            if ENABLE_TRACKING or ENABLE_FALL:
+                pose = mp.solutions.pose.Pose(model_complexity=0,
+                                              min_detection_confidence=0.5,
+                                              min_tracking_confidence=0.5)
+            if ENABLE_GESTURE:
+                hands = mp.solutions.hands.Hands(max_num_hands=2, model_complexity=0,
+                                                 min_detection_confidence=0.65,
+                                                 min_tracking_confidence=0.55)
+        ai_available = True
+    except Exception as exc:
+        print("[camera] AI unavailable:", exc)
+        for model in (pose, hands):
+            if model is not None:
+                model.close()
+        pose = hands = draw = None
+        _push_alert("camera", f"AI camera chưa sẵn sàng: {exc}", "camera")
+    with state_lock:
+        AI["ai_available"] = ai_available
+    _emit("ai_status", dict(AI))
 
     _emit("camera_sync", {"active": True, "mode": camera_mode})
 
@@ -1421,6 +1443,7 @@ def process_camera_stream():
         print("[camera] error:", exc)
         _push_alert("camera", f"Lỗi camera: {exc}", "camera")
     finally:
+        camera_active = False
         cap.release()
         if pose is not None:
             pose.close()
