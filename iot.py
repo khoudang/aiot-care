@@ -1002,7 +1002,14 @@ def _observe_restoration(room, payload):
         _restoration_seen[room] = now
     else:
         _restoration_seen.pop(room, None)
-    if set(_restoration_seen) == {"patient", "living"}:
+    # Do not report global restoration until the kitchen node itself
+    # confirms that the local safety latch has left WAIT_CONFIRM.
+    with _delivery_lock:
+        kitchen_command_pending = bool(_pending_commands["kitchen"])
+    kitchen_recovered = (NODE_ONLINE["kitchen"] and
+                         ROOMS["kitchen"].get("phase") == "normal" and
+                         not kitchen_command_pending)
+    if set(_restoration_seen) == {"patient", "living"} and kitchen_recovered:
         _emergency_snapshot = None
         _restoration_started = None
         _restoration_seen.clear()
