@@ -69,11 +69,21 @@ bool handleCommand(const String &value) {
           }
           // Safety output overrides manual commands during warning/emergency.
           if (kitchen.phase != KitchenState::NORMAL) {
-            bool mute = false;
-            if (commandSwitch(doc, "buzzer", mute) && !mute) {
+            bool enabled = false;
+            if (commandSwitch(doc, "buzzer", enabled) && !enabled) {
               kitchen.alarmMuted = true;
               applyOutputs();
               return true;
+            }
+            // At WARNING only light/window may be changed by the user.
+            // Safety mandates exhaust >=70%; refuse fan/exhaust changes.
+            if (kitchen.phase == KitchenState::WARNING) {
+              if (commandSwitch(doc, "window", enabled)) {
+                windowOpen = enabled; applyOutputs(); return true;
+              }
+              if (commandSwitch(doc, "light", enabled)) {
+                lightOn = enabled; applyOutputs(); return true;
+              }
             }
             return false;
           }
