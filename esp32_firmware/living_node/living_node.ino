@@ -20,10 +20,12 @@ bool deviceConnected = false;
 // Pinout theo sơ đồ Excel
 const int PIN_SDA = 8;
 const int PIN_SCL = 9;
-const int PIN_PIR = 10;
+const int PIN_RADAR_OT2 = 1;  // HLK-LD2420 presence output, primary
+const int PIN_RADAR_OT1 = 0;  // Connected, not used by automation
+// GPIO2: additional radar wire reported as UART RX; role unverified, not used.
 const int PIN_LIGHT_RELAY = 7;
-const int PIN_FAN_IN1 = 1;
-const int PIN_FAN_IN2 = 2;
+const int PIN_FAN_IN1 = 5;
+const int PIN_FAN_IN2 = 6;
 
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
 BH1750 lightMeter;
@@ -74,7 +76,8 @@ void setup() {
   Serial.println("\n--- BOOTING LIVING NODE ---");
 
   Serial.println("[1] Init Pins...");
-  pinMode(PIN_PIR, INPUT);
+  pinMode(PIN_RADAR_OT2, INPUT);
+  pinMode(PIN_RADAR_OT1, INPUT);
   pinMode(PIN_LIGHT_RELAY, OUTPUT);
   pinMode(PIN_FAN_IN1, OUTPUT);
   pinMode(PIN_FAN_IN2, OUTPUT);
@@ -128,7 +131,7 @@ void loop() {
     float t = sht31.readTemperature();
     float h = sht31.readHumidity();
     float lux = lightMeter.readLightLevel();
-    bool motion = digitalRead(PIN_PIR) == HIGH;
+    bool motion = digitalRead(PIN_RADAR_OT2) == HIGH; // Semantics: presence, not PIR motion
 
     // Local automation runs even when BLE is disconnected.
     living.update(millis(), motion, lux, t, h, auto_mode, lightOn, fanPwm);
