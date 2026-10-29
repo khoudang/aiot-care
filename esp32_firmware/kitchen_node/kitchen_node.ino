@@ -16,9 +16,11 @@ BLECharacteristic* pNotifyChar = NULL;
 bool deviceConnected = false;
 
 // Pinout node bếp cập nhật; BLE MAC dự kiến: E8:3D:C1:9D:A5:16.
-const int PIN_MQ2_AO = 0;
-const int PIN_MQ2_DO = 1;
-const int PIN_FLAME_DO = 2;
+// MP-2: 5V module; AO -> R1 1k -> GPIO0, R2 1.5k GPIO0 -> GND (0.6 x AO).
+// DO GPIO1 is physically wired but intentionally NEVER read: may output 5V. Disconnect/level-shift it.
+const int PIN_MP2_AO = 0;
+const int PIN_FLAME_AO = 3;  // 3.3V flame module, optional diagnostic ADC
+const int PIN_FLAME_DO = 6; // Active LOW, flame detected
 const int PIN_WINDOW_SERVO = 4;
 const int PIN_LIGHT_RELAY = 20;
 const int PIN_BUZZER = 5;
@@ -102,8 +104,8 @@ void setup() {
   Serial.println("\n--- BOOTING KITCHEN NODE ---");
   
   Serial.println("[1] Init Pins...");
-  pinMode(PIN_MQ2_AO, INPUT);
-  pinMode(PIN_MQ2_DO, INPUT);
+  pinMode(PIN_MP2_AO, INPUT);
+  pinMode(PIN_FLAME_AO, INPUT);
   pinMode(PIN_FLAME_DO, INPUT);
   pinMode(PIN_LIGHT_RELAY, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
@@ -146,16 +148,14 @@ void loop() {
   static unsigned long lastSample = 0;
   static unsigned long lastSend = 0;
   static int gas = 0;
-  static bool smoke = false;
   static bool flame = false;
   unsigned long now = millis();
   if (now - lastSample >= 100) {
     lastSample = now;
-    gas = analogRead(PIN_MQ2_AO);
-    // MQ-2 LM393 comparator output on this module is active LOW.
-    smoke = digitalRead(PIN_MQ2_DO) == LOW;
+    gas = analogRead(PIN_MP2_AO); // Raw ADC after divider, NOT ppm. Recalibrate 1500/2500 thresholds.
     flame = digitalRead(PIN_FLAME_DO) == LOW;
-    kitchen.update(now, gas, smoke, flame);
+    // MP-2 DO does not participate. Flame AO is connected but not used for alarm decisions.
+    kitchen.update(now, gas, false, flame);
   }
   drainCommands(handleCommand, pNotifyChar);
   applyOutputs();
@@ -165,7 +165,7 @@ void loop() {
     snprintf(payload, sizeof(payload),
       "{\"room\":\"kitchen\",\"gas\":%d,\"smoke\":%s,\"flame\":%s,"
       "\"window\":%s,\"exhaust\":%s,\"exhaust_speed\":%d,\"light\":%s,\"buzzer\":%s,\"emergency\":%s}",
-      gas, smoke ? "true" : "false", flame ? "true" : "false",
+      gas, "false", flame ? "true" : "false",
       windowOpen ? "true" : "false", exhaustOn ? "true" : "false",
       (exhaustOn ? exhaustPwm * 100 / 255 : 0),
       lightOn ? "true" : "false", (buzzerOn || warningGas) ? "true" : "false",
