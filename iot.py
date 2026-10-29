@@ -929,16 +929,17 @@ def confirm_safe(user_id=None):
         _emit("alert_state", {"level": alert_level,
                               "message": "Node bếp chưa sẵn sàng; cần trạng thái WAIT_CONFIRM mới nhất."})
         return
+    if _restoration_started is not None:
+        if now - _restoration_started < COMMAND_TTL:
+            return
+        _fail_restoration("patient")
+    # The gateway never replays a stale confirmation on reconnect.
     _cancel_commands("kitchen")
     if not enqueue_command("kitchen", json.dumps(
             {"cmd": "confirm_safe", "event_id": kitchen["event_id"]})):
         _emit("command_error", {"room": "kitchen", "message": "Không gửi được xác nhận."})
         return
     if _emergency_snapshot is not None:
-        if _restoration_started is not None:
-            if now - _restoration_started < COMMAND_TTL:
-                return
-            _fail_restoration("patient")
         _restoration_started = now
         if not AI.get("fall") and _fall_buzzer_saved is not None:
             _fall_restore_target = _fall_buzzer_saved
