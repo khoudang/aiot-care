@@ -36,6 +36,8 @@ bool &lightOn = kitchen.lightOn;
 bool &buzzerOn = kitchen.buzzerOn;
 bool &emergency = kitchen.emergency;
 bool &warningGas = kitchen.warningGas;
+int latestGas = 0;
+bool latestFlame = false;
 
 void applyOutputs() {
   windowServo.write(windowOpen ? 90 : 0);
@@ -60,8 +62,13 @@ bool handleCommand(const String &value) {
       if (value.length() > 0) {
         StaticJsonDocument<384> doc;
         if (!deserializeJson(doc, value)) {
-          // During emergency, only a buzzer-off command is allowed; safety outputs stay latched.
-          if (emergency || warningGas) {
+          const char *cmdName = doc["cmd"] | "";
+          if (strcmp(cmdName, "confirm_safe") == 0) {
+            if (!doc["event_id"].is<uint32_t>()) return false;
+            return kitchen.confirm(doc["event_id"].as<uint32_t>(), latestGas, latestFlame);
+          }
+          // Safety output overrides manual commands during warning/emergency.
+          if (kitchen.phase != KitchenState::NORMAL) {
             bool mute = false;
             if (commandSwitch(doc, "buzzer", mute) && !mute) {
               kitchen.alarmMuted = true;
@@ -103,6 +110,7 @@ void setup() {
   delay(3000);
   Serial.println("\n--- BOOTING KITCHEN NODE ---");
   
+  kitchen.seedEvent(esp_random());
   Serial.println("[1] Init Pins...");
   pinMode(PIN_MP2_AO, INPUT);
   pinMode(PIN_FLAME_AO, INPUT);
@@ -155,6 +163,7 @@ void loop() {
     gas = analogRead(PIN_MP2_AO); // Raw ADC after divider, NOT ppm. Recalibrate 1500/2500 thresholds.
     flame = digitalRead(PIN_FLAME_DO) == LOW;
     // MP-2 DO does not participate. Flame AO is connected but not used for alarm decisions.
+    latestGas = gas; latestFlame = flame;
     kitchen.update(now, gas, false, flame);
   }
   drainCommands(handleCommand, pNotifyChar);
@@ -171,5 +180,14 @@ void loop() {
       lightOn ? "true" : "false", (buzzerOn || warningGas) ? "true" : "false",
       emergency ? "true" : "false");
     notifyJson(pNotifyChar, payload);
+    char safetyPayload[160];
+    snprintf(safetyPayload, sizeof(safetyPayload),
+      "{\"room\":\"kitchen\",\"event_id\":%lu,\"phase\":\"%s\",\"alarm_muted\":%s}",
+      (unsigned long)kitchen.eventId,
+      kitchen.phase == KitchenState::WAIT_CONFIRM ? "wait_confirm" :
+      kitchen.phase == KitchenState::EMERGENCY ? "emergency" :
+      kitchen.phase == KitchenState::WARNING ? "warning" : "normal",
+      kitchen.alarmMuted ? "true" : "false");
+    notifyJson(pNotifyChar, safetyPayload);
   }
 }
