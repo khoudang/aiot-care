@@ -6,65 +6,53 @@ Bảng này được đối chiếu với hằng `PIN_*` của ba sketch hiện 
 trên ESP32-C3, không phải thứ tự chân vật lý trên board.** Kiểm tra nhãn in trên board.
 Không sử dụng sơ đồ cũ trong thư mục `hardware/reference/` để đấu node bếp hiện tại.
 
-## Phòng bếp — `kitchen`
+## Phòng bếp — `kitchen` (đã xác nhận 29/10/2026)
 
-Tên BLE: `AIoT_Kitchen_Node`. MAC dự kiến: **`E8:3D:C1:9D:A5:16`**;
-đối chiếu MAC thực tế trong Serial Monitor và đặt `BLE_MAC_KITCHEN` trên gateway.
+Tên BLE: `AIoT_Kitchen_Node`. MAC thực tế cần kiểm tra qua Serial Monitor.
 
-| Thiết bị | Tín hiệu | ESP32-C3 | Quy ước trong firmware |
+| Thiết bị | Tín hiệu | ESP32-C3 | Ghi chú |
 | --- | --- | --- | --- |
-| MQ-2 (người dùng ghi MP-2) | AO | GPIO0 | Đọc ADC thô, chưa quy đổi ppm |
-| MQ-2 | DO | GPIO1 | HIGH = báo khói theo code hiện tại |
-| Cảm biến lửa | DO | GPIO2 | LOW = phát hiện lửa |
-| Servo SG90 cửa sổ | Signal | GPIO4 | 0° đóng, 90° mở theo lệnh servo |
-| Buzzer chủ động | Signal | GPIO5 | HIGH bật, LOW tắt; loại đã thử có tiếng |
-| Driver quạt hút | IN1/PWM | GPIO7 | PWM 0–255; 255 khi cảnh báo khẩn cấp |
+| MP-2 (nguồn 5 V) | AO | GPIO0 | Qua R1=1 kΩ từ AO đến GPIO0, R2=1,5 kΩ từ GPIO0 xuống GND: V_GPIO0 ≈ 0,6×V_AO; ADC thô, không phải ppm |
+| MP-2 | DO | GPIO1 | Có dây theo sơ đồ thực tế, **firmware không đọc**; phải ngắt dây hoặc hạ mức nếu DO có thể lên 5 V |
+| Cảm biến lửa (nguồn 3,3 V) | AO | GPIO3 | Dây đã xác nhận; hiện chưa dùng để kích hoạt báo động |
+| Cảm biến lửa (nguồn 3,3 V) | DO | GPIO6 | LOW = phát hiện lửa (phải kiểm thử mức logic thực tế) |
+| Servo cửa sổ | Signal | GPIO4 | 0° đóng, 90° mở |
+| Buzzer | Signal | GPIO5 | HIGH bật, LOW tắt |
+| Driver quạt hút | IN1/PWM | GPIO7 | PWM 0–255 |
 | Driver quạt hút | IN2 | GPIO8 | LOW |
-| Relay đèn | IN | GPIO20 | HIGH bật, LOW tắt theo code |
+| Relay đèn | IN | GPIO20 | HIGH bật theo firmware |
 
-```text
-MQ-2 AO ───────────── GPIO0       SG90 Signal ───── GPIO4
-MQ-2 DO ───────────── GPIO1       Buzzer Signal ─── GPIO5
-Flame DO ──────────── GPIO2       Quạt IN1 ──────── GPIO7
-Relay đèn IN ──────── GPIO20      Quạt IN2 ──────── GPIO8
-```
+**Logic khí:** chỉ MP-2 AO tham gia xét mức (ADC 1500/2500 hiện là ngưỡng thử nghiệm *sau chia áp*, cần hiệu chuẩn lại). Cảm biến lửa kích hoạt theo DO. Các GPIO chỉ ghi kết nối thực tế; firmware chưa được nạp/kiểm chứng trên board. **Không dùng mô hình quạt thông thường làm giải pháp an toàn trong môi trường rò gas thật.**
 
-## Phòng người bệnh — `patient`
+## Phòng người bệnh — `patient` (đã xác nhận)
 
-Tên BLE: `AIoT_Patient_Node`. Cấu hình địa chỉ thực tế bằng `BLE_MAC_PATIENT`.
+| Thiết bị | GPIO |
+| --- | --- |
+| SHT30/SHT31 SDA / SCL | GPIO3 / GPIO4 |
+| PIR OUT | GPIO5 |
+| Buzzer | GPIO0 |
+| Servo camera | GPIO6 |
+| Quạt IN1/PWM / IN2 | GPIO9 / GPIO10 |
+| Relay đèn | GPIO8 |
+| UART RX / TX | GPIO20 / GPIO21 |
 
-| Thiết bị | Tín hiệu | ESP32-C3 | Ghi chú |
-| --- | --- | --- | --- |
-| SHT30/SHT31 | SDA | GPIO3 | I²C, địa chỉ code dùng `0x44` |
-| SHT30/SHT31 | SCL | GPIO4 | Chung bus I²C |
-| PIR | OUT | GPIO5 | HIGH = có chuyển động |
-| Buzzer | Signal | GPIO0 | HIGH bật, LOW tắt |
-| Driver quạt | IN1 / IN2 | GPIO9 / GPIO10 | PWM trên IN1; IN2 LOW |
-| Relay đèn | IN | GPIO8 | HIGH bật, LOW tắt theo code |
-| Servo camera | Signal | GPIO6 | Khởi động ở 90° |
-| UART từ gateway | RX | GPIO20 | Nối TX của Pi/USB–UART vào đây |
-| UART về gateway | TX | GPIO21 | Nối RX của Pi/USB–UART nếu cần |
+UART từ gateway dùng 115200 baud, chuỗi góc ví dụ `A90\n`.
 
-UART dùng **115200 baud, 8N1**, chuỗi ví dụ `A90\n` (kết thúc bằng ký tự xuống dòng).
-Nối chung GND. `UART_PORT` phải là cổng thực tế; USB dùng nạp sketch không mặc nhiên
-là UART1 trên GPIO20/21.
+## Phòng khách — `living` (đã xác nhận)
 
-## Phòng khách — `living`
-
-Tên BLE: `AIoT_Living_Node`. Cấu hình địa chỉ thực tế bằng `BLE_MAC_LIVING`.
-
-| Thiết bị | Tín hiệu | ESP32-C3 | Ghi chú |
-| --- | --- | --- | --- |
-| SHT30/SHT31 và BH1750 | SDA | GPIO8 | Chung bus; địa chỉ `0x44` và `0x23` |
-| SHT30/SHT31 và BH1750 | SCL | GPIO9 | Chung bus I²C |
-| PIR | OUT | GPIO10 | HIGH = có chuyển động |
-| Relay đèn | IN | GPIO7 | HIGH bật, LOW tắt theo code |
-| Driver quạt | IN1 / IN2 | GPIO1 / GPIO2 | PWM trên IN1; IN2 LOW |
+| Thiết bị | GPIO | Ghi chú |
+| --- | --- | --- |
+| SHT30/SHT31 + BH1750 SDA/SCL | GPIO8 / GPIO9 | I²C chung |
+| HLK-LD2420 OT2 | GPIO1 | Tín hiệu hiện diện chính, dùng trong firmware |
+| HLK-LD2420 OT1 | GPIO0 | Có dây, không dùng trong tự động hóa |
+| Dây radar khác, được báo là UART RX | GPIO2 | **Chưa xác minh tên/tác dụng, không dùng** |
+| Relay đèn | GPIO7 | HIGH bật theo firmware |
+| Quạt IN1/PWM / IN2 | GPIO5 / GPIO6 | PWM ở IN1 |
 
 ## Nguồn và mức tín hiệu
 
 - GPIO ESP32-C3 dùng mức logic 3,3 V. Kiểm tra mức AO/DO thực tế của module, đặc biệt
-  module MQ-2 cấp 5 V; dùng mạch hạ mức phù hợp nếu tín hiệu vượt mức cho phép của GPIO.
+  module MP-2 cấp 5 V; dùng mạch hạ mức phù hợp nếu tín hiệu vượt mức cho phép của GPIO.
 - Servo, quạt và tải đèn cần nguồn/driver phù hợp; các chân trên bảng là chân tín hiệu,
   không phải chân cấp công suất. Không cấp nguồn động cơ trực tiếp từ GPIO.
 - Chọn điện áp VCC theo module thực tế, nối chung GND cho nguồn và tín hiệu liên quan.

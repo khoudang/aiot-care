@@ -143,7 +143,7 @@ ROOMS = {
     "kitchen": {
         "gas": None, "smoke": False, "flame": False,
         "window": False, "exhaust": False, "exhaust_speed": None,
-        "light": False, "buzzer": False,
+        "light": False, "buzzer": False, "phase": "unknown", "event_id": None,
         "updated_at": 0,
     },
 }
@@ -297,6 +297,11 @@ def apply_node_payload(room, payload):
         for key in _BOOL_KEYS:
             if key in payload and key in r:
                 r[key] = safe_bool(payload[key])
+        if room == "kitchen":
+            if payload.get("phase") in ("normal", "warning", "emergency", "wait_confirm"):
+                r["phase"] = payload["phase"]
+            if type(payload.get("event_id")) is int and 0 <= payload["event_id"] <= 0xFFFFFFFF:
+                r["event_id"] = payload["event_id"]
         r["updated_at"] = now_ts()
 
     # trung bình trượt cho gas (giảm báo giả)
@@ -333,6 +338,10 @@ def set_node_online(room, online):
     if room not in ROOMS:
         return
     _restoration_seen.pop(room, None)
+    if room == "kitchen" and not online:
+        _cancel_commands("kitchen")
+        ROOMS["kitchen"]["phase"] = "unknown"
+        ROOMS["kitchen"]["event_id"] = None
     changed = NODE_ONLINE.get(room) != online
     NODE_ONLINE[room] = online
     if changed:
@@ -914,11 +923,23 @@ def confirm_safe(user_id=None):
         _emit("alert_state", {"level": alert_level,
                               "message": "Cần dữ liệu bếp bình thường liên tục ít nhất 10 giây và còn cập nhật."})
         return
+    kitchen = ROOMS["kitchen"]
+    if (not NODE_ONLINE["kitchen"] or kitchen.get("phase") != "wait_confirm"
+            or type(kitchen.get("event_id")) is not int):
+        _emit("alert_state", {"level": alert_level,
+                              "message": "Node bếp chưa sẵn sàng; cần trạng thái WAIT_CONFIRM mới nhất."})
+        return
+    if _restoration_started is not None:
+        if now - _restoration_started < COMMAND_TTL:
+            return
+        _fail_restoration("patient")
+    # The gateway never replays a stale confirmation on reconnect.
+    _cancel_commands("kitchen")
+    if not enqueue_command("kitchen", json.dumps(
+            {"cmd": "confirm_safe", "event_id": kitchen["event_id"]})):
+        _emit("command_error", {"room": "kitchen", "message": "Không gửi được xác nhận."})
+        return
     if _emergency_snapshot is not None:
-        if _restoration_started is not None:
-            if now - _restoration_started < COMMAND_TTL:
-                return
-            _fail_restoration("patient")
         _restoration_started = now
         if not AI.get("fall") and _fall_buzzer_saved is not None:
             _fall_restore_target = _fall_buzzer_saved
@@ -981,7 +1002,14 @@ def _observe_restoration(room, payload):
         _restoration_seen[room] = now
     else:
         _restoration_seen.pop(room, None)
-    if set(_restoration_seen) == {"patient", "living"}:
+    # Do not report global restoration until the kitchen node itself
+    # confirms that the local safety latch has left WAIT_CONFIRM.
+    with _delivery_lock:
+        kitchen_command_pending = bool(_pending_commands["kitchen"])
+    kitchen_recovered = (NODE_ONLINE["kitchen"] and
+                         ROOMS["kitchen"].get("phase") == "normal" and
+                         not kitchen_command_pending)
+    if set(_restoration_seen) == {"patient", "living"} and kitchen_recovered:
         _emergency_snapshot = None
         _restoration_started = None
         _restoration_seen.clear()
