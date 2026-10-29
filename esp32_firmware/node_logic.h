@@ -3,41 +3,70 @@
 #include <math.h>
 
 struct KitchenState {
+  enum Phase : uint8_t { NORMAL, WARNING, EMERGENCY, WAIT_CONFIRM };
+  Phase phase = NORMAL;
   bool windowOpen = false, exhaustOn = false, lightOn = false, buzzerOn = false;
   int exhaustPwm = 0;
-  bool emergency = false, warningGas = false, recovering = false, alarmMuted = false;
+  bool emergency = false, warningGas = false, alarmMuted = false;
   bool savedWindow = false, savedExhaust = false, savedLight = false, savedBuzzer = false;
   int savedExhaustPwm = 0;
-  uint32_t safeSince = 0;
-
-  void update(uint32_t now, int gas, bool smoke, bool flame) {
-    warningGas = gas >= 1500;
-    bool danger = gas >= 2500 || smoke || flame;
-    if (!warningGas && !danger) alarmMuted = false;
-    if (danger && !emergency) {
-      alarmMuted = false;
-      savedWindow = windowOpen; savedExhaust = exhaustOn; savedExhaustPwm = exhaustPwm;
-      savedLight = lightOn; savedBuzzer = buzzerOn;
-      emergency = true;
+  uint32_t safeSince = 0, eventId = 0;
+  bool safeCounting = false;
+  void seedEvent(uint32_t seed) { eventId = seed ? seed : 1; }
+  void saveOutputs() {
+    savedWindow = windowOpen; savedExhaust = exhaustOn;
+    savedExhaustPwm = exhaustPwm; savedLight = lightOn; savedBuzzer = buzzerOn;
+  }
+  void enter(Phase next) {
+    if (phase == NORMAL && next != NORMAL) { saveOutputs(); ++eventId; }
+    if ((phase == WARNING && next == EMERGENCY) ||
+        (phase == WAIT_CONFIRM && next != WAIT_CONFIRM)) { ++eventId; }
+    if (next == EMERGENCY && phase != EMERGENCY) alarmMuted = false;
+    if (phase == WAIT_CONFIRM && next != WAIT_CONFIRM) safeCounting = false;
+    phase = next;
+  }
+  void update(uint32_t now, int gas, bool /*unusedSmoke*/, bool flame) {
+    const bool high = gas >= 2500 || flame;
+    const bool warn = gas >= 1500;
+    warningGas = warn;
+    if (high) { enter(EMERGENCY); safeCounting = false; }
+    else if (warn) {
+      if (phase == EMERGENCY || phase == WAIT_CONFIRM) {
+        if (phase == WAIT_CONFIRM) enter(EMERGENCY);
+        safeCounting = false;
+      } else enter(WARNING);
+    } else if (phase == WARNING) {
+      enter(NORMAL); alarmMuted = false;
+      windowOpen = savedWindow; exhaustOn = savedExhaust;
+      exhaustPwm = savedExhaustPwm; lightOn = savedLight; buzzerOn = savedBuzzer;
+    } else if (phase == EMERGENCY) {
+      if (!safeCounting) { safeSince = now; safeCounting = true; }
+      if (uint32_t(now - safeSince) >= 10000) enter(WAIT_CONFIRM);
     }
-    if (!emergency) return;
-    if (danger || warningGas) recovering = false;
-    else if (!recovering) { recovering = true; safeSince = now; }
-    if (recovering && uint32_t(now - safeSince) >= 10000) {
-      emergency = false;
-      recovering = false;
-      alarmMuted = false;
-      windowOpen = savedWindow; exhaustOn = savedExhaust; exhaustPwm = savedExhaustPwm;
-      lightOn = savedLight; buzzerOn = savedBuzzer;
-    } else {
+    emergency = phase == EMERGENCY || phase == WAIT_CONFIRM;
+    if (phase == WARNING) {
+      exhaustOn = true; exhaustPwm = 179;
+    } else if (phase == EMERGENCY) {
       windowOpen = true; exhaustOn = true; exhaustPwm = 255;
-      lightOn = false; buzzerOn = true;
+      lightOn = false;
+    } else if (phase == WAIT_CONFIRM) {
+      windowOpen = true; exhaustOn = true; exhaustPwm = 179;
+      lightOn = false;
     }
   }
-
+  bool confirm(uint32_t id, int gas, bool flame) {
+    if (phase != WAIT_CONFIRM || id != eventId || gas >= 1500 || flame) return false;
+    phase = NORMAL; emergency = false; warningGas = false;
+    safeCounting = false; alarmMuted = false;
+    windowOpen = savedWindow; exhaustOn = savedExhaust;
+    exhaustPwm = savedExhaustPwm; lightOn = savedLight; buzzerOn = savedBuzzer;
+    return true;
+  }
   bool sound(uint32_t now) const {
-    return (emergency && !alarmMuted) || (!emergency && buzzerOn) ||
-           (!alarmMuted && !emergency && warningGas && now % 2000 < 300);
+    if (alarmMuted) return false;
+    if (phase == EMERGENCY) return true;
+    if (phase == WARNING || phase == WAIT_CONFIRM) return now % 2000 < 300;
+    return buzzerOn;
   }
 };
 
