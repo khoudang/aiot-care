@@ -1,6 +1,5 @@
 """Test responsive truthful feedback, event wakeup, and immediate state updates across 3 nodes."""
 import asyncio
-from contextlib import suppress
 import json
 import time
 from types import SimpleNamespace
@@ -43,9 +42,11 @@ class ImmediateFeedbackTests(unittest.TestCase):
                 # Must be received well under 50ms (typically < 10ms in host loop)
                 self.assertLess(elapsed, 0.04)
             finally:
-                sender_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await sender_task
+                # Python 3.11 wait_for may lose cancellation when its inner
+                # event completes concurrently. Stop cooperatively and bound teardown.
+                client.is_connected = False
+                iot._command_wakeups[room].set()
+                await asyncio.wait_for(sender_task, timeout=1.0)
 
         asyncio.run(run_scenario())
 

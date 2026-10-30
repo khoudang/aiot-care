@@ -14,6 +14,7 @@ def load_iot():
         if isinstance(node, ast.ImportFrom) and node.module == 'config':
             for name in node.names:
                 setattr(config, name.name, 1)
+    config.AI_OBSERVE_ONLY = False
     config.NODES = []
     config.MAX_HISTORY = 10
     config.GAS_SMOOTH_WINDOW = 5

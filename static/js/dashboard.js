@@ -162,11 +162,17 @@
     touch();
   }
   function applyAI(a){
+    const modeLabel=document.getElementById('ai-observe-mode');
+    if(modeLabel && a.observe_only!=null)modeLabel.hidden=!a.observe_only;
     if(a.gesture!=null){document.getElementById('oc-gesture').textContent='Cử chỉ: '+(a.gesture||'—');document.querySelectorAll('#gesture-table tr[data-g]').forEach(r=>r.classList.toggle('live',r.dataset.g===a.gesture));}
     if(a.fps!=null)document.getElementById('ai-fps').textContent=a.fps;
     if(a.latency!=null)document.getElementById('ai-latency').textContent=a.latency;
-    if(a.fall!=null){const oc=document.getElementById('oc-fall');oc.innerHTML=a.fall?'<i class="fas fa-person-falling"></i> TÉ NGÃ':'Bình thường';oc.classList.toggle('alarm',!!a.fall);
-      document.getElementById('ov-patient-fall').textContent=a.fall?'TÉ NGÃ':'Bình thường';badge(document.getElementById('ov-patient-badge'),a.fall?'bad':'ok',a.fall?'Té ngã':'An toàn');}
+    const fallSignal=a.observe_only?a.fall_suspected:a.fall;
+    if(fallSignal!=null){const oc=document.getElementById('oc-fall');
+      const fallText=a.observe_only?'NGHI TÉ NGÃ (quan sát)':'TÉ NGÃ';
+      oc.textContent=fallSignal?fallText:'Chưa phát hiện tư thế nghi té ngã';oc.classList.toggle('alarm',!!fallSignal);
+      document.getElementById('ov-patient-fall').textContent=fallSignal?fallText:'Chưa phát hiện';
+      badge(document.getElementById('ov-patient-badge'),fallSignal?'bad':'ok',fallSignal?'Nghi té ngã':(a.observe_only?'Quan sát':'Bình thường'));}
   }
 
   /* ---- lịch sử cảnh báo bếp (Yêu cầu 4) ---- */

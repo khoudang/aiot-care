@@ -46,6 +46,7 @@ except Exception:
 
 from config import (
     ALERT_COOLDOWN_SEC,
+    AI_OBSERVE_ONLY,
     BLE_RECONNECT_DELAY,
     CAMERA_HEIGHT,
     CAMERA_MODE_DEFAULT,
@@ -160,6 +161,7 @@ NODE_STATES = {"patient": "disconnected", "living": "disconnected", "kitchen": "
 AI = {
     "gesture": "—", "fps": "--", "latency": "--",
     "angle": SERVO_CENTER, "fall": False, "camera": False,
+    "observe_only": AI_OBSERVE_ONLY, "fall_suspected": False,
 }
 
 # Camera / tracking
@@ -1019,6 +1021,8 @@ def init_uart():
 def uart_send_angle(angle):
     """Gửi góc servo (0..180) qua UART, giới hạn tần suất."""
     global _last_servo_send
+    if AI_OBSERVE_ONLY:
+        return
     now = now_ts()
     if now - _last_servo_send < SERVO_SEND_INTERVAL:
         return
@@ -1546,6 +1550,8 @@ def _apply_gesture(gesture_key):
       - on / toggle -> bật: value=70
       - off / toggle -> tắt: value=0
     """
+    if AI_OBSERVE_ONLY:
+        return
     mapping = _gesture_map.get(gesture_key)
     if not mapping:
         return
@@ -1619,6 +1625,22 @@ def _handle_fall(is_suspect):
     global _fall_since
     global _fall_buzzer_saved, _fall_restore_target
     now = now_ts()
+    if AI_OBSERVE_ONLY:
+        # Display-only suspicion must NEVER enter the actionable fall flag:
+        # safety reconciliation and reconnect consume AI["fall"].
+        if is_suspect:
+            if _fall_since == 0.0:
+                _fall_since = now
+            suspected = now - _fall_since >= FALL_HOLD_SEC
+        else:
+            _fall_since = 0.0
+            suspected = False
+        with state_lock:
+            changed = AI["fall_suspected"] != suspected
+            AI["fall_suspected"] = suspected
+        if changed:
+            _emit("ai_status", dict(AI))
+        return
     if is_suspect:
         if _fall_since == 0.0:
             _fall_since = now
@@ -1787,4 +1809,6 @@ def start_background_services():
     load_gesture_map()
     init_uart()
     threading.Thread(target=_ble_thread, daemon=True).start()
-    print("[iot] background services started (BLE x4 + UART)")
+    if camera_mode == "on":
+        _start_camera()
+    print(f"[iot] background services started (BLE x{len(NODES)}; UART configured={bool(UART_ENABLE)})")

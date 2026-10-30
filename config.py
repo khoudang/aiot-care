@@ -106,6 +106,7 @@ PROCESS_EVERY_N_FRAMES = int(os.getenv("PROCESS_EVERY_N_FRAMES", "3"))  # cử c
 STREAM_SLEEP = float(os.getenv("STREAM_SLEEP", "0.01"))
 STATUS_EMIT_INTERVAL = float(os.getenv("STATUS_EMIT_INTERVAL", "0.2"))
 
+AI_OBSERVE_ONLY = os.getenv("AI_OBSERVE_ONLY", "0") == "1"  # Detect/display without AI-triggered actuation or Telegram.
 ENABLE_GESTURE = os.getenv("ENABLE_GESTURE", "1") == "1"
 ENABLE_TRACKING = os.getenv("ENABLE_TRACKING", "1") == "1"
 ENABLE_FALL = os.getenv("ENABLE_FALL", "1") == "1"
