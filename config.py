@@ -75,6 +75,9 @@ CHARACTERISTIC_UUID = BLE_NOTIFY_UUID
 COMMAND_UUID = BLE_COMMAND_UUID
 
 BLE_RECONNECT_DELAY = float(os.getenv("BLE_RECONNECT_DELAY", "3"))
+TELEMETRY_STALE_SEC = float(os.getenv("TELEMETRY_STALE_SEC", os.getenv("NODE_STALE_SEC", "10")))
+if not 0 < TELEMETRY_STALE_SEC < float("inf"):
+    raise ValueError("TELEMETRY_STALE_SEC must be finite and positive")
 
 
 # ------------------------------------------------------------------ #

@@ -120,7 +120,7 @@
   bindToggle('kt-buzzer-toggle','kt-buzzer-tile','Đang kêu','Im lặng',on=>emitSet('kitchen','buzzer',{state:on}));
 
   /* ---- apply data ---- */
-  function badge(el,cls,txt){el.className='rb '+cls;el.textContent=txt;}
+  function badge(el,cls,txt){el.className='rb '+cls;el.textContent=txt;el.dataset.domainClass=cls;el.dataset.domainText=txt;delete el.dataset.telemetryWarning;}
   function setToggle(id,tileId,on,onTxt,offTxt){const el=document.getElementById(id);el.checked=!!on;document.getElementById(tileId).classList.toggle('on',!!on);const st=document.getElementById(id.replace('-toggle','-status'));if(st)st.textContent=on?onTxt:offTxt;}
 
   function applyPatient(d){
@@ -209,20 +209,60 @@
 
   /* ---- node status ---- */
   const nodeState={patient:false,living:false,kitchen:false};
+  const telemetryCache={};
   function setNode(room,online){
     const el=document.getElementById('node-'+room);if(!el)return;
     el.classList.toggle('off',!online);
     el.querySelector('.nsub').textContent=online?'Đã kết nối':'Chưa kết nối';
     const roomBadge=document.getElementById('ov-'+room+'-badge');
-    if(!online&&roomBadge){roomBadge.className='rb';roomBadge.textContent='Chưa kết nối';}
+    if(!online&&roomBadge&&!roomBadge.classList.contains('bad')){roomBadge.className='rb';roomBadge.textContent='Chưa kết nối';}
     if(online&&roomBadge&&roomBadge.textContent==='Chưa kết nối'){roomBadge.className='rb ok';roomBadge.textContent='Đã kết nối';}
     if(room==='kitchen'){document.getElementById('kitchen-dot').classList.toggle('show',!online);document.getElementById('bn-kitchen-dot').classList.toggle('show',!online);}
     nodeState[room]=online;updateNodeChip();
   }
+  function applyTelemetry(quality){
+    const names={temp:'nhiệt độ',hum:'độ ẩm',motion:'hiện diện',lux:'ánh sáng',gas:'ADC khí',flame:'tín hiệu lửa'};
+    Object.entries(quality||{}).forEach(([room,q])=>{
+      if(!['patient','living','kitchen'].includes(room)||!q)return;
+      telemetryCache[room]=q;
+      let status=q.status;
+      if(status!=='unavailable'){
+        if(nodeState[room]===false)status='offline';
+        else if(status==='offline'||q.transport_connected===false)status='awaiting';
+      }
+      const fresh=status==='fresh';
+      const missing=Object.entries(q.fields||{}).filter(([,f])=>f.status!=='fresh').map(([key])=>names[key]||key);
+      const labels={fresh:'Đang nhận dữ liệu cảm biến',partial:'Có dữ liệu; thiếu/cũ: '+missing.join(', '),
+        stale:'Dữ liệu cảm biến đã cũ — không coi giá trị cuối là hiện tại',
+        awaiting:'BLE đã kết nối; đang chờ dữ liệu cảm biến',
+        offline:'Chưa có liên kết BLE; giữ giá trị cuối nếu có',
+        unavailable:'Không kiểm tra được gateway; chưa xác minh độ mới dữ liệu'};
+      const text=labels[status]||labels.unavailable;
+      const qualityLabel=document.getElementById('data-quality-'+room);
+      if(qualityLabel){qualityLabel.textContent=text;qualityLabel.className='badge '+(fresh?'ok':'warn');}
+      const node=document.getElementById('node-'+room);
+      if(node){node.classList.toggle('off',!fresh);node.querySelector('.nsub').textContent=
+        status==='offline'&&q.transport_state==='connecting'?'Đang kết nối BLE':text;}
+      const roomBadge=document.getElementById('ov-'+room+'-badge');
+      // A freshness warning must never downgrade a known danger/alarm badge.
+      if(roomBadge&&!roomBadge.classList.contains('bad')){
+        if(!fresh){
+          if(!roomBadge.dataset.telemetryWarning){roomBadge.dataset.telemetryBaseClass=roomBadge.className;roomBadge.dataset.telemetryBaseText=roomBadge.textContent;}
+          roomBadge.className='rb warn';roomBadge.textContent=status==='offline'?'Chưa kết nối':'Dữ liệu chưa đủ/mới';roomBadge.dataset.telemetryWarning='1';
+        }else if(roomBadge.dataset.telemetryWarning){
+          roomBadge.className=roomBadge.dataset.domainClass?'rb '+roomBadge.dataset.domainClass:(roomBadge.dataset.telemetryBaseClass||'rb ok');
+          roomBadge.textContent=roomBadge.dataset.domainText||roomBadge.dataset.telemetryBaseText||'Nhận dữ liệu';
+          delete roomBadge.dataset.telemetryWarning;delete roomBadge.dataset.telemetryBaseClass;delete roomBadge.dataset.telemetryBaseText;
+        }
+      }
+    });
+  }
+
   function updateNodeChip(){
     const n=Object.values(nodeState).filter(Boolean).length;
     const c=document.getElementById('node-chip');c.innerHTML='<i class="fas fa-diagram-project"></i> '+n+'/'+Object.keys(nodeState).length+' phòng';
     c.className='chip nodes'+(n===Object.keys(nodeState).length?' ok':(n===0?' bad':''));
+    c.title='Số liên kết BLE; xem nhãn từng phòng để biết độ mới dữ liệu';
   }
   function setConn(ok){
     document.querySelectorAll('.sw input:not(#pt-light-toggle), input[type="range"], #cam-seg button').forEach(el=>el.disabled=!ok);
@@ -235,12 +275,13 @@
   async function refreshNodeStatus(){
     try{
       const r=await fetch('/api/state',{cache:'no-store',credentials:'same-origin'});
-      if(!r.ok)return;
+      if(!r.ok)throw new Error('Gateway state unavailable');
       const s=await r.json();
       if(s.nodes)Object.keys(nodeState).forEach(room=>{
         if(s.nodes[room]!=null)setNode(room,!!s.nodes[room]);
       });
-    }catch(e){}
+      applyTelemetry(s.telemetry);
+    }catch(e){applyTelemetry(Object.fromEntries(Object.keys(nodeState).map(room=>[room,{status:'unavailable'}])));}
   }
   refreshNodeStatus();
   setInterval(refreshNodeStatus,3000);
@@ -254,11 +295,12 @@
       if(s.ai)applyAI(s.ai);
       if(s.camera){setCameraUI(!!s.camera.active,s.camera.mode);}
       if(s.alert)setAlert(s.alert.level);
+      applyTelemetry(s.telemetry);
     });
-    socket.on('room_update',m=>{if(m.room==='patient')applyPatient(m.data);else if(m.room==='living')applyLiving(m.data);else if(m.room==='kitchen')applyKitchen(m.data);});
-    socket.on('node_status',n=>{['patient','living','kitchen'].forEach(r=>{if(n[r]!=null)setNode(r,n[r]===true||n[r]==='online');});});
+    socket.on('room_update',m=>{if(m.room==='patient')applyPatient(m.data);else if(m.room==='living')applyLiving(m.data);else if(m.room==='kitchen')applyKitchen(m.data);applyTelemetry(telemetryCache);});
+    socket.on('node_status',n=>{['patient','living','kitchen'].forEach(r=>{if(n[r]!=null)setNode(r,n[r]===true||n[r]==='online');});applyTelemetry(telemetryCache);});
     socket.on('camera_sync',c=>{setCameraUI(!!c.active,c.mode);});
-    socket.on('ai_status',applyAI);
+    socket.on('ai_status',a=>{applyAI(a);applyTelemetry(telemetryCache);});
     socket.on('alert_state',a=>{setAlert(a.level,a.message);if(typeof loadKitchenAlerts==='function')loadKitchenAlerts();});
     socket.on('system_alert',a=>{showSys(a.message||'Có cảnh báo mới.',(a.type==='gas'||a.type==='health')?'light':'');if(typeof loadKitchenAlerts==='function')loadKitchenAlerts();});
   }

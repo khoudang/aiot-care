@@ -1,5 +1,7 @@
 # Nghiệm thu trực tiếp Raspberry Pi 4 — bản triển khai BLE/AI
 
+> Đây là biên bản của commit b12e9e4. Bổ sung giám sát độ mới và kiểm tra AI đối chứng ở [PI4_PHASE2_STATUS_VI.md](PI4_PHASE2_STATUS_VI.md); các con số dưới đây giữ nguyên theo lượt đo gốc.
+
 ## Trạng thái bàn giao
 
 **Đã triển khai và chạy trên Pi thật; chưa nghiệm thu hoàn chỉnh ba node đồng thời.**

@@ -27,7 +27,7 @@ Hệ thống định nghĩa các trạng thái trong backend và giao diện:
 2. `connecting`: Đang tìm kiếm và khởi tạo bắt tay BLE.
 3. `subscribing`: Đã kết nối GATT, đang đăng ký nhận thông báo `start_notify`.
 4. `ready`: Đăng ký `start_notify` thành công và sẵn sàng truyền nhận lệnh 2 chiều. Trạng thái này xác nhận đăng ký notify thành công, chưa chứng minh đã nhận được telemetry hay dữ liệu liên tục tươi mới.
-5. `stale`: **[CHƯA TRIỂN KHAI / NOT IMPLEMENTED — PENDING]**. Watchdog kiểm tra độ tươi telemetry theo thời gian thực (>10s) chưa được kích hoạt để tránh nguy cơ reset trạng thái an toàn ngoài ý muốn hoặc hủy lệnh an toàn khi chưa có nghiệm thu vô tuyến phần cứng. Được ghi nhận là hạng mục chờ kiểm chứng trên thiết bị thật.
+5. `stale`: Độ mới cảm biến được báo riêng qua `telemetry` trong snapshot, với trạng thái fresh/partial/stale/awaiting/offline và tuổi từng trường. UI cập nhật theo API mỗi 3 giây; ngưỡng cấu hình mặc định 10 giây. Đây là giám sát/hiển thị, không có chính sách tự hủy lệnh/reset latch khi stale; NODE_ONLINE và NODE_STATES tiếp tục chỉ phản ánh transport. Xem `PI4_PHASE2_STATUS_VI.md`.
 
 > **Bảo toàn tính tương thích:** Biến và từ điển `NODE_ONLINE[room]` tiếp tục giữ giá trị `bool` (`True` khi `ready`, `False` khi ở các trạng thái khác), đảm bảo không làm gián đoạn bất kỳ luồng xử lý hoặc test case cũ nào.
 

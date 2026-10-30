@@ -1,0 +1,5 @@
+PASS: base freshness renderer checks
+PASS cached fresh versus disconnect
+PASS cached offline versus reconnect
+PASS fresh recovery retains real gas warning
+SOCKET_REGRESSIONS=3 FAILURES=0

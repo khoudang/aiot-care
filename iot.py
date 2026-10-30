@@ -47,6 +47,7 @@ except Exception:
 from config import (
     ALERT_COOLDOWN_SEC,
     AI_OBSERVE_ONLY,
+    TELEMETRY_STALE_SEC,
     BLE_RECONNECT_DELAY,
     CAMERA_HEIGHT,
     CAMERA_MODE_DEFAULT,
@@ -154,9 +155,13 @@ ROOMS = {
 NODE_ONLINE = {"patient": False, "living": False, "kitchen": False}
 # Node connectivity state machine:
 # Active states: "disconnected", "connecting", "subscribing", "ready".
-# Note: "stale" watchdog (>10s telemetry silence) is NOT IMPLEMENTED (pending hardware validation).
+# Sensor freshness is reported separately; it never resets transport or safety state.
 # "ready" indicates successful GATT start_notify subscription, not guaranteed continuous telemetry freshness.
 NODE_STATES = {"patient": "disconnected", "living": "disconnected", "kitchen": "disconnected"}
+_SENSOR_FIELDS = {"patient": ("temp", "hum", "motion"),
+                  "living": ("temp", "hum", "lux", "motion"),
+                  "kitchen": ("gas", "flame")}
+_sensor_seen_at = {room: dict.fromkeys(fields) for room, fields in _SENSOR_FIELDS.items()}
 
 AI = {
     "gesture": "—", "fps": "--", "latency": "--",
@@ -438,6 +443,48 @@ def snapshot_histories():
                 for room, series in histories.items()}
 
 
+def telemetry_status():
+    """Read-only sensor freshness; never disconnect, cancel or clear safety state."""
+    now = time.monotonic()
+    result = {}
+    with state_lock:
+        for room, samples in _sensor_seen_at.items():
+            fields = {}
+            ages = []
+            for key, seen in samples.items():
+                age = max(0.0, now - seen) if seen is not None else None
+                if age is not None:
+                    ages.append(age)
+                fields[key] = {"age_sec": round(age, 2) if age is not None else None,
+                               "status": "missing" if age is None else
+                               ("fresh" if age <= TELEMETRY_STALE_SEC else "stale")}
+            fresh = sum(field["status"] == "fresh" for field in fields.values())
+            status = ("offline" if not NODE_ONLINE[room] else
+                      "awaiting" if not ages else
+                      "fresh" if fresh == len(fields) else
+                      "partial" if fresh else "stale")
+            result[room] = {"status": status, "transport_state": NODE_STATES[room],
+                            "transport_connected": bool(NODE_ONLINE[room]),
+                            "age_sec": round(min(ages), 2) if ages else None,
+                            "stale_after_sec": TELEMETRY_STALE_SEC, "fields": fields}
+    return result
+
+
+def _record_sensor_sample(room, payload):
+    now = time.monotonic()
+    with state_lock:
+        for source, value in payload.items():
+            key = _NUMERIC_ALIASES.get(source, source)
+            if key not in _sensor_seen_at[room]:
+                continue
+            valid = (type(value) is bool if key in ("motion", "flame") else
+                     type(value) in (int, float) and math.isfinite(value))
+            if key == "gas":
+                valid = valid and 0 <= value <= 4095
+            if valid:
+                _sensor_seen_at[room][key] = now
+
+
 def snapshot_all():
     with state_lock:
         rooms = {r: dict(v) for r, v in ROOMS.items()}
@@ -447,7 +494,7 @@ def snapshot_all():
         cam = {"active": camera_active, "mode": camera_mode, "tracking": tracking_enabled}
         alert = {"level": alert_level}
     return {"rooms": rooms, "nodes": nodes, "node_states": node_states, "ai": ai, "camera": cam,
-            "alert": alert, "histories": snapshot_histories()}
+            "alert": alert, "histories": snapshot_histories(), "telemetry": telemetry_status()}
 
 
 def push_history(room):
@@ -482,6 +529,7 @@ def apply_node_payload(room, payload):
 
     if room not in ROOMS:
         return
+    _record_sensor_sample(room, payload)
 
     if room == "kitchen" and any(key in payload for key in ("gas", "smoke", "flame")):
         sample_time = time.monotonic()
