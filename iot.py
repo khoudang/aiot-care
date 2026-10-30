@@ -18,6 +18,7 @@ import asyncio
 import json
 import math
 import queue
+import sys
 import threading
 import time
 from node_protocol import build_command
@@ -150,6 +151,10 @@ ROOMS = {
 }
 
 NODE_ONLINE = {"patient": False, "living": False, "kitchen": False}
+# Node connectivity state machine:
+# Active states: "disconnected", "connecting", "subscribing", "ready".
+# Note: "stale" watchdog (>10s telemetry silence) is NOT IMPLEMENTED (pending hardware validation).
+# "ready" indicates successful GATT start_notify subscription, not guaranteed continuous telemetry freshness.
 NODE_STATES = {"patient": "disconnected", "living": "disconnected", "kitchen": "disconnected"}
 
 AI = {
@@ -203,12 +208,16 @@ COMMAND_ATTEMPTS = 4
 COMMAND_ACK_TIMEOUT = 2.0
 COMMAND_TTL = 30.0
 ble_clients = {room: None for room in ROOMS}
+_connected_ble_devices = {room: None for room in ROOMS}
 ble_loop = None
 BLE_MAC_CONFIG_KEYS = {room: f"ble_mac_{room}" for room in ROOMS}
 _ble_reconfigure = {room: threading.Event() for room in ROOMS}
 _ble_devices = {}
 _ble_devices_seen_at = 0.0
 _ble_discovery_lock = None
+BLE_SCAN_CACHE_TTL = 10.0
+MANUAL_SCAN_RATE_LIMIT = 2.0
+_last_manual_scan_at = 0.0
 
 
 class CommandTimingTracer:
@@ -216,9 +225,11 @@ class CommandTimingTracer:
 
     Deltas are strictly calculated using same-process time.monotonic() to avoid
     clock skew across independent Pi / ESP32 / browser boundaries.
+    Both storage structures (_traces deque and _active dict) are bounded.
     """
 
     def __init__(self, maxlen=200):
+        self._maxlen = maxlen
         self._traces = deque(maxlen=maxlen)
         self._active = {}
         self._lock = threading.Lock()
@@ -240,6 +251,9 @@ class CommandTimingTracer:
             "error": None,
         }
         with self._lock:
+            if len(self._active) >= self._maxlen:
+                oldest_k = next(iter(self._active))
+                self._active.pop(oldest_k, None)
             self._active[(room, command_id)] = rec
             self._traces.append(rec)
 
@@ -256,43 +270,63 @@ class CommandTimingTracer:
         now = time.monotonic()
         with self._lock:
             rec = self._active.get((room, command_id))
+            if rec is None:
+                for r in reversed(self._traces):
+                    if r["room"] == room and r["id"] == command_id:
+                        rec = r
+                        break
             if rec:
                 rec["write_done_at"] = now
                 if error:
                     rec["status"] = "write_error"
                     rec["error"] = str(error)
-                else:
+                    self._active.pop((room, command_id), None)
+                elif not rec["status"].startswith("ack_") and rec["status"] not in ("canceled", "timeout_error"):
                     rec["status"] = "written"
 
     def record_ack(self, room, command_id, status):
         now = time.monotonic()
         with self._lock:
             rec = self._active.get((room, command_id))
+            if rec is None:
+                for r in reversed(self._traces):
+                    if r["room"] == room and r["id"] == command_id:
+                        rec = r
+                        break
             if rec:
                 rec["ack_at"] = now
                 rec["status"] = f"ack_{status}"
+                if status in ("applied", "rejected"):
+                    self._active.pop((room, command_id), None)
 
     def record_applied(self, room, device):
+        """Retained for backwards-compatibility; exact acceptance requires record_ack."""
+        pass
+
+    def record_canceled(self, room, command_id=None, device=None):
         now = time.monotonic()
         with self._lock:
             for (r, cid), rec in list(self._active.items()):
-                if r == room and rec.get("device") == device:
-                    rec["applied_at"] = now
-                    rec["status"] = "applied_state"
+                if r == room and (command_id is None or cid == command_id) and (device is None or rec.get("device") == device):
+                    rec["status"] = "canceled"
                     self._active.pop((r, cid), None)
-                    break
 
     def record_error(self, room, command_id, error_msg):
         now = time.monotonic()
         with self._lock:
             rec = self._active.pop((room, command_id), None)
+            if rec is None:
+                for r in reversed(self._traces):
+                    if r["room"] == room and r["id"] == command_id:
+                        rec = r
+                        break
             if rec:
                 rec["status"] = "timeout_error"
                 rec["error"] = str(error_msg)
 
     def get_summary(self, target_room=None):
         with self._lock:
-            records = [r for r in self._traces if target_room is None or r["room"] == target_room]
+            records = [dict(r) for r in self._traces if target_room is None or r["room"] == target_room]
 
         queue_latencies = []
         gatt_latencies = []
@@ -309,7 +343,7 @@ class CommandTimingTracer:
                 gatt_latencies.append((r["write_done_at"] - r["write_start_at"]) * 1000.0)
             if r.get("ack_at") and r.get("write_done_at"):
                 ack_latencies.append((r["ack_at"] - r["write_done_at"]) * 1000.0)
-            end_time = r.get("applied_at") or r.get("ack_at")
+            end_time = r.get("ack_at")
             if end_time and r.get("enqueued_at"):
                 total_latencies.append((end_time - r["enqueued_at"]) * 1000.0)
 
@@ -353,8 +387,8 @@ class CommandTimingTracer:
                     "attempts": r["attempts"],
                     "status": r["status"],
                     "error": r["error"],
-                    "total_ms": round((((r["applied_at"] or r["ack_at"]) - r["enqueued_at"]) * 1000.0), 2)
-                    if (r.get("applied_at") or r.get("ack_at")) and r.get("enqueued_at") else None
+                    "total_ms": round(((r["ack_at"] - r["enqueued_at"]) * 1000.0), 2)
+                    if r.get("ack_at") and r.get("enqueued_at") else None
                 }
                 for r in list(records)[-20:]
             ],
@@ -459,11 +493,6 @@ def apply_node_payload(room, payload):
         for key in _BOOL_KEYS:
             if key in payload and key in r:
                 r[key] = safe_bool(payload[key])
-                timing_tracer.record_applied(room, key)
-        if "fan_speed" in payload:
-            timing_tracer.record_applied(room, "fan")
-        if "exhaust_speed" in payload:
-            timing_tracer.record_applied(room, "exhaust")
         if room == "kitchen":
             if payload.get("phase") in ("normal", "warning", "emergency", "wait_confirm"):
                 r["phase"] = payload["phase"]
@@ -561,10 +590,14 @@ def _make_notify_handler(room):
                                 wakeup.set()
                         elif pending and payload.get("status") == "busy":
                             timing_tracer.record_ack(room, payload["ack"], "busy")
+                            now = time.monotonic()
+                            attempts = pending.get("attempts", 1)
+                            backoff = min(0.2 * (2 ** (attempts - 1)), 1.0)
+                            pending["retry_at"] = now + backoff
                             pending["sent"] = None
                             wakeup = _command_wakeups.get(room)
                             if wakeup is not None and ble_loop is not None and ble_loop.is_running():
-                                ble_loop.call_soon_threadsafe(wakeup.set)
+                                ble_loop.call_later(backoff, wakeup.set)
                             elif wakeup is not None:
                                 wakeup.set()
                 else:
@@ -606,8 +639,24 @@ def ble_node_settings():
              "state": NODE_STATES.get(node["room"], "disconnected")} for node in NODES]
 
 
+def _connected_macs():
+    macs = set()
+    for room, dev in _connected_ble_devices.items():
+        c = ble_clients.get(room)
+        if dev is not None and c is not None and getattr(c, "is_connected", False):
+            if hasattr(dev, "address"):
+                macs.add(dev.address.upper())
+    return macs
+
+
 async def _scan_ble_devices():
-    devices = await _discover_ble_devices(force=True)
+    global _last_manual_scan_at
+    now = time.monotonic()
+    if now - _last_manual_scan_at < MANUAL_SCAN_RATE_LIMIT:
+        devices = await _discover_ble_devices(force=False)
+    else:
+        _last_manual_scan_at = now
+        devices = await _discover_ble_devices(force=True)
     return sorted([{"name": device.name or "Thiết bị BLE", "mac": device.address.upper()}
                    for device in devices], key=lambda device: (device["name"], device["mac"]))
 
@@ -619,17 +668,18 @@ async def _discover_ble_devices(force=False):
         _ble_discovery_lock = asyncio.Lock()
     async with _ble_discovery_lock:
         now = time.monotonic()
+        cache_ttl = getattr(sys.modules.get("iot"), "BLE_SCAN_CACHE_TTL", BLE_SCAN_CACHE_TTL)
         # A recent scan is useful even when it found no devices. Without this,
         # absent nodes trigger back-to-back scans and starve the other nodes.
-        if not force and now - _ble_devices_seen_at < 10:
+        if not force and now - _ble_devices_seen_at < cache_ttl:
             return list(_ble_devices.values())
         devices = await BleakScanner.discover(timeout=5.0)
         # Preserve already-connected nodes absent from advertisements
         connected_devices = {}
-        for r, c in ble_clients.items():
-            if c is not None and getattr(c, "is_connected", False):
-                dev = getattr(c, "_device", getattr(c, "device", None))
-                if dev and hasattr(dev, "address"):
+        for r, dev in _connected_ble_devices.items():
+            c = ble_clients.get(r)
+            if dev is not None and c is not None and getattr(c, "is_connected", False):
+                if hasattr(dev, "address"):
                     connected_devices[dev.address.upper()] = dev
         _ble_devices.clear()
         _ble_devices.update(connected_devices)
@@ -642,10 +692,12 @@ async def _find_ble_device(mac):
     if not mac:
         return None
     target = mac.strip().upper()
+    now = time.monotonic()
+    cache_ttl = getattr(sys.modules.get("iot"), "BLE_SCAN_CACHE_TTL", BLE_SCAN_CACHE_TTL)
     dev = _ble_devices.get(target)
-    if dev is not None:
+    if dev is not None and (now - _ble_devices_seen_at < cache_ttl or target in _connected_macs()):
         return dev
-    await _discover_ble_devices(force=True)
+    await _discover_ble_devices(force=False)
     return _ble_devices.get(target)
 
 
@@ -662,8 +714,10 @@ def scan_ble_devices():
 
 def reconnect_ble_node(room):
     """Ask the node loop to close its current link and read the new MAC."""
+    global _ble_devices_seen_at
     _ble_reconfigure[room].set()
     _cancel_commands(room)
+    _ble_devices_seen_at = 0.0
     for key in list(_last_cmd):
         if key[0] == room:
             _last_cmd.pop(key, None)
@@ -674,10 +728,14 @@ def _calc_pending_timeout(room):
         if not _pending_commands[room]:
             return 2.0
         ident, pending = next(iter(_pending_commands[room].items()))
+        now = time.monotonic()
+        retry_at = pending.get("retry_at", 0.0)
+        if retry_at > now:
+            return min(2.0, max(0.01, retry_at - now))
         sent = pending.get("sent")
         if sent is None:
             return 0.01
-        elapsed = time.monotonic() - sent
+        elapsed = now - sent
         rem = max(0.01, COMMAND_ACK_TIMEOUT - elapsed)
         return min(rem, 2.0)
 
@@ -719,6 +777,7 @@ async def _node_loop(node):
                 if _ble_reconfigure[room].is_set() or _configured_mac(node).strip().upper() != mac:
                     continue
                 ble_clients[room] = client
+                _connected_ble_devices[room] = device
 
                 set_node_online(room, False, state="subscribing")
                 await client.start_notify(notify_uuid, _make_notify_handler(room))
@@ -743,6 +802,7 @@ async def _node_loop(node):
             reconnect_delay = min(reconnect_delay * 1.5, 10.0)
         finally:
             ble_clients[room] = None
+            _connected_ble_devices[room] = None
             set_node_online(room, False, state="disconnected")
             await asyncio.sleep(reconnect_delay)
 
@@ -789,14 +849,27 @@ def _cancel_commands(room, device=None):
     """A new safety phase invalidates queued and retrying older commands."""
     with _delivery_lock:
         for ident, pending in list(_pending_commands[room].items()):
-            if device is None or json.loads(pending["text"])["cmd"] == device:
+            cmd_dev = None
+            try:
+                cmd_dev = json.loads(pending["text"]).get("cmd")
+            except Exception:
+                pass
+            if device is None or cmd_dev == device:
                 del _pending_commands[room][ident]
+                timing_tracer.record_canceled(room, command_id=ident, device=cmd_dev)
         retained = []
         while True:
             try:
                 text = command_queues[room].get_nowait()
-                if device is not None and json.loads(text)["cmd"] != device:
+                cmd_obj = {}
+                try:
+                    cmd_obj = json.loads(text)
+                except Exception:
+                    pass
+                if device is not None and cmd_obj.get("cmd") != device:
                     retained.append(text)
+                else:
+                    timing_tracer.record_canceled(room, command_id=cmd_obj.get("id"), device=cmd_obj.get("cmd"))
             except queue.Empty:
                 break
         for text in retained:
@@ -813,6 +886,9 @@ async def _send_pending(room, client, command_uuid):
             return
         ident, pending = next(iter(_pending_commands[room].items()))
         now = time.monotonic()
+        retry_at = pending.get("retry_at", 0.0)
+        if retry_at > now:
+            return
         due = pending["sent"] is None or now - pending["sent"] >= COMMAND_ACK_TIMEOUT
         if now - pending["created"] >= COMMAND_TTL or (due and pending["attempts"] >= COMMAND_ATTEMPTS):
             del _pending_commands[room][ident]

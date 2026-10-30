@@ -72,6 +72,6 @@ journalctl -u aiot-care.service -f
 ```
 
 Đặc điểm an toàn của service:
-* Chỉ chạy một tiến trình duy nhất (`FLASK_DEBUG=0`, không dùng debug reloader tạo tiến trình con trùng lặp BLE).
-* Phụ thuộc `After=network.target bluetooth.target dbus.service` bảo đảm adapter Bluetooth sẵn sàng trước khi gateway quét.
-* Chính sách khởi động lại có giới hạn `Restart=on-failure`, `RestartSec=5s` tránh vòng lặp khởi động liên tục khi gặp lỗi nghiêm trọng.
+* Chỉ chạy một tiến trình duy nhất (`app.py` thiết lập `use_reloader=False` rõ ràng cùng `FLASK_DEBUG=0` trong unit file, tránh hiện tượng reloader spawn tiến trình con gây xung đột cổng Socket.IO và tạo hai luồng BLE quét trùng lặp).
+* Khởi động theo thứ tự: `After=network.target bluetooth.target dbus.service` chỉ định thứ tự kích hoạt tiến trình theo systemd, KHÔNG đồng nghĩa adapter Bluetooth HCI phần cứng đã sẵn sàng tại thời điểm app khởi chạy. Gateway được thiết kế với cơ chế catch-up và reconnect có bounded backoff để tự phục hồi khi adapter bật sau.
+* Giới hạn tần suất khởi động lại: cấu hình `StartLimitIntervalSec=60s` và `StartLimitBurst=5` kết hợp `Restart=on-failure`, `RestartSec=5s` nhằm ngăn chặn triệt để vòng lặp restart storm (tối đa 5 lần trong 60 giây).

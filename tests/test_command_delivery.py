@@ -42,14 +42,15 @@ class DeliveryTests(unittest.TestCase):
             first = Mock(write_gatt_char=AsyncMock(side_effect=OSError('disconnected')))
             with self.assertRaises(OSError):
                 asyncio.run(iot._send_pending('patient', first, 'uuid'))
-        ident = next(iter(iot._pending_commands['patient']))
-        handler = iot._make_notify_handler('patient')
-        handler(None, json.dumps({'ack': ident, 'status': 'busy'}).encode())
+            ident = next(iter(iot._pending_commands['patient']))
+            handler = iot._make_notify_handler('patient')
+            handler(None, json.dumps({'ack': ident, 'status': 'busy'}).encode())
         second = Mock(write_gatt_char=AsyncMock())
         with patch.object(iot.time, 'monotonic', return_value=12):
             asyncio.run(iot._send_pending('patient', second, 'uuid'))
         self.assertEqual(first.write_gatt_char.call_args, second.write_gatt_char.call_args)
-        handler(None, json.dumps({'ack': ident, 'status': 'applied'}).encode())
+        with patch.object(iot.time, 'monotonic', return_value=12):
+            handler(None, json.dumps({'ack': ident, 'status': 'applied'}).encode())
         self.assertFalse(iot._pending_commands['patient'])
         self.assertFalse(iot.ROOMS['patient']['buzzer'])  # ACK is not telemetry.
 
@@ -115,3 +116,37 @@ class DeliveryTests(unittest.TestCase):
         handler(None, b'{"ack":[],"status":"applied"}\n')
         handler(None, json.dumps({'room': 'patient', 'ack': ident, 'status': 'applied'}).encode())
         self.assertIn(ident, iot._pending_commands['living'])
+
+    def test_busy_ack_causes_bounded_backoff_without_retry_storm(self):
+        """Busy ACK must apply modest backoff so immediate loop wakeups do not storm and exhaust attempts."""
+        iot = self.iot
+        client = Mock(write_gatt_char=AsyncMock())
+        t0 = 100.0
+
+        with patch.object(iot.time, 'monotonic', return_value=t0):
+            iot.set_device('living', 'light', True)
+            # Attempt 1
+            asyncio.run(iot._send_pending('living', client, 'uuid'))
+
+        self.assertEqual(client.write_gatt_char.await_count, 1)
+        ident = next(iter(iot._pending_commands['living']))
+        self.assertEqual(iot._pending_commands['living'][ident]['attempts'], 1)
+
+        # Busy ACK arrives shortly after at t = 100.02
+        with patch.object(iot.time, 'monotonic', return_value=t0 + 0.02):
+            handler = iot._make_notify_handler('living')
+            handler(None, json.dumps({'ack': ident, 'status': 'busy'}).encode())
+
+        # An immediate wakeup loop tick at t = 100.05 MUST NOT send yet (in backoff window)
+        with patch.object(iot.time, 'monotonic', return_value=t0 + 0.05):
+            asyncio.run(iot._send_pending('living', client, 'uuid'))
+
+        self.assertEqual(client.write_gatt_char.await_count, 1)  # Still 1, NOT sent!
+        self.assertEqual(iot._pending_commands['living'][ident]['attempts'], 1)
+
+        # After backoff passes at t = 100.25, retry is due and sends attempt 2 with exact same ID
+        with patch.object(iot.time, 'monotonic', return_value=t0 + 0.25):
+            asyncio.run(iot._send_pending('living', client, 'uuid'))
+
+        self.assertEqual(client.write_gatt_char.await_count, 2)
+        self.assertEqual(iot._pending_commands['living'][ident]['attempts'], 2)

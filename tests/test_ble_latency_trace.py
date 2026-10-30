@@ -48,8 +48,8 @@ class BleLatencyTraceTests(unittest.TestCase):
         # Verify monotonic calculation deltas:
         self.assertAlmostEqual(final_stats['queue_latency']['median_ms'], 15.0, places=1)
         self.assertAlmostEqual(final_stats['ack_rtt_latency']['median_ms'], 30.0, places=1)
-        self.assertAlmostEqual(final_stats['total_latency']['median_ms'], 50.0, places=1)
-        self.assertEqual(final_stats['recent_traces'][0]['status'], 'applied_state')
+        self.assertAlmostEqual(final_stats['total_latency']['median_ms'], 45.0, places=1)
+        self.assertEqual(final_stats['recent_traces'][0]['status'], 'ack_applied')
 
     def test_timing_trace_tracks_errors_and_timeouts(self):
         iot = self.iot
@@ -130,6 +130,84 @@ class BleLatencyTraceTests(unittest.TestCase):
         self.assertTrue(data['ok'])
         self.assertIn('timing_trace', data)
         self.assertEqual(data['timing_trace']['source'], 'simulated_host_timing_monotonic')
+
+    def test_tracer_and_active_bounded_above_200_items(self):
+        """Both _traces deque and _active dict must be bounded (e.g. <= 200 items)."""
+        iot = self.iot
+        tracer = iot.timing_tracer
+        # Enqueue 250 commands without ACKs
+        for i in range(1, 251):
+            tracer.record_enqueued('patient', i, 'fan', {'state': 1, 'value': i % 100})
+
+        self.assertLessEqual(len(tracer._traces), 200)
+        self.assertLessEqual(len(tracer._active), 200)
+
+    def test_unsolicited_old_telemetry_before_write_does_not_apply_command(self):
+        """Unsolicited telemetry before command write/ACK must NOT falsely mark command applied."""
+        iot = self.iot
+        iot.timing_tracer.record_enqueued('patient', 99, 'fan', {'state': 1, 'value': 80})
+
+        # Unsolicited telemetry arrives before write starts or ACK
+        iot.apply_node_payload('patient', {'fan': True, 'fan_speed': 80})
+
+        # Command must still be active and status must NOT be applied_state
+        stats = iot.get_command_timing_stats('patient')
+        rec = next(r for r in stats['recent_traces'] if r['id'] == 99)
+        self.assertNotEqual(rec['status'], 'applied_state')
+        self.assertEqual(rec['status'], 'enqueued')
+
+    def test_rejected_and_canceled_trace_cleanup(self):
+        """Canceled and rejected commands must achieve terminal status and be removed from _active."""
+        iot = self.iot
+        tracer = iot.timing_tracer
+
+        # Enqueue commands
+        iot.enqueue_command('patient', '{"cmd":"fan","state":1,"value":40}')
+        iot.enqueue_command('patient', '{"cmd":"fan","state":1,"value":60}')
+
+        # _cancel_commands should mark canceled and clear from active
+        iot._cancel_commands('patient', 'fan')
+        self.assertEqual(len(tracer._active), 0)
+
+        # Enqueue another and reject via ACK
+        iot.enqueue_command('living', '{"cmd":"light","state":1}')
+        cid = list(tracer._active.keys())[0][1]
+        handler = iot._make_notify_handler('living')
+        handler(None, json.dumps({'ack': cid, 'status': 'rejected'}).encode())
+
+        self.assertNotIn(('living', cid), tracer._active)
+        rec = next(r for r in tracer._traces if r['id'] == cid)
+        self.assertEqual(rec['status'], 'ack_rejected')
+
+    def test_ack_arriving_during_write_not_overwritten_by_write_done(self):
+        """ACK arriving during write must not be overwritten by subsequent write_done callback."""
+        iot = self.iot
+        tracer = iot.timing_tracer
+        tracer.record_enqueued('patient', 10, 'light', {'state': 1})
+        tracer.record_write_start('patient', 10, 1)
+
+        # ACK arrives while write is still completing in background
+        tracer.record_ack('patient', 10, 'applied')
+        self.assertEqual(tracer._traces[-1]['status'], 'ack_applied')
+
+        # write_done completes subsequently
+        tracer.record_write_done('patient', 10)
+        # Must retain terminal ack_applied, NOT reverted to written
+        self.assertEqual(tracer._traces[-1]['status'], 'ack_applied')
+
+    def test_get_summary_returns_snapshot_copies(self):
+        """get_summary must return detached copies so external mutation doesn't alter internal records."""
+        iot = self.iot
+        tracer = iot.timing_tracer
+        tracer.record_enqueued('patient', 42, 'buzzer', {'state': 1})
+        summary = tracer.get_summary('patient')
+
+        # Mutate the returned summary
+        summary['recent_traces'][0]['status'] = 'MUTATED'
+
+        # Fetch again: internal record must not be mutated
+        summary2 = tracer.get_summary('patient')
+        self.assertNotEqual(summary2['recent_traces'][0]['status'], 'MUTATED')
 
 
 if __name__ == '__main__':

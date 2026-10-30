@@ -37,6 +37,11 @@ inline void commandAck(BLECharacteristic *characteristic, const char *packet, co
   notifyJson(characteristic, reply);
 }
 
+// Cross-Layer Semantics Note:
+// 'applied' ACK establishes that the logical command has been successfully parsed,
+// passed local safety checks, and applied to memory control variables.
+// Physical GPIO/PWM/actuator updates follow immediately via applyOutputs().
+// Immediate telemetry notifies output pin states, not external physical movement sensors.
 inline bool drainCommands(bool (*handle)(const String &), BLECharacteristic *characteristic) {
   char packet[200];
   bool anyApplied = false;

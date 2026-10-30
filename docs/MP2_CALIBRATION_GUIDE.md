@@ -40,7 +40,7 @@
 
 Để chuyển đổi từ điện áp ADC sang nồng độ ppm $C_3H_8$ tin cậy, bắt buộc phải có đầy đủ các dữ kiện sau trên phần cứng thực tế:
 1. **Sơ đồ nguyên lý module MP-2:** Đo chính xác giá trị điện trở tải $R_L$ được hàn trên module thực tế (thường từ $1\text{ k}\Omega$ đến $47\text{ k}\Omega$).
-2. **Thời gian sấy ổn định (Preheating Time):** Cảm biến MP-2 cần sấy tối thiểu $24\text{ giờ}$ (burn-in) trước lần hiệu chuẩn đầu tiên, và tối thiểu $2 - 5\text{ phút}$ sau mỗi lần cấp nguồn.
+2. **Thời gian sấy ổn định (Preheating Time):** Theo tiêu chuẩn nhà sản xuất (*Winsen MP-2 Technical Manual v1.4*, Table 2: Technical Parameters), cảm biến MP-2 yêu cầu thời gian sấy già hóa (aging/preheat) **trên 48 giờ (`Over 48 hours`)** trước lần hiệu chuẩn đầu tiên để lớp oxit bán dẫn đạt trạng thái cân bằng động, và tối thiểu $2 - 5\text{ phút}$ sấy ổn định sau mỗi lần cấp nguồn lại thông thường. Tuyệt đối không dùng số liệu sao chép 24h không đúng tài liệu gốc.
 3. **Hiệu chuẩn điểm chuẩn ($R_0$):** Đo giá trị $R_s$ trong buồng khí sạch có nhiệt độ ($20^\circ\text{C} \pm 2$) và độ ẩm ($55\% \pm 5\%$) chuẩn để tính $R_0$.
 4. **Bù nhiệt ẩm:** Sử dụng công thức đường cong hiệu chỉnh nhiệt độ/độ ẩm từ datasheet Winsen MP-2:
    $$\alpha = f(T, H)$$

@@ -1,7 +1,11 @@
 [Unit]
 Description=AIoT Care Station Gateway Service
+# Note: 'After' specifies systemd unit activation ordering, NOT an adapter hardware readiness guarantee.
 After=network.target bluetooth.target dbus.service
 Wants=bluetooth.target
+# Bounded restart rate: maximum 5 restarts within a 60-second window
+StartLimitIntervalSec=60s
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -9,7 +13,7 @@ Type=simple
 User=pi
 # Working directory containing repository code
 WorkingDirectory=/home/pi/aiot-care
-# Virtual environment Python executable (single process, no debug reloader)
+# Virtual environment Python executable (single process; use_reloader=False in app.py avoids duplicate process)
 ExecStart=/home/pi/aiot-care/venv/bin/python3 app.py
 
 # Restart policy: bounded restart on failure with 5s backoff
