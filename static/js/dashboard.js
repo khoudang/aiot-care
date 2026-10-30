@@ -164,21 +164,52 @@
   function applyAI(a){
     const modeLabel=document.getElementById('ai-observe-mode');
     if(modeLabel && a.observe_only!=null)modeLabel.hidden=!a.observe_only;
-    if(a.gesture!=null){document.getElementById('oc-gesture').textContent='Cử chỉ: '+(a.gesture||'—');document.querySelectorAll('#gesture-table tr[data-g]').forEach(r=>r.classList.toggle('live',r.dataset.g===a.gesture));}
-    if(a.fps!=null)document.getElementById('ai-fps').textContent=a.fps;
-    if(a.latency!=null)document.getElementById('ai-latency').textContent=a.latency;
+    if(a.gesture!=null){
+      const elG=document.getElementById('oc-gesture');
+      const gTxt='Cử chỉ: '+(a.gesture||'—');
+      if(elG&&elG.textContent!==gTxt)elG.textContent=gTxt;
+      document.querySelectorAll('#gesture-table tr[data-g]').forEach(r=>r.classList.toggle('live',r.dataset.g===a.gesture));
+    }
+    if(a.fps!=null){
+      const el=document.getElementById('ai-fps');
+      const txt=String(a.fps);
+      if(el&&el.textContent!==txt)el.textContent=txt;
+    }
+    if(a.video_fps!=null){
+      const elV=document.getElementById('ai-video-fps');
+      const vTxt=String(a.video_fps);
+      if(elV&&elV.textContent!==vTxt)elV.textContent=vTxt;
+    }
+    const latVal=a.work_ms!=null?a.work_ms:a.latency;
+    if(latVal!=null){
+      const elL=document.getElementById('ai-latency');
+      const lTxt=String(latVal);
+      if(elL&&elL.textContent!==lTxt)elL.textContent=lTxt;
+    }
     const fallSignal=a.observe_only?a.fall_suspected:a.fall;
-    if(fallSignal!=null){const oc=document.getElementById('oc-fall');
+    if(fallSignal!=null){
+      const oc=document.getElementById('oc-fall');
       const fallText=a.observe_only?'NGHI TÉ NGÃ (quan sát)':'TÉ NGÃ';
-      oc.textContent=fallSignal?fallText:'Chưa phát hiện tư thế nghi té ngã';oc.classList.toggle('alarm',!!fallSignal);
-      document.getElementById('ov-patient-fall').textContent=fallSignal?fallText:'Chưa phát hiện';
-      badge(document.getElementById('ov-patient-badge'),fallSignal?'bad':'ok',fallSignal?'Nghi té ngã':(a.observe_only?'Quan sát':'Bình thường'));}
+      const expectedText=fallSignal?fallText:'Chưa phát hiện tư thế nghi té ngã';
+      if(oc&&oc.textContent!==expectedText){
+        oc.textContent=expectedText;
+        oc.classList.toggle('alarm',!!fallSignal);
+      }
+      const ovFall=document.getElementById('ov-patient-fall');
+      const expectedOv=fallSignal?fallText:'Chưa phát hiện';
+      if(ovFall&&ovFall.textContent!==expectedOv)ovFall.textContent=expectedOv;
+      badge(document.getElementById('ov-patient-badge'),fallSignal?'bad':'ok',fallSignal?'Nghi té ngã':(a.observe_only?'Quan sát':'Bình thường'));
+    }
   }
 
   /* ---- lịch sử cảnh báo bếp (Yêu cầu 4) ---- */
   function fmtT(v){if(!v)return'--';const d=new Date(String(v).replace(' ','T'));return isNaN(d)?v:d.toLocaleString('vi-VN');}
+  let _lastKitchenFetch = 0;
   async function loadKitchenAlerts(){
     const list=document.getElementById('kt-alert-list');if(!list)return;
+    const now=Date.now();
+    if(now - _lastKitchenFetch < 1000)return;
+    _lastKitchenFetch = now;
     try{
       const r=await fetch('/api/kitchen_alerts');const d=await r.json();const a=(d&&d.alerts)||[];
       if(!a.length){list.innerHTML='<div class="empty">Chưa có cảnh báo nào.</div>';return;}
@@ -300,7 +331,7 @@
     socket.on('room_update',m=>{if(m.room==='patient')applyPatient(m.data);else if(m.room==='living')applyLiving(m.data);else if(m.room==='kitchen')applyKitchen(m.data);applyTelemetry(telemetryCache);});
     socket.on('node_status',n=>{['patient','living','kitchen'].forEach(r=>{if(n[r]!=null)setNode(r,n[r]===true||n[r]==='online');});applyTelemetry(telemetryCache);});
     socket.on('camera_sync',c=>{setCameraUI(!!c.active,c.mode);});
-    socket.on('ai_status',a=>{applyAI(a);applyTelemetry(telemetryCache);});
+    socket.on('ai_status',a=>{applyAI(a);});
     socket.on('alert_state',a=>{setAlert(a.level,a.message);if(typeof loadKitchenAlerts==='function')loadKitchenAlerts();});
     socket.on('system_alert',a=>{showSys(a.message||'Có cảnh báo mới.',(a.type==='gas'||a.type==='health')?'light':'');if(typeof loadKitchenAlerts==='function')loadKitchenAlerts();});
   }

@@ -108,6 +108,7 @@ JPEG_QUALITY = int(os.getenv("JPEG_QUALITY", "65"))
 PROCESS_EVERY_N_FRAMES = int(os.getenv("PROCESS_EVERY_N_FRAMES", "3"))  # cử chỉ chạy mỗi N frame
 STREAM_SLEEP = float(os.getenv("STREAM_SLEEP", "0.01"))
 STATUS_EMIT_INTERVAL = float(os.getenv("STATUS_EMIT_INTERVAL", "0.2"))
+OVERLAY_MAX_AGE_SEC = float(os.getenv("OVERLAY_MAX_AGE_SEC", "0.8"))
 
 AI_OBSERVE_ONLY = os.getenv("AI_OBSERVE_ONLY", "0") == "1"  # Detect/display without AI-triggered actuation or Telegram.
 ENABLE_GESTURE = os.getenv("ENABLE_GESTURE", "1") == "1"
