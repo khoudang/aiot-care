@@ -55,7 +55,10 @@ struct KitchenState {
     }
   }
   bool confirm(uint32_t id, int gas, bool flame) {
-    if (phase != WAIT_CONFIRM || id != eventId || gas >= 1500 || flame) return false;
+    if (phase != WAIT_CONFIRM || id != eventId || gas >= 1500 || flame) {
+      if (phase == NORMAL && id == eventId && gas < 1500 && !flame) return true;
+      return false;
+    }
     phase = NORMAL; emergency = false; warningGas = false;
     safeCounting = false; alarmMuted = false;
     windowOpen = savedWindow; exhaustOn = savedExhaust;

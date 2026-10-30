@@ -170,10 +170,23 @@ void notifyOutputState(BLECharacteristic *characteristic, int gas, bool flame) {
     "\"window\":%s,\"exhaust\":%s,\"exhaust_speed\":%d,\"light\":%s,\"buzzer\":%s,\"emergency\":%s}",
     gas, "false", flame ? "true" : "false",
     windowOpen ? "true" : "false", exhaustOn ? "true" : "false",
-    (exhaustOn ? exhaustPwm * 100 / 255 : 0),
-    lightOn ? "true" : "false", (buzzerOn || warningGas) ? "true" : "false",
+    (exhaustOn ? (exhaustPwm * 100 + 127) / 255 : 0),
+    lightOn ? "true" : "false", (kitchen.alarmMuted ? "false" : ((buzzerOn || warningGas) ? "true" : "false")),
     emergency ? "true" : "false");
   notifyJson(characteristic, payload);
+}
+
+void notifySafetyState(BLECharacteristic *characteristic) {
+  if (!deviceConnected) return;
+  char safetyPayload[160];
+  snprintf(safetyPayload, sizeof(safetyPayload),
+    "{\"room\":\"kitchen\",\"event_id\":%lu,\"phase\":\"%s\",\"alarm_muted\":%s}",
+    (unsigned long)kitchen.eventId,
+    kitchen.phase == KitchenState::WAIT_CONFIRM ? "wait_confirm" :
+    kitchen.phase == KitchenState::EMERGENCY ? "emergency" :
+    kitchen.phase == KitchenState::WARNING ? "warning" : "normal",
+    kitchen.alarmMuted ? "true" : "false");
+  notifyJson(characteristic, safetyPayload);
 }
 
 void loop() {
@@ -193,20 +206,13 @@ void loop() {
   if (drainCommands(handleCommand, pNotifyChar)) {
     applyOutputs();
     notifyOutputState(pNotifyChar, latestGas, latestFlame);
+    notifySafetyState(pNotifyChar);
   } else {
     applyOutputs();
   }
   if (deviceConnected && now - lastSend >= 1000) {
     lastSend = now;
     notifyOutputState(pNotifyChar, gas, flame);
-    char safetyPayload[160];
-    snprintf(safetyPayload, sizeof(safetyPayload),
-      "{\"room\":\"kitchen\",\"event_id\":%lu,\"phase\":\"%s\",\"alarm_muted\":%s}",
-      (unsigned long)kitchen.eventId,
-      kitchen.phase == KitchenState::WAIT_CONFIRM ? "wait_confirm" :
-      kitchen.phase == KitchenState::EMERGENCY ? "emergency" :
-      kitchen.phase == KitchenState::WARNING ? "warning" : "normal",
-      kitchen.alarmMuted ? "true" : "false");
-    notifyJson(pNotifyChar, safetyPayload);
+    notifySafetyState(pNotifyChar);
   }
 }

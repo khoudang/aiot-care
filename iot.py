@@ -553,6 +553,20 @@ def _make_notify_handler(room):
                             if payload["status"] == "rejected":
                                 _fail_restoration(room)
                                 _emit("command_error", {"room": room, "message": "Node rejected command"})
+                            # Wake up sender loop immediately to dispatch next queued command
+                            wakeup = _command_wakeups.get(room)
+                            if wakeup is not None and ble_loop is not None and ble_loop.is_running():
+                                ble_loop.call_soon_threadsafe(wakeup.set)
+                            elif wakeup is not None:
+                                wakeup.set()
+                        elif pending and payload.get("status") == "busy":
+                            timing_tracer.record_ack(room, payload["ack"], "busy")
+                            pending["sent"] = None
+                            wakeup = _command_wakeups.get(room)
+                            if wakeup is not None and ble_loop is not None and ble_loop.is_running():
+                                ble_loop.call_soon_threadsafe(wakeup.set)
+                            elif wakeup is not None:
+                                wakeup.set()
                 else:
                     apply_node_payload(room, payload)
 
