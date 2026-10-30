@@ -28,7 +28,7 @@ int main() {
   k.update(100, 1500, false, false);
   assert(k.warningGas && !k.emergency && k.sound(100) && !k.sound(400));
   k.update(200, 2500, false, false);
-  assert(k.emergency && k.windowOpen && k.exhaustOn && k.buzzerOn && !k.lightOn);
+  assert(k.emergency && k.windowOpen && k.exhaustOn && k.sound(200) && !k.lightOn);
   k.update(300, 0, false, false);
   k.update(10299, 0, false, false);
   assert(k.emergency);
@@ -37,6 +37,8 @@ int main() {
   k.update(20399, 0, false, false);
   assert(k.emergency);
   k.update(20400, 0, false, false);
+  assert(k.phase == KitchenState::WAIT_CONFIRM && k.emergency);
+  assert(k.confirm(k.eventId, 0, false));
   assert(!k.emergency && k.lightOn && k.exhaustOn && k.exhaustPwm == 128 && !k.windowOpen);
   k.update(20500, 0, false, true);
   assert(k.emergency);

@@ -21,9 +21,13 @@ class KitchenControlTests(unittest.TestCase):
         handler = self.iot._make_notify_handler(room)
         for ident in list(self.iot._pending_commands[room]):
             handler(None, json.dumps({'ack': ident, 'status': 'applied'}).encode())
+        if room == 'kitchen':
+            self.iot.apply_node_payload('kitchen', {'phase': 'normal', 'event_id': 1})
 
     def safe_kitchen(self):
         iot = self.iot
+        iot.set_node_online('kitchen', True)
+        iot.ROOMS['kitchen'].update(phase='wait_confirm', event_id=1)
         iot._kitchen_safe_since = 100
         iot._kitchen_sample_at = 113
         iot._kitchen_emergency = False
@@ -41,7 +45,7 @@ class KitchenControlTests(unittest.TestCase):
             self.trigger_fall()
             self.assertTrue(fan_ids <= set(iot._pending_commands['patient']))
             self.assertIsNotNone(iot._restoration_started)
-            for room in ('patient', 'living'):
+            for room in ('patient', 'living', 'kitchen'):
                 iot.set_node_online(room, True)
                 self.acknowledge(room)
             iot.apply_node_payload('patient', {'fan': True, 'fan_speed': 50, 'buzzer': True})
@@ -66,14 +70,14 @@ class KitchenControlTests(unittest.TestCase):
                                 iot._enter_emergency()
                             if clear_before_ack:
                                 iot._handle_fall(False)
-                            for room in ('patient', 'living'):
+                            for room in ('patient', 'living', 'kitchen'):
                                 self.acknowledge(room)
                                 iot.set_node_online(room, True)
                             iot._handle_fall(False)
                             self.safe_kitchen()
                             iot.confirm_safe()
                             self.assertEqual(iot._patient_buzzer_target(), saved)
-                            for room in ('patient', 'living'):
+                            for room in ('patient', 'living', 'kitchen'):
                                 self.acknowledge(room)
                             iot.apply_node_payload('living', {'auto': True})
                             iot.apply_node_payload('patient', {
@@ -91,7 +95,7 @@ class KitchenControlTests(unittest.TestCase):
             iot._enter_emergency()
             self.safe_kitchen()
             iot.confirm_safe()
-            for room in ('patient', 'living'):
+            for room in ('patient', 'living', 'kitchen'):
                 iot.set_node_online(room, True)
                 self.acknowledge(room)
             iot._handle_fall(False)
@@ -235,24 +239,25 @@ class KitchenControlTests(unittest.TestCase):
 
     def begin_restoration(self, automatic=True):
         iot = self.iot
-        for room in ('patient', 'living'):
+        for room in ('patient', 'living', 'kitchen'):
             iot.set_node_online(room, True)
         iot.ROOMS['living'].update(auto=automatic, light=True, fan=True, fan_speed=50)
         iot.AI['fall'] = True
         iot.apply_node_payload('kitchen', {
-            'gas': 2500, 'smoke': True, 'flame': False, 'emergency': True})
+            'gas': 2500, 'smoke': False, 'flame': False, 'emergency': True,
+            'phase': 'emergency', 'event_id': 1})
         self.assertEqual(iot.alert_level, 'emergency')
         for tick in range(101, 114):
             with patch.object(iot.time, 'monotonic', return_value=tick):
                 iot.apply_node_payload('kitchen', {
-                    'gas': 0, 'smoke': False, 'flame': False, 'emergency': False})
+                    'gas': 0, 'smoke': False, 'flame': False, 'emergency': False,
+                    'phase': 'wait_confirm' if tick >= 111 else 'emergency',
+                    'event_id': 1})
         iot.confirm_safe()
         self.assertIsNotNone(iot._restoration_started)
         # Simulate firmware acknowledgements through the actual notification parser.
-        for room in ('patient', 'living'):
-            handler = iot._make_notify_handler(room)
-            for ident in list(iot._pending_commands[room]):
-                handler(None, json.dumps({'ack': ident, 'status': 'applied'}).encode())
+        for room in ('patient', 'living', 'kitchen'):
+            self.acknowledge(room)
 
     def test_auto_restore_completes_from_telemetry_with_changed_outputs(self):
         iot = self.iot
@@ -318,13 +323,12 @@ class KitchenControlTests(unittest.TestCase):
                     if failure == 'timeout':
                         asyncio.run(iot._send_pending('patient', Mock(write_gatt_char=AsyncMock()), 'uuid'))
                     self.assertIsNotNone(iot._emergency_snapshot)
+                    self.safe_kitchen()
                     iot._kitchen_sample_at = 144
                     iot.confirm_safe()
                     self.assertEqual(iot._restoration_started, 144)
-                    for room in ('patient', 'living'):
-                        handler = iot._make_notify_handler(room)
-                        for command in list(iot._pending_commands[room]):
-                            handler(None, json.dumps({'ack': command, 'status': 'applied'}).encode())
+                    for room in ('patient', 'living', 'kitchen'):
+                        self.acknowledge(room)
                     iot.apply_node_payload('patient', {'fan': False, 'fan_speed': 0, 'buzzer': True})
                     iot.apply_node_payload('living', {'auto': True})
                     self.assertIsNone(iot._emergency_snapshot)

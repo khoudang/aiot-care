@@ -162,6 +162,20 @@ void setup() {
   Serial.println("[4] BLE Started! Waiting for Pi...");
 }
 
+void notifyOutputState(BLECharacteristic *characteristic, int gas, bool flame) {
+  if (!deviceConnected) return;
+  char payload[256];
+  snprintf(payload, sizeof(payload),
+    "{\"room\":\"kitchen\",\"gas\":%d,\"smoke\":%s,\"flame\":%s,"
+    "\"window\":%s,\"exhaust\":%s,\"exhaust_speed\":%d,\"light\":%s,\"buzzer\":%s,\"emergency\":%s}",
+    gas, "false", flame ? "true" : "false",
+    windowOpen ? "true" : "false", exhaustOn ? "true" : "false",
+    (exhaustOn ? exhaustPwm * 100 / 255 : 0),
+    lightOn ? "true" : "false", (buzzerOn || warningGas) ? "true" : "false",
+    emergency ? "true" : "false");
+  notifyJson(characteristic, payload);
+}
+
 void loop() {
   static unsigned long lastSample = 0;
   static unsigned long lastSend = 0;
@@ -176,20 +190,15 @@ void loop() {
     latestGas = gas; latestFlame = flame;
     kitchen.update(now, gas, false, flame);
   }
-  drainCommands(handleCommand, pNotifyChar);
-  applyOutputs();
+  if (drainCommands(handleCommand, pNotifyChar)) {
+    applyOutputs();
+    notifyOutputState(pNotifyChar, latestGas, latestFlame);
+  } else {
+    applyOutputs();
+  }
   if (deviceConnected && now - lastSend >= 1000) {
     lastSend = now;
-    char payload[256];
-    snprintf(payload, sizeof(payload),
-      "{\"room\":\"kitchen\",\"gas\":%d,\"smoke\":%s,\"flame\":%s,"
-      "\"window\":%s,\"exhaust\":%s,\"exhaust_speed\":%d,\"light\":%s,\"buzzer\":%s,\"emergency\":%s}",
-      gas, "false", flame ? "true" : "false",
-      windowOpen ? "true" : "false", exhaustOn ? "true" : "false",
-      (exhaustOn ? exhaustPwm * 100 / 255 : 0),
-      lightOn ? "true" : "false", (buzzerOn || warningGas) ? "true" : "false",
-      emergency ? "true" : "false");
-    notifyJson(pNotifyChar, payload);
+    notifyOutputState(pNotifyChar, gas, flame);
     char safetyPayload[160];
     snprintf(safetyPayload, sizeof(safetyPayload),
       "{\"room\":\"kitchen\",\"event_id\":%lu,\"phase\":\"%s\",\"alarm_muted\":%s}",

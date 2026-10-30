@@ -1,15 +1,31 @@
 [Unit]
-Description=AIoT Care Station
-After=network.target
+Description=AIoT Care Station Gateway Service
+After=network.target bluetooth.target dbus.service
+Wants=bluetooth.target
 
 [Service]
 Type=simple
-User=khoi
-WorkingDirectory=/home/khoi/aiot-care
-ExecStart=/home/khoi/aiot-care/venv311/bin/python3 app.py
-Restart=always
-RestartSec=10
-Environment=PATH=/home/khoi/aiot-care/venv311/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Replace 'pi' with your target Linux/Pi user account
+User=pi
+# Working directory containing repository code
+WorkingDirectory=/home/pi/aiot-care
+# Virtual environment Python executable (single process, no debug reloader)
+ExecStart=/home/pi/aiot-care/venv/bin/python3 app.py
+
+# Restart policy: bounded restart on failure with 5s backoff
+Restart=on-failure
+RestartSec=5s
+RestartPreventExitStatus=2
+
+# Environment variables
+Environment=PYTHONUNBUFFERED=1
+Environment=FLASK_DEBUG=0
+Environment=PATH=/home/pi/aiot-care/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Resource and security boundaries
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aiot-care
 
 [Install]
 WantedBy=multi-user.target

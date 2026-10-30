@@ -36,22 +36,31 @@
     async function loadLogs(){const d=await fj('/api/admin/logs');renderLogin(d.login_logs||[]);renderAudit(d.audit_logs||[]);}
     async function loadConfig(){const c=(await fj('/api/admin/configs')).configs||{};$('cfg-code').value=c.admin_register_code||'';$('cfg-token').value=c.telegram_bot_token||'';$('cfg-chat').value=c.telegram_chat_id||'';}
     const bleNames={patient:'Phòng người bệnh',living:'Phòng khách',kitchen:'Phòng bếp'};
-    const bleStatus=online=>online?'Đã kết nối':'Chưa kết nối';
+    const bleStatus=state=>{
+      if(state==='ready'||state===true) return 'Sẵn sàng';
+      if(state==='connecting') return 'Đang kết nối';
+      if(state==='subscribing') return 'Đang đăng ký';
+      if(state==='stale') return 'Mất tín hiệu';
+      return 'Chưa kết nối';
+    };
     function paintBleNodes(nodes){
       const list=$('ble-list');list.textContent='';
       for(const node of nodes){
         const row=document.createElement('div');row.className='ble-row';row.dataset.room=node.room;
         const label=document.createElement('label');label.textContent=bleNames[node.room]||node.room;
-        const status=document.createElement('span');status.className='ble-state';status.textContent=bleStatus(node.online);
+        const status=document.createElement('span');status.className='ble-state';status.textContent=bleStatus(node.state||node.online);
         const input=document.createElement('input');input.value=node.mac;input.setAttribute('list','ble-found');input.setAttribute('aria-label',`MAC BLE ${label.textContent}`);input.spellcheck=false;
         const save=document.createElement('button');save.type='button';save.className='btn sm';save.textContent='Lưu';
-        save.addEventListener('click',async()=>{save.disabled=true;try{const d=await fj(`/api/admin/ble-nodes/${node.room}`,{method:'POST',body:JSON.stringify({mac:input.value.trim()})});const current=(d.nodes||[]).find(item=>item.room===node.room);if(current){input.value=current.mac;status.textContent=bleStatus(current.online);}$('ble-message').textContent=d.message||'Đã lưu.';}catch(err){$('ble-message').textContent=err.message;}finally{save.disabled=false;}});
+        save.addEventListener('click',async()=>{save.disabled=true;try{const d=await fj(`/api/admin/ble-nodes/${node.room}`,{method:'POST',body:JSON.stringify({mac:input.value.trim()})});const current=(d.nodes||[]).find(item=>item.room===node.room);if(current){input.value=current.mac;status.textContent=bleStatus(current.state||current.online);}$('ble-message').textContent=d.message||'Đã lưu.';}catch(err){$('ble-message').textContent=err.message;}finally{save.disabled=false;}});
         row.append(label,status,input,save);list.append(row);
       }
     }
     async function loadBleNodes(){paintBleNodes((await fj('/api/admin/ble-nodes')).nodes||[]);}
     $('ble-scan').addEventListener('click',async()=>{const btn=$('ble-scan');btn.disabled=true;$('ble-message').textContent='Đang quét BLE…';try{const devices=(await fj('/api/admin/ble-scan')).devices||[];const found=$('ble-found');found.textContent='';for(const device of devices){const option=document.createElement('option');option.value=device.mac;option.label=`${device.name} · ${device.mac}`;found.append(option);}$('ble-message').textContent=devices.length?`Tìm thấy ${devices.length} thiết bị. Chọn MAC trong ô của phòng tương ứng.`:'Không tìm thấy thiết bị đang phát BLE.';}catch(err){$('ble-message').textContent=err.message;}finally{btn.disabled=false;}});
-    if(typeof socket!=='undefined'&&socket)socket.on('node_status',statuses=>{document.querySelectorAll('.ble-row').forEach(row=>{row.querySelector('.ble-state').textContent=bleStatus(statuses[row.dataset.room]);});});
+    if(typeof socket!=='undefined'&&socket){
+      socket.on('node_status',statuses=>{document.querySelectorAll('.ble-row').forEach(row=>{row.querySelector('.ble-state').textContent=bleStatus(statuses[row.dataset.room]);});});
+      socket.on('node_state',states=>{document.querySelectorAll('.ble-row').forEach(row=>{row.querySelector('.ble-state').textContent=bleStatus(states[row.dataset.room]);});});
+    }
     window.editUser=async(id,cur)=>{const u=prompt('Username mới:',cur);if(u===null)return;const un=u.trim();if(!un){alert('Không được để trống.');return;}const p=prompt('Mật khẩu mới (trống nếu giữ nguyên):','');if(p===null)return;try{const d=await fj(`/api/admin/users/${id}/edit`,{method:'POST',body:JSON.stringify({username:un,password:p.trim()})});renderUsers(d.users||[]);loadLogs();alert(d.message||'Đã cập nhật.');}catch(e){alert(e.message);}};
     window.toggleSuspend=async id=>{try{const d=await fj(`/api/admin/users/${id}/suspend`,{method:'POST'});renderUsers(d.users||[]);loadLogs();alert(d.message||'Đã cập nhật.');}catch(e){alert(e.message);}};
     window.delUser=async(id,n)=>{if(!confirm(`Xóa vĩnh viễn tài khoản "${n}"?`))return;try{const d=await fj(`/api/admin/users/${id}`,{method:'DELETE'});renderUsers(d.users||[]);loadLogs();alert(d.message||'Đã xóa.');}catch(e){alert(e.message);}};

@@ -144,11 +144,13 @@ ROOMS = {
         "gas": None, "smoke": False, "flame": False,
         "window": False, "exhaust": False, "exhaust_speed": None,
         "light": False, "buzzer": False, "phase": "unknown", "event_id": None,
+        "gas_unit": "raw_adc", "calibration_status": "uncalibrated", "ppm_c3h8": None,
         "updated_at": 0,
     },
 }
 
 NODE_ONLINE = {"patient": False, "living": False, "kitchen": False}
+NODE_STATES = {"patient": "disconnected", "living": "disconnected", "kitchen": "disconnected"}
 
 AI = {
     "gesture": "—", "fps": "--", "latency": "--",
@@ -208,6 +210,165 @@ _ble_devices = {}
 _ble_devices_seen_at = 0.0
 _ble_discovery_lock = None
 
+
+class CommandTimingTracer:
+    """Bounded in-memory timing trace for BLE commands using monotonic clock.
+
+    Deltas are strictly calculated using same-process time.monotonic() to avoid
+    clock skew across independent Pi / ESP32 / browser boundaries.
+    """
+
+    def __init__(self, maxlen=200):
+        self._traces = deque(maxlen=maxlen)
+        self._active = {}
+        self._lock = threading.Lock()
+
+    def record_enqueued(self, room, command_id, device, sig):
+        now = time.monotonic()
+        rec = {
+            "id": command_id,
+            "room": room,
+            "device": device,
+            "sig": sig,
+            "enqueued_at": now,
+            "write_start_at": None,
+            "write_done_at": None,
+            "ack_at": None,
+            "applied_at": None,
+            "status": "enqueued",
+            "attempts": 0,
+            "error": None,
+        }
+        with self._lock:
+            self._active[(room, command_id)] = rec
+            self._traces.append(rec)
+
+    def record_write_start(self, room, command_id, attempt):
+        now = time.monotonic()
+        with self._lock:
+            rec = self._active.get((room, command_id))
+            if rec:
+                rec["write_start_at"] = now
+                rec["attempts"] = attempt
+                rec["status"] = "writing"
+
+    def record_write_done(self, room, command_id, error=None):
+        now = time.monotonic()
+        with self._lock:
+            rec = self._active.get((room, command_id))
+            if rec:
+                rec["write_done_at"] = now
+                if error:
+                    rec["status"] = "write_error"
+                    rec["error"] = str(error)
+                else:
+                    rec["status"] = "written"
+
+    def record_ack(self, room, command_id, status):
+        now = time.monotonic()
+        with self._lock:
+            rec = self._active.get((room, command_id))
+            if rec:
+                rec["ack_at"] = now
+                rec["status"] = f"ack_{status}"
+
+    def record_applied(self, room, device):
+        now = time.monotonic()
+        with self._lock:
+            for (r, cid), rec in list(self._active.items()):
+                if r == room and rec.get("device") == device:
+                    rec["applied_at"] = now
+                    rec["status"] = "applied_state"
+                    self._active.pop((r, cid), None)
+                    break
+
+    def record_error(self, room, command_id, error_msg):
+        now = time.monotonic()
+        with self._lock:
+            rec = self._active.pop((room, command_id), None)
+            if rec:
+                rec["status"] = "timeout_error"
+                rec["error"] = str(error_msg)
+
+    def get_summary(self, target_room=None):
+        with self._lock:
+            records = [r for r in self._traces if target_room is None or r["room"] == target_room]
+
+        queue_latencies = []
+        gatt_latencies = []
+        ack_latencies = []
+        total_latencies = []
+        errors = 0
+
+        for r in records:
+            if r.get("error") or r.get("status") in ("write_error", "timeout_error", "ack_rejected"):
+                errors += 1
+            if r.get("write_start_at") and r.get("enqueued_at"):
+                queue_latencies.append((r["write_start_at"] - r["enqueued_at"]) * 1000.0)
+            if r.get("write_done_at") and r.get("write_start_at"):
+                gatt_latencies.append((r["write_done_at"] - r["write_start_at"]) * 1000.0)
+            if r.get("ack_at") and r.get("write_done_at"):
+                ack_latencies.append((r["ack_at"] - r["write_done_at"]) * 1000.0)
+            end_time = r.get("applied_at") or r.get("ack_at")
+            if end_time and r.get("enqueued_at"):
+                total_latencies.append((end_time - r["enqueued_at"]) * 1000.0)
+
+        def calc_stats(arr):
+            if not arr:
+                return {"count": 0, "median_ms": None, "p95_ms": None, "min_ms": None, "max_ms": None}
+            s = sorted(arr)
+            n = len(s)
+            p95_idx = int(math.ceil(0.95 * n)) - 1
+            med_idx = n // 2
+            median = s[med_idx] if n % 2 != 0 else (s[med_idx - 1] + s[med_idx]) / 2.0
+            return {
+                "count": n,
+                "median_ms": round(median, 2),
+                "p95_ms": round(s[min(max(p95_idx, 0), n - 1)], 2),
+                "min_ms": round(s[0], 2),
+                "max_ms": round(s[-1], 2),
+            }
+
+        queue_len = {}
+        with _delivery_lock:
+            for rm in ROOMS:
+                if target_room is None or rm == target_room:
+                    queue_len[rm] = len(_pending_commands.get(rm, {}))
+
+        return {
+            "room": target_room or "all",
+            "total_commands": len(records),
+            "errors": errors,
+            "error_rate": round(errors / len(records), 4) if records else 0.0,
+            "queue_lengths": queue_len,
+            "queue_latency": calc_stats(queue_latencies),
+            "gatt_write_latency": calc_stats(gatt_latencies),
+            "ack_rtt_latency": calc_stats(ack_latencies),
+            "total_latency": calc_stats(total_latencies),
+            "recent_traces": [
+                {
+                    "id": r["id"],
+                    "room": r["room"],
+                    "device": r["device"],
+                    "attempts": r["attempts"],
+                    "status": r["status"],
+                    "error": r["error"],
+                    "total_ms": round((((r["applied_at"] or r["ack_at"]) - r["enqueued_at"]) * 1000.0), 2)
+                    if (r.get("applied_at") or r.get("ack_at")) and r.get("enqueued_at") else None
+                }
+                for r in list(records)[-20:]
+            ],
+            "source": "simulated_host_timing_monotonic",
+        }
+
+
+timing_tracer = CommandTimingTracer(maxlen=200)
+_command_wakeups = {room: None for room in ROOMS}
+
+
+def get_command_timing_stats(room=None):
+    return timing_tracer.get_summary(room)
+
 # UART
 uart = None
 _last_servo_send = 0.0
@@ -231,9 +392,10 @@ def snapshot_all():
         rooms = {r: dict(v) for r, v in ROOMS.items()}
         ai = dict(AI)
         nodes = dict(NODE_ONLINE)
+        node_states = dict(NODE_STATES)
         cam = {"active": camera_active, "mode": camera_mode, "tracking": tracking_enabled}
         alert = {"level": alert_level}
-    return {"rooms": rooms, "nodes": nodes, "ai": ai, "camera": cam,
+    return {"rooms": rooms, "nodes": nodes, "node_states": node_states, "ai": ai, "camera": cam,
             "alert": alert, "histories": snapshot_histories()}
 
 
@@ -297,6 +459,11 @@ def apply_node_payload(room, payload):
         for key in _BOOL_KEYS:
             if key in payload and key in r:
                 r[key] = safe_bool(payload[key])
+                timing_tracer.record_applied(room, key)
+        if "fan_speed" in payload:
+            timing_tracer.record_applied(room, "fan")
+        if "exhaust_speed" in payload:
+            timing_tracer.record_applied(room, "exhaust")
         if room == "kitchen":
             if payload.get("phase") in ("normal", "warning", "emergency", "wait_confirm"):
                 r["phase"] = payload["phase"]
@@ -334,22 +501,28 @@ def _gas_avg(room):
 # ================================================================== #
 #  Node online / offline
 # ================================================================== #
-def set_node_online(room, online):
+def set_node_online(room, online, state=None):
     if room not in ROOMS:
         return
+    resolved_state = state or ("ready" if online else "disconnected")
+    is_ready = (resolved_state == "ready")
+    NODE_STATES[room] = resolved_state
     _restoration_seen.pop(room, None)
-    if room == "kitchen" and not online:
+    if room == "kitchen" and not is_ready:
         _cancel_commands("kitchen")
         ROOMS["kitchen"]["phase"] = "unknown"
         ROOMS["kitchen"]["event_id"] = None
-    changed = NODE_ONLINE.get(room) != online
-    NODE_ONLINE[room] = online
+    changed = NODE_ONLINE.get(room) != is_ready
+    NODE_ONLINE[room] = is_ready
     if changed:
         _emit("node_status", dict(NODE_ONLINE))
-        if not online:
+        _emit("node_state", dict(NODE_STATES))
+        if not is_ready and resolved_state == "disconnected":
             log_audit(f"Node {room} mất kết nối (BLE offline)", user_id=None)
             _push_alert("node_" + room,
                         f"Node {room_name(room)} mất kết nối.", "node")
+    else:
+        _emit("node_state", dict(NODE_STATES))
 
 
 def room_name(room):
@@ -376,6 +549,7 @@ def _make_notify_handler(room):
                         pending = _pending_commands[room].get(payload["ack"])
                         if pending and payload.get("status") in ("applied", "rejected"):
                             del _pending_commands[room][payload["ack"]]
+                            timing_tracer.record_ack(room, payload["ack"], payload["status"])
                             if payload["status"] == "rejected":
                                 _fail_restoration(room)
                                 _emit("command_error", {"room": room, "message": "Node rejected command"})
@@ -414,7 +588,8 @@ def _configured_mac(node):
 
 def ble_node_settings():
     return [{"room": node["room"], "mac": _configured_mac(node),
-             "online": bool(NODE_ONLINE[node["room"]])} for node in NODES]
+             "online": bool(NODE_ONLINE[node["room"]]),
+             "state": NODE_STATES.get(node["room"], "disconnected")} for node in NODES]
 
 
 async def _scan_ble_devices():
@@ -429,20 +604,35 @@ async def _discover_ble_devices(force=False):
     if _ble_discovery_lock is None:
         _ble_discovery_lock = asyncio.Lock()
     async with _ble_discovery_lock:
+        now = time.monotonic()
         # A recent scan is useful even when it found no devices. Without this,
         # absent nodes trigger back-to-back scans and starve the other nodes.
-        if not force and time.monotonic() - _ble_devices_seen_at < 10:
+        if not force and now - _ble_devices_seen_at < 10:
             return list(_ble_devices.values())
         devices = await BleakScanner.discover(timeout=5.0)
+        # Preserve already-connected nodes absent from advertisements
+        connected_devices = {}
+        for r, c in ble_clients.items():
+            if c is not None and getattr(c, "is_connected", False):
+                dev = getattr(c, "_device", getattr(c, "device", None))
+                if dev and hasattr(dev, "address"):
+                    connected_devices[dev.address.upper()] = dev
         _ble_devices.clear()
+        _ble_devices.update(connected_devices)
         _ble_devices.update({device.address.upper(): device for device in devices})
-        _ble_devices_seen_at = time.monotonic()
+        _ble_devices_seen_at = now
         return list(_ble_devices.values())
 
 
 async def _find_ble_device(mac):
-    await _discover_ble_devices()
-    return _ble_devices.get(mac.upper())
+    if not mac:
+        return None
+    target = mac.strip().upper()
+    dev = _ble_devices.get(target)
+    if dev is not None:
+        return dev
+    await _discover_ble_devices(force=True)
+    return _ble_devices.get(target)
 
 
 def scan_ble_devices():
@@ -465,6 +655,19 @@ def reconnect_ble_node(room):
             _last_cmd.pop(key, None)
 
 
+def _calc_pending_timeout(room):
+    with _delivery_lock:
+        if not _pending_commands[room]:
+            return 2.0
+        ident, pending = next(iter(_pending_commands[room].items()))
+        sent = pending.get("sent")
+        if sent is None:
+            return 0.01
+        elapsed = time.monotonic() - sent
+        rem = max(0.01, COMMAND_ACK_TIMEOUT - elapsed)
+        return min(rem, 2.0)
+
+
 async def _node_loop(node):
     room = node["room"]
     notify_uuid = node["notify_uuid"]
@@ -472,40 +675,62 @@ async def _node_loop(node):
 
     if BleakClient is None:
         print("[BLE] bleak chưa được cài — bỏ qua node", room)
+        set_node_online(room, False, state="disconnected")
         return
+
+    _command_wakeups[room] = asyncio.Event()
+    reconnect_delay = BLE_RECONNECT_DELAY
 
     while True:
         try:
             _ble_reconfigure[room].clear()
             mac = _configured_mac(node)
             if not mac or not mac.strip():
-                print("[BLE] MAC not configured; waiting for node", room)
+                set_node_online(room, False, state="disconnected")
+                print(f"[BLE] MAC not configured; waiting for node {room}")
+                for _ in range(20):
+                    if _ble_reconfigure[room].is_set():
+                        break
+                    await asyncio.sleep(0.05)
                 continue
+
+            mac = mac.strip().upper()
+            set_node_online(room, False, state="connecting")
             print(f"[BLE {room}] connecting to {mac} ...")
             device = await _find_ble_device(mac)
             if device is None:
                 raise RuntimeError(f"BLE scan did not find configured device {mac}")
+
             async with BleakClient(device) as client:
-                if _ble_reconfigure[room].is_set() or _configured_mac(node).upper() != mac.upper():
+                if _ble_reconfigure[room].is_set() or _configured_mac(node).strip().upper() != mac:
                     continue
                 ble_clients[room] = client
-                set_node_online(room, True)
-                print(f"[BLE {room}] connected")
 
+                set_node_online(room, False, state="subscribing")
                 await client.start_notify(notify_uuid, _make_notify_handler(room))
-                _resync_safety(room)
 
-                # vòng lặp gửi lệnh (drain queue) + giữ kết nối
+                # Online / ready ONLY after start_notify success!
+                set_node_online(room, True, state="ready")
+                print(f"[BLE {room}] ready (subscribed)")
+                _resync_safety(room)
+                reconnect_delay = BLE_RECONNECT_DELAY
+
                 while client.is_connected and not _ble_reconfigure[room].is_set():
                     await _send_pending(room, client, command_uuid)
-                    await asyncio.sleep(0.05)
+                    timeout = _calc_pending_timeout(room)
+                    try:
+                        await asyncio.wait_for(_command_wakeups[room].wait(), timeout=timeout)
+                    except asyncio.TimeoutError:
+                        pass
+                    _command_wakeups[room].clear()
 
         except Exception as exc:
             print(f"[BLE {room}] disconnected / reconnect:", exc)
+            reconnect_delay = min(reconnect_delay * 1.5, 10.0)
         finally:
             ble_clients[room] = None
-            set_node_online(room, False)
-            await asyncio.sleep(BLE_RECONNECT_DELAY)
+            set_node_online(room, False, state="disconnected")
+            await asyncio.sleep(reconnect_delay)
 
 
 async def _ble_main():
@@ -534,8 +759,15 @@ def enqueue_command(room, text):
             command_queues[room].put_nowait(text)
         except queue.Full:
             return False
+        now = time.monotonic()
         _pending_commands[room][_command_sequence] = {
-            "text": text, "created": time.monotonic(), "sent": None, "attempts": 0}
+            "text": text, "created": now, "sent": None, "attempts": 0}
+        cmd_name = command.get("cmd") or "unknown"
+        sig = {k: v for k, v in command.items() if k not in ("id", "event_id")}
+        timing_tracer.record_enqueued(room, _command_sequence, cmd_name, sig)
+        wakeup = _command_wakeups.get(room)
+        if wakeup is not None and ble_loop is not None and ble_loop.is_running():
+            ble_loop.call_soon_threadsafe(wakeup.set)
         return True
 
 
@@ -571,15 +803,21 @@ async def _send_pending(room, client, command_uuid):
         if now - pending["created"] >= COMMAND_TTL or (due and pending["attempts"] >= COMMAND_ATTEMPTS):
             del _pending_commands[room][ident]
             _fail_restoration(room)
+            timing_tracer.record_error(room, ident, "Command acknowledgement timeout")
             _emit("command_error", {"room": room, "message": "Command acknowledgement timeout"})
             return
         if not due:
             return
         pending["sent"] = now
         pending["attempts"] += 1
+        cmd_text = pending["text"]
+        attempt = pending["attempts"]
+    timing_tracer.record_write_start(room, ident, attempt)
     try:
-        await client.write_gatt_char(command_uuid, pending["text"].encode("utf-8"), response=True)
-    except Exception:
+        await client.write_gatt_char(command_uuid, cmd_text.encode("utf-8"), response=True)
+        timing_tracer.record_write_done(room, ident)
+    except Exception as exc:
+        timing_tracer.record_write_done(room, ident, error=exc)
         # Retain the same ID across write errors and reconnect, until bounded expiry.
         raise
 

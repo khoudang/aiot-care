@@ -391,6 +391,15 @@ def register_web(app, socketio):
     def api_admin_ble_nodes():
         return jsonify({"ok": True, "nodes": iot.ble_node_settings()})
 
+    @app.route("/api/admin/ble/timing-traces", methods=["GET"])
+    @admin_required
+    def api_admin_ble_timing_traces():
+        room = request.args.get("room")
+        if room and room not in ("patient", "living", "kitchen"):
+            return jsonify({"ok": False, "message": "Phòng không hợp lệ."}), 400
+        stats = iot.get_command_timing_stats(room)
+        return jsonify({"ok": True, "timing_trace": stats})
+
     @app.route("/api/admin/ble-scan", methods=["GET"])
     @admin_required
     def api_admin_ble_scan():

@@ -129,8 +129,20 @@ void setup() {
   Serial.println("[6] BLE Started! Waiting for Pi...");
 }
 
+void notifyOutputState(BLECharacteristic *characteristic) {
+  if (!deviceConnected) return;
+  char payload[160];
+  snprintf(payload, sizeof(payload),
+    "{\"room\":\"patient\",\"light\":%s,\"fan\":%s,\"fan_speed\":%d,\"buzzer\":%s}",
+    lightOn ? "true" : "false", fanPwm > 0 ? "true" : "false",
+    (fanPwm * 100 + 127) / 255, buzzerOn ? "true" : "false");
+  notifyJson(characteristic, payload);
+}
+
 void loop() {
-  drainCommands(handleCommand, pNotifyChar);
+  if (drainCommands(handleCommand, pNotifyChar)) {
+    notifyOutputState(pNotifyChar);
+  }
   // Xử lý lệnh UART từ Pi để quay Servo
   if (Serial1.available()) {
     String cmd = Serial1.readStringUntil('\n');

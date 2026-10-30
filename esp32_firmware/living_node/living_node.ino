@@ -122,8 +122,20 @@ void setup() {
   Serial.println("[4] BLE Started! Waiting for Pi...");
 }
 
+void notifyOutputState(BLECharacteristic *characteristic) {
+  if (!deviceConnected) return;
+  char payload[160];
+  snprintf(payload, sizeof(payload),
+    "{\"room\":\"living\",\"light\":%s,\"fan\":%s,\"fan_speed\":%d,\"auto\":%s}",
+    lightOn ? "true" : "false", fanPwm > 0 ? "true" : "false",
+    (fanPwm * 100 + 127) / 255, auto_mode ? "true" : "false");
+  notifyJson(characteristic, payload);
+}
+
 void loop() {
-  drainCommands(handleCommand, pNotifyChar);
+  if (drainCommands(handleCommand, pNotifyChar)) {
+    notifyOutputState(pNotifyChar);
+  }
   static unsigned long lastSend = 0;
   if (millis() - lastSend > 1000) {
     lastSend = millis();
