@@ -243,8 +243,10 @@ class CommandTimingTracer:
             "sig": sig,
             "enqueued_at": now,
             "write_start_at": None,
+            "first_write_start_at": None,
             "write_done_at": None,
             "ack_at": None,
+            "ack_status": None,
             "applied_at": None,
             "status": "enqueued",
             "attempts": 0,
@@ -262,7 +264,12 @@ class CommandTimingTracer:
         with self._lock:
             rec = self._active.get((room, command_id))
             if rec:
+                if rec["first_write_start_at"] is None:
+                    rec["first_write_start_at"] = now
                 rec["write_start_at"] = now
+                rec["write_done_at"] = None
+                rec["ack_at"] = None
+                rec["ack_status"] = None
                 rec["attempts"] = attempt
                 rec["status"] = "writing"
 
@@ -278,9 +285,10 @@ class CommandTimingTracer:
             if rec:
                 rec["write_done_at"] = now
                 if error:
-                    rec["status"] = "write_error"
+                    if rec["status"] not in ("ack_applied", "ack_rejected", "canceled", "timeout_error"):
+                        rec["status"] = "write_error"
                     rec["error"] = str(error)
-                    self._active.pop((room, command_id), None)
+                    # Transport failure is retryable; terminal ACK/cancel/TTL removes it.
                 elif not rec["status"].startswith("ack_") and rec["status"] not in ("canceled", "timeout_error"):
                     rec["status"] = "written"
 
@@ -295,6 +303,7 @@ class CommandTimingTracer:
                         break
             if rec:
                 rec["ack_at"] = now
+                rec["ack_status"] = status
                 rec["status"] = f"ack_{status}"
                 if status in ("applied", "rejected"):
                     self._active.pop((room, command_id), None)
@@ -337,14 +346,18 @@ class CommandTimingTracer:
         for r in records:
             if r.get("error") or r.get("status") in ("write_error", "timeout_error", "ack_rejected"):
                 errors += 1
-            if r.get("write_start_at") and r.get("enqueued_at"):
-                queue_latencies.append((r["write_start_at"] - r["enqueued_at"]) * 1000.0)
-            if r.get("write_done_at") and r.get("write_start_at"):
+            first_write = r.get("first_write_start_at")
+            if first_write is not None and r.get("enqueued_at") is not None:
+                queue_latencies.append((first_write - r["enqueued_at"]) * 1000.0)
+            if r.get("write_done_at") is not None and r.get("write_start_at") is not None:
                 gatt_latencies.append((r["write_done_at"] - r["write_start_at"]) * 1000.0)
-            if r.get("ack_at") and r.get("write_done_at"):
-                ack_latencies.append((r["ack_at"] - r["write_done_at"]) * 1000.0)
-            end_time = r.get("ack_at")
-            if end_time and r.get("enqueued_at"):
+            terminal_ack = r.get("status") in ("ack_applied", "ack_rejected")
+            if terminal_ack and r.get("ack_at") is not None and r.get("write_start_at") is not None:
+                # A notification may arrive before the awaited write returns.
+                # Anchor ACK timing to write START, never to write completion.
+                ack_latencies.append((r["ack_at"] - r["write_start_at"]) * 1000.0)
+            end_time = r.get("ack_at") if terminal_ack else None
+            if end_time is not None and r.get("enqueued_at") is not None:
                 total_latencies.append((end_time - r["enqueued_at"]) * 1000.0)
 
         def calc_stats(arr):
@@ -388,11 +401,13 @@ class CommandTimingTracer:
                     "status": r["status"],
                     "error": r["error"],
                     "total_ms": round(((r["ack_at"] - r["enqueued_at"]) * 1000.0), 2)
-                    if r.get("ack_at") and r.get("enqueued_at") else None
+                    if r.get("status") in ("ack_applied", "ack_rejected") and r.get("ack_at") is not None and r.get("enqueued_at") is not None else None
                 }
                 for r in list(records)[-20:]
             ],
-            "source": "simulated_host_timing_monotonic",
+            "source": "gateway_monotonic",
+            "ack_rtt_anchor": "gatt_write_start",
+            "measurement_scope": "gateway_to_firmware_ack_not_physical_output",
         }
 
 

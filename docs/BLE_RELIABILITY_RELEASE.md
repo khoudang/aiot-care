@@ -15,7 +15,7 @@
 | :--- | :--- | :--- | :--- |
 | **GATT Transport** | `write_gatt_char(command_uuid, json, response=True)` | Tầng BLE ATT chấp nhận packet ghi. Chưa chứng minh firmware đã thực thi. | Bounded retry (4 attempts, timeout 2s, TTL 30s). Giữ nguyên `response=True`. |
 | **Application ACK** | `{"ack": <uint32_t id>, "status": "applied"\|"rejected"\|"busy"}` | Firmware ESP32 đã giải mã JSON, kiểm tra logic an toàn cục bộ, và chấp thuận lệnh logic vào biến điều khiển trong bộ nhớ (trong `drainCommands`, gói ACK phát đi trước khi gọi `applyOutputs`). | Phản hồi ngay lập tức qua notify frame riêng. Trạng thái `busy` áp dụng backoff có giới hạn (0.2s–1.0s) tránh bão retry; `rejected` hủy quy trình khôi phục. |
-| **Immediate State** | `{"room": "...", "light": bool, "fan": bool, ...}` | Firmware phát frame telemetry đầu ra ngay sau khi `applyOutputs()` xuất tín hiệu GPIO. | Giảm thiểu độ trễ cập nhật so với chu kỳ 1s thông thường. Lưu ý: các mốc thời gian <10ms/<50ms là kết quả đo host simulation trong cùng tiến trình, không phải cam kết cố định trên sóng vô tuyến BLE phần cứng thực tế (phụ thuộc connection interval và RF). |
+| **Immediate State** | `{"room": "...", "light": bool, "fan": bool, ...}` | Firmware phát frame telemetry đầu ra ngay sau khi `applyOutputs()` xuất tín hiệu GPIO. | Giảm thiểu độ trễ cập nhật so với chu kỳ 1s thông thường. Không cam kết một ngưỡng độ trễ vô tuyến cố định khi chưa đo trên thiết bị thật (phụ thuộc connection interval và RF). |
 | **Physical Feedback** | *Chưa có cảm biến hành trình* | Không báo "vật lý hoàn thành" nếu không có sensor phản hồi (ví dụ: servo đã quay xung PWM nhưng cánh cửa sổ chưa có công tắc hành trình vật lý). | Hệ thống chỉ ghi nhận trung thực "đã xuất tín hiệu điều khiển" (actuator output applied). |
 
 ---
@@ -26,7 +26,7 @@ Hệ thống định nghĩa các trạng thái trong backend và giao diện:
 1. `disconnected`: Chưa kết nối BLE.
 2. `connecting`: Đang tìm kiếm và khởi tạo bắt tay BLE.
 3. `subscribing`: Đã kết nối GATT, đang đăng ký nhận thông báo `start_notify`.
-4. `ready`: Đăng ký `start_notify` thành công và sẵn sàng truyền nhận lệnh 2 chiều. Trạng thái này xác nhận kênh notify hoạt động, không đại diện cho việc dữ liệu telemetry liên tục tươi mới.
+4. `ready`: Đăng ký `start_notify` thành công và sẵn sàng truyền nhận lệnh 2 chiều. Trạng thái này xác nhận đăng ký notify thành công, chưa chứng minh đã nhận được telemetry hay dữ liệu liên tục tươi mới.
 5. `stale`: **[CHƯA TRIỂN KHAI / NOT IMPLEMENTED — PENDING]**. Watchdog kiểm tra độ tươi telemetry theo thời gian thực (>10s) chưa được kích hoạt để tránh nguy cơ reset trạng thái an toàn ngoài ý muốn hoặc hủy lệnh an toàn khi chưa có nghiệm thu vô tuyến phần cứng. Được ghi nhận là hạng mục chờ kiểm chứng trên thiết bị thật.
 
 > **Bảo toàn tính tương thích:** Biến và từ điển `NODE_ONLINE[room]` tiếp tục giữ giá trị `bool` (`True` khi `ready`, `False` khi ở các trạng thái khác), đảm bảo không làm gián đoạn bất kỳ luồng xử lý hoặc test case cũ nào.
@@ -37,7 +37,7 @@ Hệ thống định nghĩa các trạng thái trong backend và giao diện:
 
 | Hạng mục kiểm thử | Trạng thái | Bằng chứng thực nghiệm | Ghi chú kỹ thuật |
 | :--- | :---: | :--- | :--- |
-| **Đo độ trễ Monotonic Trace (Priority A)** | **ĐÃ TEST** | `tests/test_ble_latency_trace.py` (8/8 tests OK) | Đo cùng tiến trình bằng monotonic clock: queue delta, GATT delta, ACK RTT delta. Bounded deque + active dict (200 items max). Không giả định correlated applied khi chỉ nhận telemetry đơn thuần. Snapshot copy an toàn dưới lock. |
+| **Đo độ trễ Monotonic Trace (Priority A)** | **ĐÃ TEST** | `tests/test_ble_latency_trace.py`, `tests/test_ble_trace_boundaries.py` (xem báo cáo tổng hợp cuối) | Đo bằng clock monotonic của gateway (`source: gateway_monotonic`); ACK RTT tính từ lúc bắt đầu ghi GATT đến ACK terminal đúng ID, không phải từ lúc hàm ghi trả về. ACK `busy` không tính là hoàn tất. Lỗi ghi tạm thời giữ trace cho lần retry; queue delta tính tới lần ghi đầu tiên. Đây không phải thời gian cơ cấu vật lý hoàn thành. Bounded deque + active dict (200 items max). Không giả định correlated applied khi chỉ nhận telemetry đơn thuần. Snapshot copy an toàn dưới lock. |
 | **Khám phá & Sẵn sàng (Priority B)** | **ĐÃ TEST** | `tests/test_ble_readiness.py` (6/6 tests OK), `tests/test_ble_settings.py` (3/3 tests OK) | Phối hợp single-flight discovery; 3 node thiếu MAC cùng lúc chỉ quét 1 lần trong TTL; client không phụ thuộc thuộc tính nội bộ `_device`; manual scan có rate limit; giữ cache node đang kết nối. |
 | **Phản hồi tức thì & Bounded Busy Retry (Priority C)** | **ĐÃ TEST** | `tests/test_immediate_feedback.py` (3/3 tests OK), `tests/test_command_delivery.py` (9/9 tests OK), `tests/test_kitchen_control.py` (20/20 tests OK) | Đánh thức sender bằng `asyncio.Event` trên host; ACK busy áp dụng backoff 0.2s–1.0s không gây bão thử lại; bảo toàn thứ tự và ID lệnh gốc; bảo toàn logic khẩn cấp/an toàn. |
 | **C++ Host Logic Firmware** | **ĐÃ TEST** | `tests/test_firmware_logic.py` (1/1 test OK) | Biên dịch logic máy trạng thái Kitchen & Living bằng `g++ -std=c++11`, kiểm tra WAIT_CONFIRM, confirm_safe và sound(). ACK phát trước applyOutputs; không hạ ngưỡng an toàn gas. |

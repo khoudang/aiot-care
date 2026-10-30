@@ -43,7 +43,7 @@ class BleLatencyTraceTests(unittest.TestCase):
         self.assertEqual(final_stats['total_commands'], 1)
         self.assertEqual(final_stats['errors'], 0)
         self.assertEqual(final_stats['error_rate'], 0.0)
-        self.assertEqual(final_stats['source'], 'simulated_host_timing_monotonic')
+        self.assertEqual(final_stats['source'], 'gateway_monotonic')
 
         # Verify monotonic calculation deltas:
         self.assertAlmostEqual(final_stats['queue_latency']['median_ms'], 15.0, places=1)
@@ -129,7 +129,7 @@ class BleLatencyTraceTests(unittest.TestCase):
         data = admin_resp.get_json()
         self.assertTrue(data['ok'])
         self.assertIn('timing_trace', data)
-        self.assertEqual(data['timing_trace']['source'], 'simulated_host_timing_monotonic')
+        self.assertEqual(data['timing_trace']['source'], 'gateway_monotonic')
 
     def test_tracer_and_active_bounded_above_200_items(self):
         """Both _traces deque and _active dict must be bounded (e.g. <= 200 items)."""
