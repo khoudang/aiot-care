@@ -232,7 +232,7 @@ class VideoPipelineTests(unittest.TestCase):
         iot = self.iot
         iot.camera_active = True
         iot._camera_session_id = 1
-        iot._latest_raw_slot.update(frame=np.zeros((4, 4, 3), dtype=np.uint8), gen=1, ts=0.0, w=4, h=4)
+        iot._latest_raw_slot.update(frame=np.zeros((4, 4, 3), dtype=np.uint8), gen=1, ts=0.0, session_id=1, w=4, h=4)
         iot.mp = Mock()
         iot.ENABLE_FALL = False
         iot.tracking_enabled = False
@@ -249,7 +249,7 @@ class VideoPipelineTests(unittest.TestCase):
         iot = self.iot
         iot.camera_active = True
         iot._camera_session_id = 1
-        iot._latest_raw_slot.update(frame=np.zeros((4, 4, 3), dtype=np.uint8), gen=1, ts=0.0, w=4, h=4)
+        iot._latest_raw_slot.update(frame=np.zeros((4, 4, 3), dtype=np.uint8), gen=1, ts=0.0, session_id=1, w=4, h=4)
         iot.mp = Mock()
         iot.ENABLE_FALL = False
         iot.tracking_enabled = False
@@ -268,7 +268,7 @@ class VideoPipelineTests(unittest.TestCase):
         iot = self.iot
         iot.camera_active = True
         iot._camera_session_id = 1
-        iot._latest_raw_slot.update(frame=np.zeros((4, 4, 3), dtype=np.uint8), gen=1, ts=0.0, w=4, h=4)
+        iot._latest_raw_slot.update(frame=np.zeros((4, 4, 3), dtype=np.uint8), gen=1, ts=0.0, session_id=1, w=4, h=4)
         iot.mp = Mock()
         iot.ENABLE_FALL = False
         iot.tracking_enabled = False
@@ -516,6 +516,82 @@ class VideoPipelineTests(unittest.TestCase):
         iot._camera_ai_worker(1)
         self.assertFalse(iot.camera_active)
         self.assertNotIn(False, action_states, 'No action may dispatch after stop completed; actions serialized before stop are valid')
+
+    def test_old_camera_open_failure_cannot_mark_new_session_offline(self):
+        """Superseded VideoCapture open failure must not overwrite newer session status."""
+        iot = self.iot
+        iot.camera_active = True
+        iot._camera_session_id = 2
+        iot.AI.update(camera=True, gesture="new_session", fps="42")
+        cap = Mock()
+        cap.isOpened.return_value = False
+        iot.cv2.VideoCapture = Mock(return_value=cap)
+        iot._camera_pub_worker(1)
+        self.assertTrue(iot.camera_active)
+        self.assertTrue(iot.AI["camera"], "Old failed-open branch must not erase new-session status")
+        self.assertEqual(iot.AI["gesture"], "new_session")
+        self.assertEqual(iot.AI["fps"], "42")
+
+    def test_old_model_init_failure_cannot_clear_new_session_metrics(self):
+        """Superseded model-init exception must not mutate newer session metrics."""
+        iot = self.iot
+        iot.camera_active = True
+        iot._camera_session_id = 1
+        iot.mp = Mock()
+        def superseded_init(**kwargs):
+            iot._camera_session_id = 2
+            iot.AI.update(camera=True, gesture="new_session", fps="42")
+            raise RuntimeError("simulated old-session initialization failure")
+        iot.mp.solutions.pose.Pose = Mock(side_effect=superseded_init)
+        iot._camera_ai_worker(1)
+        self.assertEqual(iot.AI["fps"], "42", "Old exception cleanup must not mutate newer session metrics")
+        self.assertEqual(iot.AI["gesture"], "new_session")
+        self.assertTrue(iot.AI["camera"])
+
+    def test_current_session_camera_open_failure_marks_offline(self):
+        """Real production path: current session VideoCapture open failure marks camera offline."""
+        iot = self.iot
+        iot.camera_active = True
+        iot._camera_session_id = 1
+        iot.AI.update(camera=True, gesture="ok", fps="25")
+        cap = Mock()
+        cap.isOpened.return_value = False
+        iot.cv2.VideoCapture = Mock(return_value=cap)
+        iot._camera_pub_worker(1)
+        self.assertFalse(iot.camera_active)
+        self.assertFalse(iot.AI["camera"])
+        self.assertEqual(iot.AI["gesture"], "Camera Offline")
+        self.assertEqual(iot.AI["fps"], "--")
+
+    def test_current_session_model_failure_exposes_ai_error_without_stopping_camera(self):
+        """Current session model failure must expose AI error without marking camera offline."""
+        iot = self.iot
+        iot.camera_active = True
+        iot._camera_session_id = 1
+        iot.AI.update(camera=True, gesture="Live", fps="30")
+        iot.mp = Mock()
+        iot.mp.solutions.pose.Pose.side_effect = RuntimeError("model load error")
+        iot._camera_ai_worker(1)
+        self.assertEqual(iot.AI["fps"], "--")
+        self.assertEqual(iot.AI["work_ms"], 0)
+        self.assertTrue(iot.camera_active, "AI worker failure must not stop independent video camera")
+        self.assertTrue(iot.AI["camera"], "AI worker failure must not mark camera offline")
+
+    def test_obsolete_start_cannot_clear_newer_session_slots(self):
+        """Slot cleanup must occur only under current session ownership inside start lock."""
+        iot = self.iot
+        iot.camera_active = True
+        iot._camera_session_id = 2
+        with iot._new_raw_frame_cond:
+            iot._latest_raw_slot.update(frame=np.ones((4, 4, 3), dtype=np.uint8), gen=5, session_id=2)
+        with iot._ai_results_lock:
+            iot._latest_ai_results.update(gesture="session_2_gesture", session_id=2)
+
+        # An obsolete attempt to start with camera already active must not clear slots
+        iot._start_camera()
+        self.assertEqual(iot._camera_session_id, 2)
+        self.assertEqual(iot._latest_raw_slot["session_id"], 2)
+        self.assertEqual(iot._latest_ai_results["gesture"], "session_2_gesture")
 
 
 if __name__ == "__main__":

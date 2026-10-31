@@ -172,7 +172,7 @@ def register_web(app, socketio):
                 frame, gen = iot.get_next_frame(last_seen_gen=last_gen, timeout=0.25)
                 if frame is not None and gen != last_gen:
                     last_gen = gen
-                    yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n" 
+                    yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
 
         return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
