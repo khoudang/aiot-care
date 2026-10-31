@@ -186,6 +186,12 @@
       const lTxt=String(latVal);
       if(elL&&elL.textContent!==lTxt)elL.textContent=lTxt;
     }
+    const ageVal=a.overlay_age_ms;
+    if(ageVal!=null){
+      const elA=document.getElementById('ai-age');
+      const aTxt=String(ageVal);
+      if(elA&&elA.textContent!==aTxt)elA.textContent=aTxt;
+    }
     const fallSignal=a.observe_only?a.fall_suspected:a.fall;
     if(fallSignal!=null){
       const oc=document.getElementById('oc-fall');

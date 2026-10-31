@@ -227,6 +227,140 @@ class VideoPipelineTests(unittest.TestCase):
         self.assertEqual(draw_calls, count_after_stale,
                          "Stale landmark overlay must not continue to be drawn after timeout")
 
+    def test_inflight_inference_cannot_reactivate_stopped_camera(self):
+        """Stopping the camera while inference is in-flight must never be undone by old inference completing."""
+        iot = self.iot
+        iot.camera_active = True
+        iot._camera_session_id = 1
+        iot._latest_raw_slot.update(frame=np.zeros((4, 4, 3), dtype=np.uint8), gen=1, ts=0.0, w=4, h=4)
+        iot.mp = Mock()
+        iot.ENABLE_FALL = False
+        iot.tracking_enabled = False
+        def process(_):
+            iot.camera_active = False
+            iot.AI['camera'] = False
+            return Mock(pose_landmarks=None)
+        iot.mp.solutions.pose.Pose.return_value = Mock(process=process)
+        iot._camera_ai_worker(1)
+        self.assertFalse(iot.AI['camera'], 'Late old inference must not mark a stopped camera live')
+
+    def test_superseded_inference_cannot_apply_gesture(self):
+        """Superseded inference from an older session must never invoke gesture actuations."""
+        iot = self.iot
+        iot.camera_active = True
+        iot._camera_session_id = 1
+        iot._latest_raw_slot.update(frame=np.zeros((4, 4, 3), dtype=np.uint8), gen=1, ts=0.0, w=4, h=4)
+        iot.mp = Mock()
+        iot.ENABLE_FALL = False
+        iot.tracking_enabled = False
+        iot._apply_gesture = Mock()
+        def process(_):
+            iot._camera_session_id = 2
+            return Mock(pose_landmarks=None)
+        iot.mp.solutions.pose.Pose.return_value = Mock(process=process)
+        iot.mp.solutions.hands.Hands.return_value = Mock(process=Mock(return_value=Mock(multi_hand_landmarks=[Mock()])))
+        iot.detect_gesture = Mock(return_value='test_gesture')
+        iot._camera_ai_worker(1)
+        iot._apply_gesture.assert_not_called()
+
+    def test_skipping_capture_generations_cannot_starve_hands(self):
+        """Hands scheduling must use inference cadence, not capture-ID modulo, avoiding starvation on frame skips."""
+        iot = self.iot
+        iot.camera_active = True
+        iot._camera_session_id = 1
+        iot._latest_raw_slot.update(frame=np.zeros((4, 4, 3), dtype=np.uint8), gen=1, ts=0.0, w=4, h=4)
+        iot.mp = Mock()
+        iot.ENABLE_FALL = False
+        iot.tracking_enabled = False
+        iot.PROCESS_EVERY_N_FRAMES = 3
+        count = 0
+        def process(_):
+            nonlocal count
+            count += 1
+            iot._latest_raw_slot['gen'] += 3
+            if count == 4:
+                iot.camera_active = False
+            return Mock(pose_landmarks=None)
+        iot.mp.solutions.pose.Pose.return_value = Mock(process=process)
+        hands = Mock(process=Mock(return_value=Mock(multi_hand_landmarks=None)))
+        iot.mp.solutions.hands.Hands.return_value = hands
+        iot._camera_ai_worker(1)
+        self.assertGreater(hands.process.call_count, 0, 'Capture generation modulo can starve hands forever; use inference cadence')
+
+    def test_start_camera_cleans_prior_slots_and_overlays(self):
+        """Starting a camera session cleans up prior session raw frame slots and AI results."""
+        iot = self.iot
+        iot.cv2.VideoCapture = Mock(return_value=FakeVideoCapture())
+        iot.cv2.imencode = Mock(return_value=(True, Mock(tobytes=lambda: b"jpeg")))
+        iot._latest_raw_slot["frame"] = np.ones((4, 4, 3), dtype=np.uint8)
+        iot._latest_raw_slot["gen"] = 99
+        iot._latest_ai_results["gesture"] = "old_gesture"
+        iot._start_camera()
+        self.assertIsNone(iot._latest_raw_slot["frame"])
+        self.assertEqual(iot._latest_raw_slot["gen"], 0)
+        self.assertEqual(iot._latest_ai_results["gesture"], "—")
+        iot._stop_camera()
+
+    def test_generation_aware_dedup_and_client_wait(self):
+        """get_next_frame prevents duplicate JPEG packets and supports slow client jumping without queues."""
+        iot = self.iot
+        iot.camera_active = True
+        iot.latest_frame = b"frame_1"
+        iot.latest_frame_gen = 1
+
+        # First read sees generation 1
+        f1, gen1 = iot.get_next_frame(last_seen_gen=0, timeout=0.05)
+        self.assertEqual(f1, b"frame_1")
+        self.assertEqual(gen1, 1)
+
+        # Subsequent read with last_seen_gen=1 returns None without duplicate yield
+        f2, gen2 = iot.get_next_frame(last_seen_gen=1, timeout=0.05)
+        self.assertIsNone(f2)
+        self.assertEqual(gen2, 1)
+
+        # Publish frame 2
+        with iot.camera_lock:
+            iot.latest_frame = b"frame_2"
+            iot.latest_frame_gen = 2
+            iot.camera_cond.notify_all()
+
+        f3, gen3 = iot.get_next_frame(last_seen_gen=1, timeout=0.05)
+        self.assertEqual(f3, b"frame_2")
+        self.assertEqual(gen3, 2)
+
+        # Slow client jumping from gen 0 directly to gen 2 skips intermediate without backlog
+        f_slow, gen_slow = iot.get_next_frame(last_seen_gen=0, timeout=0.05)
+        self.assertEqual(f_slow, b"frame_2")
+        self.assertEqual(gen_slow, 2)
+        iot.camera_active = False
+
+    def test_client_wakeup_on_camera_stop(self):
+        """Stopping the camera unblocks waiting MJPEG stream clients immediately without waiting for timeout."""
+        iot = self.iot
+        iot.camera_active = True
+        client_unblocked = threading.Event()
+
+        def client_wait():
+            f, _g = iot.get_next_frame(last_seen_gen=10, timeout=2.0)
+            client_unblocked.set()
+
+        t = threading.Thread(target=client_wait, daemon=True)
+        t.start()
+        time.sleep(0.05)
+        iot._stop_camera()
+        self.assertTrue(client_unblocked.wait(timeout=0.3), "Stopping camera must immediately unblock waiting clients")
+
+    def test_model_construction_failure_handles_error_gracefully(self):
+        """Model initialization failure must close partial models and report AI offline without unhandled crash."""
+        iot = self.iot
+        iot.camera_active = True
+        iot._camera_session_id = 1
+        iot.mp = Mock()
+        iot.mp.solutions.pose.Pose.side_effect = RuntimeError("Failed to allocate TFLite delegate")
+        iot._camera_ai_worker(1)
+        self.assertEqual(iot.AI["fps"], "--")
+        self.assertEqual(iot.AI["work_ms"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

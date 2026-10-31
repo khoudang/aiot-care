@@ -163,14 +163,16 @@ def register_web(app, socketio):
     @login_required
     def video_feed():
         def generate():
+            last_gen = 0
             while True:
                 if not iot.is_camera_active():
                     time.sleep(0.1)
+                    last_gen = 0
                     continue
-                frame = iot.get_latest_frame()
-                if frame:
-                    yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
-                time.sleep(0.03)
+                frame, gen = iot.get_next_frame(last_seen_gen=last_gen, timeout=0.25)
+                if frame is not None and gen != last_gen:
+                    last_gen = gen
+                    yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n" 
 
         return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
