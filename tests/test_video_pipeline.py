@@ -444,23 +444,78 @@ class VideoPipelineTests(unittest.TestCase):
         self.assertFalse(iot.is_camera_active(), "Camera must be stopped via re-entrant callback without deadlock")
 
     def test_post_encode_publication_guard_blocks_superseded_frame(self):
-        """Encoded frame from an older session must not overwrite latest_frame once session is superseded."""
+        """Production _camera_pub_worker must not publish frame after imencode if session was superseded."""
+        iot = self.iot
+        fake_cap = FakeVideoCapture()
+        iot.cv2.VideoCapture = Mock(return_value=fake_cap)
+        imencode_started = threading.Event()
+        imencode_unblock = threading.Event()
+
+        def slow_imencode(*args, **kwargs):
+            imencode_started.set()
+            imencode_unblock.wait(timeout=1.0)
+            return True, Mock(tobytes=lambda: b"session_1_stale_frame")
+
+        iot.cv2.imencode = slow_imencode
+        iot.camera_active = True
+        iot._camera_session_id = 1
+
+        # Start the real production pub worker for session 1
+        t_pub = threading.Thread(target=iot._camera_pub_worker, args=(1,), daemon=True)
+        t_pub.start()
+
+        # Wait until pub worker reaches and blocks inside imencode
+        self.assertTrue(imencode_started.wait(timeout=1.0), "Publisher worker must enter imencode")
+
+        # Now simulate session supersession: session 2 starts and publishes fresh frame
+        with iot._camera_session_lock:
+            iot._camera_session_id = 2
+            with iot.camera_lock:
+                iot.latest_frame = b"session_2_fresh_frame"
+                iot.latest_frame_gen = 2
+
+        # Unblock session 1's imencode and stop camera
+        imencode_unblock.set()
+        time.sleep(0.05)
+        iot.camera_active = False
+        t_pub.join(timeout=1.0)
+
+        # Production post-encode check must have rejected session 1's stale frame
+        self.assertEqual(iot.get_latest_frame(), b"session_2_fresh_frame",
+                         "Real publisher must not overwrite newer session frame after imencode")
+
+    def test_stop_between_state_commit_and_callback_rejects_old_gesture(self):
+        """Actions must be serialized with stop: no action may dispatch after stop has completed."""
         iot = self.iot
         iot.camera_active = True
-        iot._camera_session_id = 2
-        iot.latest_frame = b"session_2_fresh_frame"
-        iot.latest_frame_gen = 2
+        iot._camera_session_id = 1
+        iot._latest_raw_slot.update(frame=np.zeros((4, 4, 3), dtype=np.uint8), gen=1, ts=0.0, session_id=1, w=4, h=4)
+        iot.ENABLE_FALL = False
+        iot.tracking_enabled = False
+        iot.PROCESS_EVERY_N_FRAMES = 1
+        iot.mp = Mock()
+        iot.mp.solutions.pose.Pose.return_value = Mock(process=Mock(return_value=Mock(pose_landmarks=None)))
+        iot.mp.solutions.hands.Hands.return_value = Mock(process=Mock(return_value=Mock(multi_hand_landmarks=[Mock()])))
+        iot.detect_gesture = Mock(return_value='old_gesture')
+        action_states = []
+        iot._apply_gesture = Mock(side_effect=lambda _: action_states.append(iot.camera_active))
+        native = threading.RLock()
 
-        # Simulate pub worker of session 1 trying to publish after session 2 became active
-        with iot._camera_session_lock:
-            # session 1 is superseded (session_id 1 != _camera_session_id 2)
-            superseded_session = 1
-            if superseded_session == iot._camera_session_id and iot.camera_active:
-                with iot.camera_lock:
-                    iot.latest_frame = b"session_1_stale_frame"
+        class StopAtReleasedCommit:
+            armed = True
+            def __enter__(self):
+                native.acquire()
+                return self
+            def __exit__(self, *exc):
+                native.release()
+                if self.armed and iot.AI['camera']:
+                    self.armed = False
+                    iot._stop_camera()
 
-        # Frame must still be session 2's fresh frame
-        self.assertEqual(iot.get_latest_frame(), b"session_2_fresh_frame")
+        iot._camera_session_lock = StopAtReleasedCommit()
+        iot._camera_ai_worker(1)
+        self.assertFalse(iot.camera_active)
+        self.assertNotIn(False, action_states, 'No action may dispatch after stop completed; actions serialized before stop are valid')
 
 
 if __name__ == "__main__":

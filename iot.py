@@ -1549,12 +1549,16 @@ def _stop_camera():
     with camera_lock:
         camera_cond.notify_all()
 
-    # Join threads with finite timeout to avoid deadlocks
+    # Join threads with finite timeout to avoid deadlocks.
+    # If _stop_camera is called from within a worker thread (reentrant lifecycle call),
+    # skip joining worker threads to avoid self-join / cross-join deadlocks.
     curr_t = threading.current_thread()
-    if pub_t is not None and hasattr(pub_t, "join") and pub_t is not curr_t:
-        pub_t.join(timeout=1.5)
-    if ai_t is not None and hasattr(ai_t, "join") and ai_t is not curr_t:
-        ai_t.join(timeout=1.5)
+    is_internal_worker = (curr_t is pub_t or curr_t is ai_t)
+    if not is_internal_worker:
+        if pub_t is not None and hasattr(pub_t, "join"):
+            pub_t.join(timeout=1.5)
+        if ai_t is not None and hasattr(ai_t, "join"):
+            ai_t.join(timeout=1.5)
 
     should_emit = False
     with _camera_session_lock:
@@ -2127,19 +2131,10 @@ def _camera_ai_worker(session_id):
                         gesture_key = gkey
                         gesture = GESTURE_LABELS.get(gkey, gkey)
 
-            # Serialize state commits under session lock, extracting actions to dispatch outside lock
-            dispatch_angle = None
-            dispatch_fall = None
-            dispatch_gesture = None
-            dispatch_ai = None
-
+            # Serialize state commits and actions under session lock (RLock enables safe same-thread reentry)
             with _camera_session_lock:
                 if not camera_active or session_id != _camera_session_id:
                     break
-
-                dispatch_angle = action_angle
-                dispatch_fall = fall_event
-                dispatch_gesture = gesture_key
 
                 t_completion = time.perf_counter()
                 work_ms = int((t_completion - t0) * 1000)
@@ -2171,20 +2166,21 @@ def _camera_ai_worker(session_id):
                         "camera": True,
                     })
 
-                if socketio is not None and (time.time() - last_emit) >= STATUS_EMIT_INTERVAL:
-                    dispatch_ai = dict(AI)
-                    last_emit = time.time()
+                # Dispatch actions strictly serialized against stop/supersession
+                if action_angle is not None:
+                    uart_send_angle(action_angle)
+                if fall_event is not None:
+                    _handle_fall(fall_event)
+                if gesture_key is not None:
+                    _apply_gesture(gesture_key)
 
-            # DISPATCH external side-effects and callbacks OUTSIDE _camera_session_lock:
-            # Prevents re-entry deadlocks if any handler triggers camera controls or stops
-            if dispatch_angle is not None:
-                uart_send_angle(dispatch_angle)
-            if dispatch_fall is not None:
-                _handle_fall(dispatch_fall)
-            if dispatch_gesture is not None:
-                _apply_gesture(dispatch_gesture)
-            if dispatch_ai is not None:
-                _emit("ai_status", dispatch_ai)
+                # Revalidate in case a re-entrant callback (e.g. gesture handler) stopped the camera
+                if not camera_active or session_id != _camera_session_id:
+                    break
+
+                if socketio is not None and (time.time() - last_emit) >= STATUS_EMIT_INTERVAL:
+                    _emit("ai_status", dict(AI))
+                    last_emit = time.time()
     except Exception as exc:
         print("[camera ai] error:", exc)
         with state_lock:
