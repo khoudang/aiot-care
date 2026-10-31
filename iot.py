@@ -183,7 +183,7 @@ camera_cond = threading.Condition(camera_lock)
 camera_owner_user_id = None
 
 # Decoupled camera pipeline synchronization
-_camera_session_lock = threading.Lock()
+_camera_session_lock = threading.RLock()
 _camera_session_id = 0
 _pub_thread = None
 _ai_thread = None
@@ -1508,24 +1508,26 @@ def _start_camera(user_id=None):
         _camera_session_id += 1
         current_session = _camera_session_id
 
-        # Clean prior-session slots and overlays
-        with _new_raw_frame_cond:
-            _latest_raw_slot["frame"] = None
-            _latest_raw_slot["gen"] = 0
-            _latest_raw_slot["ts"] = 0.0
-            _latest_raw_slot["session_id"] = current_session
-        with _ai_results_lock:
-            _latest_ai_results["pose_landmarks"] = None
-            _latest_ai_results["multi_hand_landmarks"] = None
-            _latest_ai_results["gesture"] = "—"
-            _latest_ai_results["ts"] = 0.0
-            _latest_ai_results["source_ts"] = 0.0
-            _latest_ai_results["session_id"] = current_session
+    # Clean prior-session slots and overlays (disjoint lock acquisition, no nesting)
+    with _new_raw_frame_cond:
+        _latest_raw_slot["frame"] = None
+        _latest_raw_slot["gen"] = 0
+        _latest_raw_slot["ts"] = 0.0
+        _latest_raw_slot["session_id"] = current_session
+    with _ai_results_lock:
+        _latest_ai_results["pose_landmarks"] = None
+        _latest_ai_results["multi_hand_landmarks"] = None
+        _latest_ai_results["gesture"] = "—"
+        _latest_ai_results["ts"] = 0.0
+        _latest_ai_results["source_ts"] = 0.0
+        _latest_ai_results["session_id"] = current_session
 
-        # Start decoupled publication and AI workers
-        _pub_thread = _start_worker_thread(_camera_pub_worker, (current_session,))
-        _ai_thread = _start_worker_thread(_camera_ai_worker, (current_session,))
-        camera_thread = _pub_thread
+    # Start decoupled publication and AI workers
+    with _camera_session_lock:
+        if current_session == _camera_session_id and camera_active:
+            _pub_thread = _start_worker_thread(_camera_pub_worker, (current_session,))
+            _ai_thread = _start_worker_thread(_camera_ai_worker, (current_session,))
+            camera_thread = _pub_thread
 
 
 def _stop_camera():
@@ -1537,6 +1539,7 @@ def _stop_camera():
             return
         camera_active = False
         camera_owner_user_id = None
+        stopping_session = _camera_session_id
         pub_t = _pub_thread
         ai_t = _ai_thread
 
@@ -1553,26 +1556,33 @@ def _stop_camera():
     if ai_t is not None and hasattr(ai_t, "join") and ai_t is not curr_t:
         ai_t.join(timeout=1.5)
 
-    with state_lock:
-        AI.update({
-            "gesture": "Camera Offline",
-            "fps": "--",
-            "video_fps": "--",
-            "latency": "--",
-            "work_ms": 0,
-            "overlay_age_ms": 0,
-            "camera": False,
-        })
-    with _ai_results_lock:
-        _latest_ai_results["pose_landmarks"] = None
-        _latest_ai_results["multi_hand_landmarks"] = None
-        _latest_ai_results["gesture"] = "—"
-        _latest_ai_results["ts"] = 0.0
-        _latest_ai_results["source_ts"] = 0.0
-        _latest_ai_results["session_id"] = 0
+    should_emit = False
+    with _camera_session_lock:
+        if stopping_session == _camera_session_id and not camera_active:
+            with state_lock:
+                AI.update({
+                    "gesture": "Camera Offline",
+                    "fps": "--",
+                    "video_fps": "--",
+                    "latency": "--",
+                    "work_ms": 0,
+                    "overlay_age_ms": 0,
+                    "camera": False,
+                })
+            with _ai_results_lock:
+                _latest_ai_results.update({
+                    "pose_landmarks": None,
+                    "multi_hand_landmarks": None,
+                    "gesture": "—",
+                    "ts": 0.0,
+                    "source_ts": 0.0,
+                    "session_id": 0,
+                })
+            should_emit = True
 
-    _emit("camera_sync", {"active": False, "mode": camera_mode})
-    _emit("ai_status", dict(AI))
+    if should_emit:
+        _emit("camera_sync", {"active": False, "mode": camera_mode})
+        _emit("ai_status", dict(AI))
 
 
 def _maybe_auto_camera_on():
@@ -1950,10 +1960,12 @@ def _camera_pub_worker(session_id):
             ret, buffer = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
             if ret:
                 frame_bytes = buffer.tobytes()
-                with camera_lock:
-                    latest_frame = frame_bytes
-                    latest_frame_gen += 1
-                    camera_cond.notify_all()
+                with _camera_session_lock:
+                    if session_id == _camera_session_id and camera_active:
+                        with camera_lock:
+                            latest_frame = frame_bytes
+                            latest_frame_gen += 1
+                            camera_cond.notify_all()
 
             # Auto shutdown on motion timeout
             if camera_mode == "auto" and (now_ts() - last_motion_ts) > CAMERA_MOTION_TIMEOUT:
@@ -1968,35 +1980,35 @@ def _camera_pub_worker(session_id):
         _push_alert("camera", f"Lỗi camera: {exc}", "camera")
     finally:
         cap.release()
-        is_current = False
+        should_emit = False
         with _camera_session_lock:
             if session_id == _camera_session_id:
                 camera_active = False
-                is_current = True
+                with state_lock:
+                    AI.update({
+                        "gesture": "Camera Offline",
+                        "fps": "--",
+                        "video_fps": "--",
+                        "latency": "--",
+                        "work_ms": 0,
+                        "overlay_age_ms": 0,
+                        "camera": False,
+                    })
+                with _ai_results_lock:
+                    _latest_ai_results.update({
+                        "pose_landmarks": None,
+                        "multi_hand_landmarks": None,
+                        "gesture": "—",
+                        "ts": 0.0,
+                        "source_ts": 0.0,
+                        "session_id": 0,
+                    })
+                should_emit = True
         with _new_raw_frame_cond:
             _new_raw_frame_cond.notify_all()
         with camera_lock:
             camera_cond.notify_all()
-        if is_current:
-            with state_lock:
-                AI.update({
-                    "gesture": "Camera Offline",
-                    "fps": "--",
-                    "video_fps": "--",
-                    "latency": "--",
-                    "work_ms": 0,
-                    "overlay_age_ms": 0,
-                    "camera": False,
-                })
-            with _ai_results_lock:
-                _latest_ai_results.update({
-                    "pose_landmarks": None,
-                    "multi_hand_landmarks": None,
-                    "gesture": "—",
-                    "ts": 0.0,
-                    "source_ts": 0.0,
-                    "session_id": 0,
-                })
+        if should_emit:
             _emit("camera_sync", {"active": False, "mode": camera_mode})
             _emit("ai_status", dict(AI))
 
@@ -2027,18 +2039,17 @@ def _camera_ai_worker(session_id):
         last_inferred_gen = 0
 
         while True:
+            # 1. Verify session without holding raw frame condition lock
+            with _camera_session_lock:
+                if not camera_active or session_id != _camera_session_id:
+                    break
+
+            # 2. Acquire raw frame condition lock without holding session lock (NO lock inversion)
             with _new_raw_frame_cond:
-                while True:
-                    with _camera_session_lock:
-                        if not camera_active or session_id != _camera_session_id:
-                            break
-                    if _latest_raw_slot["gen"] > last_inferred_gen and _latest_raw_slot.get("session_id") in (None, 0, session_id):
+                while _latest_raw_slot["gen"] <= last_inferred_gen:
+                    if not camera_active:
                         break
                     _new_raw_frame_cond.wait(timeout=0.1)
-
-                with _camera_session_lock:
-                    if not camera_active or session_id != _camera_session_id:
-                        break
 
                 raw_frame = _latest_raw_slot["frame"]
                 last_inferred_gen = _latest_raw_slot["gen"]
@@ -2046,6 +2057,11 @@ def _camera_ai_worker(session_id):
                 frame_session = _latest_raw_slot.get("session_id", session_id)
                 w = _latest_raw_slot.get("w", CAMERA_WIDTH)
                 h = _latest_raw_slot.get("h", CAMERA_HEIGHT)
+
+            # 3. Re-verify session after frame condition release
+            with _camera_session_lock:
+                if not camera_active or session_id != _camera_session_id:
+                    break
 
             if raw_frame is None or frame_session not in (None, 0, session_id):
                 continue
@@ -2111,17 +2127,19 @@ def _camera_ai_worker(session_id):
                         gesture_key = gkey
                         gesture = GESTURE_LABELS.get(gkey, gkey)
 
-            # Serialize actionable and state commits under session lock
+            # Serialize state commits under session lock, extracting actions to dispatch outside lock
+            dispatch_angle = None
+            dispatch_fall = None
+            dispatch_gesture = None
+            dispatch_ai = None
+
             with _camera_session_lock:
                 if not camera_active or session_id != _camera_session_id:
                     break
 
-                if action_angle is not None:
-                    uart_send_angle(action_angle)
-                if fall_event is not None:
-                    _handle_fall(fall_event)
-                if gesture_key is not None:
-                    _apply_gesture(gesture_key)
+                dispatch_angle = action_angle
+                dispatch_fall = fall_event
+                dispatch_gesture = gesture_key
 
                 t_completion = time.perf_counter()
                 work_ms = int((t_completion - t0) * 1000)
@@ -2154,8 +2172,19 @@ def _camera_ai_worker(session_id):
                     })
 
                 if socketio is not None and (time.time() - last_emit) >= STATUS_EMIT_INTERVAL:
-                    _emit("ai_status", dict(AI))
+                    dispatch_ai = dict(AI)
                     last_emit = time.time()
+
+            # DISPATCH external side-effects and callbacks OUTSIDE _camera_session_lock:
+            # Prevents re-entry deadlocks if any handler triggers camera controls or stops
+            if dispatch_angle is not None:
+                uart_send_angle(dispatch_angle)
+            if dispatch_fall is not None:
+                _handle_fall(dispatch_fall)
+            if dispatch_gesture is not None:
+                _apply_gesture(dispatch_gesture)
+            if dispatch_ai is not None:
+                _emit("ai_status", dispatch_ai)
     except Exception as exc:
         print("[camera ai] error:", exc)
         with state_lock:

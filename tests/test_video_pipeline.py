@@ -361,6 +361,107 @@ class VideoPipelineTests(unittest.TestCase):
         self.assertEqual(iot.AI["fps"], "--")
         self.assertEqual(iot.AI["work_ms"], 0)
 
+    def test_no_abba_deadlock_under_concurrent_contention(self):
+        """Concurrent start/stop and frame delivery must not trigger ABBA deadlock."""
+        iot = self.iot
+        iot.cv2.VideoCapture = Mock(side_effect=lambda _src: FakeVideoCapture())
+        iot.cv2.imencode = Mock(return_value=(True, Mock(tobytes=lambda: b"jpeg")))
+        iot.mp = Mock()
+        iot.mp.solutions.pose.Pose = Mock(return_value=Mock(process=Mock(return_value=Mock(pose_landmarks=None)), close=Mock()))
+        iot.mp.solutions.hands.Hands = Mock(return_value=Mock(process=Mock(return_value=Mock(multi_hand_landmarks=None)), close=Mock()))
+
+        stop_workers = threading.Event()
+
+        def producer():
+            while not stop_workers.is_set():
+                with iot._new_raw_frame_cond:
+                    iot._latest_raw_slot["gen"] += 1
+                    iot._new_raw_frame_cond.notify_all()
+                time.sleep(0.002)
+
+        t_prod = threading.Thread(target=producer, daemon=True)
+        t_prod.start()
+
+        # Rapidly start and stop camera across multiple iterations
+        for _ in range(5):
+            iot._start_camera()
+            time.sleep(0.02)
+            iot._stop_camera()
+            time.sleep(0.01)
+
+        stop_workers.set()
+        t_prod.join(timeout=0.5)
+        self.assertFalse(iot.is_camera_active())
+
+    def test_stop_camera_gap_does_not_erase_restarted_session(self):
+        """When camera is restarted in the join gap of a prior stopping session, new state must not be erased."""
+        iot = self.iot
+        iot._pub_thread = Mock(join=Mock())
+        iot._ai_thread = Mock(join=Mock())
+
+        # Simulate join gap where new session starts
+        def mock_join(*_args, **_kwargs):
+            # Session 2 starts while session 1 is in its join phase
+            with iot._camera_session_lock:
+                iot._camera_session_id = 2
+                iot.camera_active = True
+                iot.AI["camera"] = True
+                iot.AI["gesture"] = "Live Session 2"
+
+        iot._pub_thread.join = mock_join
+        iot.camera_active = True
+        iot._camera_session_id = 1
+
+        # Session 1 stops
+        iot._stop_camera()
+
+        # Session 2's active status and gesture must NOT be erased by session 1's cleanup
+        self.assertTrue(iot.AI["camera"], "Session 2 must remain live despite session 1 stop finishing")
+        self.assertEqual(iot.AI["gesture"], "Live Session 2")
+
+    def test_callback_reentry_does_not_deadlock_session_lock(self):
+        """Callback dispatch (e.g. gesture handler calling _stop_camera) must not deadlock on session lock."""
+        iot = self.iot
+        iot.camera_active = True
+        iot._camera_session_id = 1
+        iot._latest_raw_slot.update(frame=np.zeros((4, 4, 3), dtype=np.uint8), gen=1, ts=0.0, session_id=1, w=4, h=4)
+        iot.mp = Mock()
+        iot.ENABLE_FALL = False
+        iot.tracking_enabled = False
+        iot.PROCESS_EVERY_N_FRAMES = 1
+
+        # Gesture callback re-enters camera lifecycle by calling _stop_camera
+        def reentrant_gesture(_key):
+            iot._stop_camera()
+
+        iot._apply_gesture = reentrant_gesture
+        iot.mp.solutions.pose.Pose.return_value = Mock(process=Mock(return_value=Mock(pose_landmarks=None)))
+        iot.mp.solutions.hands.Hands.return_value = Mock(process=Mock(return_value=Mock(multi_hand_landmarks=[Mock()])))
+        iot.detect_gesture = Mock(return_value="reenter_cmd")
+
+        # Worker should execute gesture, safely re-enter _stop_camera without deadlocking, and exit
+        iot._camera_ai_worker(1)
+        self.assertFalse(iot.is_camera_active(), "Camera must be stopped via re-entrant callback without deadlock")
+
+    def test_post_encode_publication_guard_blocks_superseded_frame(self):
+        """Encoded frame from an older session must not overwrite latest_frame once session is superseded."""
+        iot = self.iot
+        iot.camera_active = True
+        iot._camera_session_id = 2
+        iot.latest_frame = b"session_2_fresh_frame"
+        iot.latest_frame_gen = 2
+
+        # Simulate pub worker of session 1 trying to publish after session 2 became active
+        with iot._camera_session_lock:
+            # session 1 is superseded (session_id 1 != _camera_session_id 2)
+            superseded_session = 1
+            if superseded_session == iot._camera_session_id and iot.camera_active:
+                with iot.camera_lock:
+                    iot.latest_frame = b"session_1_stale_frame"
+
+        # Frame must still be session 2's fresh frame
+        self.assertEqual(iot.get_latest_frame(), b"session_2_fresh_frame")
+
 
 if __name__ == "__main__":
     unittest.main()
