@@ -1,8 +1,28 @@
 /* ================= ADMIN ================= */
   (function(){
     const $=id=>document.getElementById(id);
+    const settings=$('admin-settings');
+    if(settings&&!settings.querySelector('.settings-scroll')){
+      const scroll=document.createElement('div');scroll.className='settings-scroll';
+      Array.from(settings.children).filter(el=>!el.classList.contains('detail-heading')).forEach(el=>scroll.append(el));
+      settings.append(scroll);
+    }
+    // A running server may still render the previous dashboard template.
+    const logsHeading=document.querySelector('#admin-logs>.detail-heading');
+    if(logsHeading&&!$('logs-from')){
+      const filter=document.createElement('div');filter.className='logs-filter';
+      filter.innerHTML='<label for="logs-from">Từ ngày</label><input type="date" id="logs-from"><label for="logs-to">Đến ngày</label><input type="date" id="logs-to"><span id="logs-filter-message" role="status" aria-live="polite"></span>';
+      logsHeading.append(filter);
+    }
+    const logsFilter=logsHeading?.querySelector('.logs-filter');
+    if(logsFilter&&!$('logs-apply')){
+      const apply=document.createElement('button');apply.id='logs-apply';apply.type='button';apply.className='btn';
+      apply.innerHTML='<i class="fas fa-filter" aria-hidden="true"></i> Lọc';
+      logsFilter.insertBefore(apply,$('logs-filter-message'));
+      apply.addEventListener('click',()=>loadLogs().catch(()=>{}));
+    }
     const usersBody=$('users-body'),loginBody=$('login-body'),auditBody=$('audit-body');
-    let loginAll=[],auditAll=[],loginExp=false,auditExp=false;const LIMIT=10;
+    let loginAll=[],auditAll=[];let logRequest=0;
     async function fj(url,opt={}){const r=await fetch(url,{headers:{'Content-Type':'application/json'},...opt});const d=await r.json().catch(()=>({}));if(!r.ok||d.ok===false)throw new Error(d.message||'Lỗi máy chủ.');return d;}
     function fmtSql(v){if(!v)return'--';const d=new Date(String(v).replace(' ','T'));return isNaN(d)?v:d.toLocaleString('vi-VN');}
     function renderUsers(us){
@@ -19,21 +39,29 @@
             <button class="btn sm danger" onclick="delUser(${u.id},'${un}')"><i class="fas fa-trash"></i></button>
           </div></td></tr>`;}).join('');
     }
-    const loginRow=l=>`<tr><td>${l.id}</td><td>${l.username||('user #'+(l.user_id??''))}</td><td>${l.ip_address||'--'}</td><td>${fmtSql(l.timestamp)}</td></tr>`;
-    function paintLogin(){const more=$('login-more');
-      if(!loginAll.length){loginBody.innerHTML='<tr><td colspan="4"><div class="empty">Chưa có dữ liệu.</div></td></tr>';more.style.display='none';return;}
-      loginBody.innerHTML=(loginExp?loginAll:loginAll.slice(0,LIMIT)).map(loginRow).join('');
-      if(loginAll.length>LIMIT){more.style.display='';more.innerHTML=loginExp?'<i class="fas fa-chevron-up"></i> Thu gọn':`<i class="fas fa-chevron-down"></i> Xem thêm (${loginAll.length-LIMIT})`;}else more.style.display='none';}
+    const loginRow=l=>`<tr><td>${l.username||('user #'+(l.user_id??''))}</td><td>${l.ip_address||'--'}</td><td>${fmtSql(l.timestamp)}</td></tr>`;
+    function paintLogin(){loginBody.innerHTML=loginAll.length?loginAll.map(loginRow).join(''):'<tr><td colspan="3"><div class="empty">Chưa có dữ liệu.</div></td></tr>';}
     function renderLogin(ls){loginAll=ls||[];paintLogin();}
     function isWarn(a){const t=String(a||'').toLowerCase();return t.includes('cảnh báo')||t.includes('gas')||t.includes('cháy')||t.includes('té ngã')||t.includes('khẩn')||t.includes('sức khỏe');}
-    const auditRow=l=>{const w=isWarn(l.action);const a=w?`<span class="warn-txt"><i class="fas fa-triangle-exclamation"></i> ${l.action}</span>`:l.action;return `<tr class="${w?'warn-row':''}"><td>${l.id}</td><td>${l.username||(l.user_id?('user #'+l.user_id):'hệ thống')}</td><td>${a}</td><td>${fmtSql(l.timestamp)}</td></tr>`;};
-    function paintAudit(){const more=$('audit-more');
-      if(!auditAll.length){auditBody.innerHTML='<tr><td colspan="4"><div class="empty">Chưa có dữ liệu.</div></td></tr>';more.style.display='none';return;}
-      auditBody.innerHTML=(auditExp?auditAll:auditAll.slice(0,LIMIT)).map(auditRow).join('');
-      if(auditAll.length>LIMIT){more.style.display='';more.innerHTML=auditExp?'<i class="fas fa-chevron-up"></i> Thu gọn':`<i class="fas fa-chevron-down"></i> Xem thêm (${auditAll.length-LIMIT})`;}else more.style.display='none';}
+    const auditRow=l=>{const w=isWarn(l.action);const a=w?`<span class="warn-txt"><i class="fas fa-triangle-exclamation"></i> ${l.action}</span>`:l.action;return `<tr class="${w?'warn-row':''}"><td>${l.username||(l.user_id?('user #'+l.user_id):'hệ thống')}</td><td>${a}</td><td>${fmtSql(l.timestamp)}</td></tr>`;};
+    function paintAudit(){auditBody.innerHTML=auditAll.length?auditAll.map(auditRow).join(''):'<tr><td colspan="3"><div class="empty">Chưa có dữ liệu.</div></td></tr>';}
     function renderAudit(ls){auditAll=ls||[];paintAudit();}
     async function loadUsers(){usersBody.innerHTML='<tr><td colspan="6"><div class="empty">Đang tải…</div></td></tr>';renderUsers((await fj('/api/admin/users')).users||[]);}
-    async function loadLogs(){const d=await fj('/api/admin/logs');renderLogin(d.login_logs||[]);renderAudit(d.audit_logs||[]);}
+    async function loadLogs(){
+      const from=$('logs-from')?.value||'',to=$('logs-to')?.value||'';
+      const message=$('logs-filter-message');
+      if(from&&to&&from>to){if(message)message.textContent='Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.';return;}
+      const token=++logRequest;
+      if(message)message.textContent='Đang tải…';
+      try{
+        const d=await fj('/api/admin/logs?'+new URLSearchParams({from,to}));
+        if(token!==logRequest)return;
+        renderLogin(d.login_logs||[]);renderAudit(d.audit_logs||[]);
+        if(message)message.textContent='';
+        document.querySelectorAll('#admin-logs .table-wrap').forEach(el=>el.scrollTop=0);
+      }catch(error){if(token===logRequest&&message)message.textContent=error.message;throw error;}
+    }
+    ['logs-from','logs-to'].forEach(id=>$(id)?.addEventListener('change',()=>loadLogs().catch(()=>{})));
     async function loadConfig(){const c=(await fj('/api/admin/configs')).configs||{};$('cfg-code').value=c.admin_register_code||'';$('cfg-token').value=c.telegram_bot_token||'';$('cfg-chat').value=c.telegram_chat_id||'';}
     const bleNames={patient:'Phòng người bệnh',living:'Phòng khách',kitchen:'Phòng bếp'};
     const bleStatus=state=>{
@@ -76,11 +104,8 @@
     $('reload-users').addEventListener('click',()=>loadUsers().catch(e=>alert(e.message)));
     $('reload-logs').addEventListener('click',()=>loadLogs().catch(e=>alert(e.message)));
     $('reload-audit').addEventListener('click',()=>loadLogs().catch(e=>alert(e.message)));
-    $('login-more').addEventListener('click',()=>{loginExp=!loginExp;paintLogin();});
-    $('audit-more').addEventListener('click',()=>{auditExp=!auditExp;paintAudit();});
-    $('clear-login').addEventListener('click',async()=>{if(!confirm('Xóa toàn bộ lịch sử đăng nhập?'))return;try{const d=await fj('/api/admin/logs',{method:'DELETE',body:JSON.stringify({target:'login'})});loginExp=false;renderLogin(d.login_logs||[]);renderAudit(d.audit_logs||[]);}catch(e){alert(e.message);}});
-    $('clear-audit').addEventListener('click',async()=>{if(!confirm('Xóa toàn bộ lịch sử hoạt động & cảnh báo?'))return;try{const d=await fj('/api/admin/logs',{method:'DELETE',body:JSON.stringify({target:'audit'})});auditExp=false;renderAudit(d.audit_logs||[]);renderLogin(d.login_logs||[]);}catch(e){alert(e.message);}});
-    $('reload-config').addEventListener('click',()=>loadConfig().catch(e=>alert(e.message)));
+    $('clear-login').addEventListener('click',async()=>{if(!confirm('Xóa toàn bộ lịch sử đăng nhập?'))return;try{const d=await fj('/api/admin/logs',{method:'DELETE',body:JSON.stringify({target:'login'})});await loadLogs();}catch(e){alert(e.message);}});
+    $('clear-audit').addEventListener('click',async()=>{if(!confirm('Xóa toàn bộ lịch sử hoạt động & cảnh báo?'))return;try{const d=await fj('/api/admin/logs',{method:'DELETE',body:JSON.stringify({target:'audit'})});await loadLogs();}catch(e){alert(e.message);}});
     $('config-form').addEventListener('submit',async e=>{e.preventDefault();try{const d=await fj('/api/admin/configs',{method:'POST',body:JSON.stringify({admin_register_code:$('cfg-code').value.trim(),telegram_bot_token:$('cfg-token').value.trim(),telegram_chat_id:$('cfg-chat').value.trim()})});alert(d.message||'Đã lưu.');loadLogs();}catch(err){alert(err.message);}});
     const weatherForm=$('weather-config-form'),weatherSelect=$('cfg-weather-city'),weatherMessage=$('weather-config-message');
     if(weatherForm){

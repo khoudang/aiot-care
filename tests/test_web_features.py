@@ -12,6 +12,58 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class WebFeaturesTests(unittest.TestCase):
+    def test_gesture_limit_and_unique_actions(self):
+        self.login()
+        self.iot.available_gesture_options.return_value = {
+            'gestures': [{'key': k} for k in ('open', 'fist', 'one', 'two', 'three')],
+            'devices': [{'key': k} for k in ('light', 'fan', 'buzzer')],
+            'actions': [{'key': k} for k in ('on', 'off', 'toggle')],
+        }
+        def save(gesture, device, action):
+            return self.client.post('/api/gesture_mappings', json={
+                'gesture_name': gesture, 'target_device': device, 'action': action})
+        self.assertEqual(save('open', 'light', 'on').status_code, 200)
+        self.assertEqual(save('three', 'light', 'on').status_code, 200)
+        replaced = self.client.get('/api/gesture_mappings').json['mappings']
+        self.assertEqual(len(replaced), 4)
+        self.assertNotIn('open', [m['gesture_name'] for m in replaced])
+        self.assertEqual(save('open', 'buzzer', 'on').status_code, 400)
+        self.assertEqual(save('open', 'light', 'toggle').status_code, 400)
+        self.assertEqual(save('three', 'fan', 'off').status_code, 200)
+        reassigned = self.client.get('/api/gesture_mappings').json['mappings']
+        self.assertEqual(len(reassigned), 3)
+        self.assertNotIn('two', [m['gesture_name'] for m in reassigned])
+        self.assertEqual(save('open', 'light', 'on').status_code, 200)
+        mappings = self.client.get('/api/gesture_mappings').json['mappings']
+        self.assertEqual(len(mappings), 4)
+        self.assertEqual(len({m['gesture_name'] for m in mappings}), 4)
+        self.assertEqual(len({(m['target_device'], m['action']) for m in mappings}), 4)
+
+    def test_logs_date_filter_includes_full_end_day_and_all_rows(self):
+        self.login()
+        conn = sys.modules['database'].get_db_connection()
+        conn.execute('delete from login_logs')
+        conn.execute('delete from audit_logs')
+        for timestamp in ('2026-10-31 23:59:59', '2026-11-01 00:00:00',
+                          '2026-11-01 23:59:59', '2026-11-02 00:00:00'):
+            conn.execute('insert into login_logs (user_id, ip_address, timestamp) values (1, ?, ?)', ('127.0.0.1', timestamp))
+            conn.execute('insert into audit_logs (user_id, action, timestamp) values (1, ?, ?)', ('test', timestamp))
+        conn.commit()
+        response = self.client.get('/api/admin/logs?from=2026-11-01&to=2026-11-01')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json['login_logs']), 2)
+        self.assertEqual(len(response.json['audit_logs']), 2)
+        conn.executemany('insert into audit_logs (user_id, action, timestamp) values (1, ?, ?)',
+                         [('test', '2026-11-01 12:00:00')] * 205)
+        conn.commit()
+        conn.close()
+        self.assertEqual(len(self.client.get('/api/admin/logs').json['audit_logs']), 209)
+        self.assertEqual(self.client.get('/api/admin/logs?from=2026-11-02&to=2026-11-01').status_code, 400)
+        self.assertEqual(self.client.get('/api/admin/logs?from=bad-date').status_code, 400)
+        self.client.get('/logout')
+        self.login('test-member')
+        self.assertEqual(self.client.get('/api/admin/logs').status_code, 403)
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

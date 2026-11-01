@@ -1,0 +1,96 @@
+:root{color-scheme:light;--accent:#084575;--text:#20354b;--muted:#64768a;--border:#cfd9e4}
+*{box-sizing:border-box}
+body{margin:0;background:#f7f9fc;color:var(--text);font:15px/1.6 'Plus Jakarta Sans',Arial,sans-serif}
+button,input{font:inherit}a{color:var(--accent);text-underline-offset:3px}
+.shell{display:flex;min-height:100vh;min-height:100svh;padding:32px 24px}
+.right{display:flex;width:100%;margin:auto;justify-content:center}
+.form-card{width:100%;max-width:360px;background:transparent;border:0;border-radius:0;box-shadow:none;padding:0}
+.auth-logo{display:block;width:230px;max-width:80%;height:auto;margin:0 auto 32px}
+.head h1{font-size:23px;font-weight:700;margin:0 0 24px;text-align:center}
+.fld{margin-bottom:18px}.fld label{display:block;font-size:14px;font-weight:600;margin-bottom:7px}
+.iw{position:relative}.iw>.lic{display:none}
+.iw input{display:block;width:100%;min-width:0;height:48px;border:1px solid var(--border);border-radius:6px;padding:11px 13px;background:#fff;color:var(--text);font-size:16px}
+.iw input::placeholder{color:#7b8998}
+.iw input[type=password],.iw input#password,.iw input#confirm_password{padding-right:50px}
+.eye{position:absolute;top:2px;right:2px;width:44px;height:44px;border:0;background:transparent;color:var(--muted);cursor:pointer}
+.submit{display:block;width:100%;min-height:48px;margin-top:24px;padding:11px 16px;border:0;border-radius:6px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer}.submit i{display:none}.submit:hover{background:#063658}
+.bottom{margin-top:22px;text-align:center;font-size:14px;color:var(--muted)}.bottom a{font-weight:600}
+.alert{display:flex;align-items:flex-start;gap:8px;margin-bottom:20px;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}.alert i{margin-top:5px}.alert.error{color:#b13d44}
+.note{display:flex;align-items:flex-start;gap:8px;margin-top:16px;color:var(--muted);font-size:12px}.note i{margin-top:4px}
+.field-help{margin:7px 0 0;font-size:12px;line-height:1.5;color:var(--muted)}
+.register-page .head,.register-page .note{background:transparent;border:0;box-shadow:none}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.iw input:focus{outline:none;box-shadow:none;border-color:var(--border)}
+body.keyboard-navigation .iw input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+/* Compatibility with the old template cached by a running Flask process. */
+.left,.login-page:not(.register-page) .form-card>h1,.login-page:not(.register-page) .form-card>h3,.login-page:not(.register-page) .form-card>.sub{display:none}
+@media(max-width:480px){.shell{padding:28px 24px}.auth-logo{width:210px;margin-bottom:28px}}
+/* Shared login and registration artwork. */
+@media(min-width:761px){
+ body.login-page{background:#e8f2ff}
+ .login-page .shell{display:grid;grid-template-columns:1fr;min-height:100svh;padding:0;background:url('../images/login-desktop-background.png?v=20261101_16') center top / cover no-repeat}
+ .login-page .right{width:44%;margin:0 3% 0 auto;align-self:stretch;display:flex;align-items:center;justify-content:center;padding:clamp(225px,30svh,360px) 24px max(48px,12svh)}
+ .login-page .form-card{max-width:360px}
+ .login-page .auth-logo{display:none}
+ .login-page .iw input{background:#ffffffdb}
+}
+@media(min-width:761px) and (max-height:650px){
+ .login-page .shell{background-size:100% auto}
+ .login-page .right{padding-top:18vw;padding-bottom:32px}
+}
+/* Mobile login artwork; the form sits beneath the logo already in the image. */
+@media(max-width:760px){
+ body.login-page{background:#e8f2ff}
+ .login-page .shell{display:flex;min-height:100svh;padding:0;background:url('../images/login-mobile-background.png?v=20261101_15') center top / cover no-repeat}
+ .login-page .right{width:100%;min-height:100svh;margin:0;align-items:center;padding:clamp(185px,30svh,280px) max(24px,7vw) max(60px,12svh)}
+ .login-page .form-card{width:100%;max-width:360px}
+ .login-page .auth-logo{display:none}
+ .login-page .iw input{background:#ffffffdf}
+}
+@media(max-width:760px) and (max-height:600px){
+ .login-page .shell{background-size:100% auto}
+ .login-page .right{padding-top:50vw;padding-bottom:32px}
+}
+/* Preserve the complete laptop artwork inside the browser viewport. */
+@media(min-width:761px){
+ .login-page .shell{min-height:100svh;background-image:url('../images/login-desktop-background.png?v=20261101_17');background-size:contain;background-position:center top;background-color:#e8f2ff}
+ .login-page .right{padding-top:clamp(190px,24svh,280px);padding-bottom:48px}
+}
+@media(min-width:761px) and (max-height:600px){.login-page .right{padding-top:170px;padding-bottom:24px}}
+/* Keep the longer registration form clear of the logo and allow natural scrolling. */
+.register-page .form-card{background:transparent;border:0;box-shadow:none}
+.register-page .fld{margin-bottom:14px}
+.register-page .submit{margin-top:20px}
+.register-page .bottom{margin-top:16px}
+@media(min-width:761px){.register-page .right{align-items:flex-start}.register-page .form-card{max-width:360px}}
+@media(max-width:760px){.register-page .shell{background-size:100% auto;background-color:#e8f2ff}.register-page .right{align-items:flex-start;padding-top:max(185px,48vw);padding-bottom:36px}}
+/* Registration fits below the embedded logo with two compact desktop rows. */
+@media(min-width:761px){
+ .register-page .right{width:46%;margin:0 2% 0 auto;align-items:flex-start;padding:calc(min(16vw,35svh) + 16px) 24px 24px}
+ .register-page .form-card{max-width:480px}
+ .register-page form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 18px;align-items:start}
+ .register-page .fld{min-width:0;margin:0}
+ .register-page .fld label{margin-bottom:6px;font-size:14px}
+ .register-page .iw input{height:46px;font-size:15px;padding-left:12px}
+ .register-page .eye{height:42px;width:42px}
+ .register-page .submit{grid-column:1/-1;min-height:46px;margin:2px 0 0}
+ .register-page .field-help{font-size:11px;margin-top:6px;line-height:1.5}
+ .register-page .bottom{margin-top:16px;font-size:13px}
+ .register-page .alert{margin-bottom:12px;padding:8px 0}
+}
+@media(min-width:761px) and (max-height:600px){
+ .register-page .right{padding-top:calc(min(15vw,32svh) + 18px);padding-bottom:20px}
+ .register-page form{gap:10px 14px}
+ .register-page .bottom{margin-top:12px}
+}
+/* Authentication follows the last dashboard theme on this browser. */
+html.dark-mode{color-scheme:dark;--accent:#8bbcf0;--text:#e6edf5;--muted:#acb9ca;--border:#4a5a6d}
+html.dark-mode body.login-page{background:#121e2b}
+html.dark-mode .login-page .shell{background-color:#121e2b}
+html.dark-mode .login-page .iw input{background:#182636eF;border-color:#4a5a6d;color:#e6edf5}
+html.dark-mode .login-page .iw input::placeholder{color:#9aaabd}
+html.dark-mode .login-page .submit{background:#356faa;color:#fff}
+html.dark-mode .login-page .submit:hover{background:#407fbd}
+html.dark-mode .alert.error{color:#f3949c}
+@media(min-width:761px){html.dark-mode .login-page .shell{background-image:url('../images/login-desktop-dark.png?v=20261101_22')}}
+@media(max-width:760px){html.dark-mode .login-page .shell{background-image:url('../images/login-mobile-dark.png?v=20261101_22')}}

@@ -12,7 +12,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}?v=20261003_living_fullscreen">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard-refresh.css') }}?v=20261028_9">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/type-system.css') }}?v=20261029_personal11">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/type-system.css') }}?v=20261101_refine35">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/gateway-diagnostics.css') }}?v=20261102">
 </head>
 <body data-username="{{ username }}" data-role="{{ role }}">
@@ -65,6 +65,7 @@
           <span class="nav-text">Cấu hình</span>
         </li>
         {% endif %}
+        <li class="theme-nav-item"><label class="sidebar-theme" for="dark-mode-toggle"><i class="fas fa-moon" aria-hidden="true"></i><span>Chế độ tối</span><input type="checkbox" role="switch" id="dark-mode-toggle" aria-label="Chế độ tối"></label></li>
       </ul>
 
       <div class="side-foot">
@@ -76,7 +77,6 @@
           </div>
           <i class="fa-solid fa-gear user-gear-icon" style="display:none"></i>
         </div>
-        <label class="sidebar-theme"><span>Chế độ tối</span><input type="checkbox" id="dark-mode-toggle" aria-label="Chế độ tối"></label>
         <a class="logout" href="{{ url_for('logout') }}" title="Đăng xuất">
           <i class="fa-solid fa-arrow-right-from-bracket"></i>
           <span class="logout-text" style="display:none">Đăng xuất</span>
@@ -199,14 +199,14 @@
                     <h5>Camera đang ở chế độ chờ</h5>
                     <p>Tự động bật khi cảm biến PIR phát hiện có chuyển động</p>
                   </div>
+                </div>
                   <div class="cam-overlay-stats">
-                    <div class="cam-stat-pill" id="oc-fps"><i class="fas fa-gauge"></i> AI <b id="ai-fps">--</b> FPS · video <b id="ai-video-fps">--</b> FPS · xử lý <b id="ai-latency">--</b> ms · tuổi kết quả <b id="ai-age">--</b> ms</div>
+                    <details class="camera-diagnostics"><summary>Chi tiết xử lý</summary><div class="cam-stat-pill" id="oc-fps"><i class="fas fa-gauge"></i> AI <b id="ai-fps">--</b> FPS · video <b id="ai-video-fps">--</b> FPS · xử lý <b id="ai-latency">--</b> ms · tuổi kết quả <b id="ai-age">--</b> ms</div></details>
                     <div class="cam-stat-pill" id="ai-observe-mode" hidden>AI chỉ quan sát — không điều khiển tải</div>
                     <div class="cam-stat-pill" id="oc-pir"><i class="fas fa-person-walking"></i> PIR: --</div>
                     <div class="cam-stat-pill" id="oc-gesture">Cử chỉ: —</div>
                     <div class="cam-stat-pill" id="oc-fall">An toàn</div>
                   </div>
-                </div>
               </div></div><div class="detail-side"><section class="detail-group"><h2>Cảm biến môi trường</h2><div class="sensor-cards-grid">
                   <div class="balanced-sensor-card">
                     <div class="bsc-header">
@@ -251,19 +251,7 @@
                   </div>
 
                   <!-- Còi báo động phòng bệnh -->
-                  <div class="device-card-modern" id="pt-buzzer-tile">
-                    <div class="device-card-top">
-                      <div class="device-icon-wrapper"><i class="fas fa-bell"></i></div>
-                      <label class="sw">
-                        <input type="checkbox" id="pt-buzzer-toggle" aria-label="Còi phòng bệnh">
-                        <span class="tr"></span>
-                      </label>
-                    </div>
-                    <div class="device-meta-info">
-                      <h5>Còi báo động</h5>
-                      <p id="pt-buzzer-status">Im lặng</p>
-                    </div>
-                  </div>
+
 
                   <!-- Đèn phòng bệnh -->
                   <div class="device-card-modern" id="pt-light-tile">
@@ -302,7 +290,7 @@
                     <div class="bsc-val"><span id="lv-humi">--</span><small>%</small></div>
                     <canvas class="spark" id="sp-lv-humi"></canvas>
                   </div>
-                </div><div class="sensor-cards-grid"><div class="balanced-sensor-card" id="lv-motion-tile"><div class="bsc-name">Hiện diện</div><div class="bsc-val" id="lv-motion-status">Chưa có dữ liệu</div></div><div class="balanced-sensor-card"><div class="bsc-name">Ánh sáng</div><div class="bsc-val"><span id="lv-lux">--</span><small>lux</small></div><canvas class="spark" id="sp-lv-lux"></canvas></div></div></section><section class="detail-group"><h2>Thiết bị</h2><div class="living-2cards-grid">
+                <div class="balanced-sensor-card" id="lv-motion-tile"><div class="bsc-name">Hiện diện</div><div class="bsc-val" id="lv-motion-status">Chưa có dữ liệu</div></div><div class="balanced-sensor-card"><div class="bsc-name">Ánh sáng</div><div class="bsc-val"><span id="lv-lux">--</span><small>lux</small></div><canvas class="spark" id="sp-lv-lux"></canvas></div></div></section><section class="detail-group"><h2>Thiết bị</h2><div class="living-2cards-grid">
                   <!-- Đèn phòng khách -->
                   <div class="device-card-modern" id="lv-light-tile">
                     <div class="device-card-top">
@@ -416,31 +404,8 @@
             </div>
 
             <!-- Còi báo động bếp -->
-            <div class="device-card-modern" id="kt-buzzer-tile">
-              <div class="device-card-top">
-                <div class="device-icon-wrapper"><i class="fas fa-bell"></i></div>
-                <label class="sw">
-                  <input type="checkbox" id="kt-buzzer-toggle" aria-label="Còi bếp">
-                  <span class="tr"></span>
-                </label>
-              </div>
-              <div class="device-meta-info">
-                <h5>Còi báo động bếp</h5>
-                <p id="kt-buzzer-status">Im lặng</p>
-              </div>
-            </div>
-          </div></section></div><div class="detail-history"><div class="card" style="padding:22px;margin-top:28px">
-            <div class="card-h" style="border:none;padding:0 0 16px">
-              <div>
-                <h3>Lịch sử cảnh báo an toàn phòng bếp</h3>
-                <p>Nhật ký ghi nhận nồng độ gas tăng cao, phát hiện khói hoặc lửa</p>
-              </div>
-              <button class="btn sm" id="kt-alerts-reload"><i class="fas fa-rotate"></i> Tải lại</button>
-            </div>
-            <div id="kt-alert-list" style="display:flex;flex-direction:column;gap:8px">
-              <div class="empty" style="color:var(--text-muted);font-size:0.86rem">Chưa có cảnh báo nào.</div>
-            </div>
-          </div></div></section>
+
+          </div></section></div></section>
 
         <!-- =================================================================
              GESTURES SECTION (Tùy chỉnh cử chỉ tay AI MediaPipe)
@@ -453,7 +418,7 @@
               <div class="card-h" style="border:none;padding:0 0 16px">
                 <div>
                   <h3>Thiết lập ánh xạ</h3>
-                  <p>Chọn cử chỉ, thiết bị và hành động cần thực hiện.</p>
+                  <p>Tối đa 4 cử chỉ cho bật/tắt đèn và quạt. Lưu mới sẽ thay thế ánh xạ liên quan sau khi bạn xác nhận.</p>
                 </div>
               </div>
 
@@ -522,40 +487,38 @@
         <!-- =================================================================
              ADMIN: LOGS
              ================================================================= -->
-        <section id="admin-logs" class="room"><header class="detail-heading"><h1>Nhật ký & cảnh báo</h1></header>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(300px, 1fr));gap:20px">
+        <section id="admin-logs" class="room"><header class="detail-heading"><h1>Nhật ký & cảnh báo</h1><div class="logs-filter"><label for="logs-from">Từ ngày</label><input type="date" id="logs-from"><label for="logs-to">Đến ngày</label><input type="date" id="logs-to"><span id="logs-filter-message" role="status" aria-live="polite"></span></div></header>
+          <div class="logs-panel">
             <div class="card" style="padding:22px">
               <div class="card-h" style="border:none;padding:0 0 16px">
                 <div><h3>Lịch sử đăng nhập</h3><p>Nhật ký IP và thời gian truy cập</p></div>
                 <div style="display:flex;gap:8px">
-                  <button class="btn sm" id="reload-logs"><i class="fas fa-rotate"></i></button>
-                  <button class="btn sm danger" id="clear-login"><i class="fas fa-trash"></i></button>
+                  <button class="btn sm" id="reload-logs" aria-label="Tải lại lịch sử đăng nhập" title="Tải lại lịch sử đăng nhập"><i class="fas fa-rotate"></i></button>
+                  <button class="btn sm danger" id="clear-login" aria-label="Xóa lịch sử đăng nhập" title="Xóa lịch sử đăng nhập"><i class="fas fa-trash"></i></button>
                 </div>
               </div>
               <div class="table-wrap">
                 <table class="atable">
-                  <thead><tr><th>User</th><th>IP</th><th>Thời gian</th></tr></thead>
+                  <thead><tr><th scope="col">Tài khoản</th><th scope="col">IP</th><th scope="col">Thời gian</th></tr></thead>
                   <tbody id="login-body"><tr><td colspan="3"><div class="empty">Chưa có dữ liệu.</div></td></tr></tbody>
                 </table>
               </div>
-              <div style="margin-top:10px;text-align:center"><button class="btn sm" id="login-more" style="display:none"></button></div>
             </div>
 
             <div class="card" style="padding:22px">
               <div class="card-h" style="border:none;padding:0 0 16px">
                 <div><h3>Hoạt động &amp; Cảnh báo</h3><p>Lệnh điều khiển và sự kiện an toàn</p></div>
                 <div style="display:flex;gap:8px">
-                  <button class="btn sm" id="reload-audit"><i class="fas fa-rotate"></i></button>
-                  <button class="btn sm danger" id="clear-audit"><i class="fas fa-trash"></i></button>
+                  <button class="btn sm" id="reload-audit" aria-label="Tải lại nhật ký hoạt động" title="Tải lại nhật ký hoạt động"><i class="fas fa-rotate"></i></button>
+                  <button class="btn sm danger" id="clear-audit" aria-label="Xóa nhật ký hoạt động" title="Xóa nhật ký hoạt động"><i class="fas fa-trash"></i></button>
                 </div>
               </div>
               <div class="table-wrap">
                 <table class="atable">
-                  <thead><tr><th>User</th><th>Hành động</th><th>Thời gian</th></tr></thead>
+                  <thead><tr><th scope="col">Tài khoản</th><th scope="col">Hành động</th><th scope="col">Thời gian</th></tr></thead>
                   <tbody id="audit-body"><tr><td colspan="3"><div class="empty">Chưa có dữ liệu.</div></td></tr></tbody>
                 </table>
               </div>
-              <div style="margin-top:10px;text-align:center"><button class="btn sm" id="audit-more" style="display:none"></button></div>
             </div>
           </div>
         </section>
@@ -586,7 +549,6 @@
               </div>
               <div class="settings-actions">
                 <button type="submit" class="btn accent"><i class="fas fa-floppy-disk"></i> Lưu cấu hình</button>
-                <button type="button" class="btn" id="reload-config"><i class="fas fa-rotate"></i> Nạp lại</button>
               </div>
             </form>
           </div>
@@ -644,10 +606,10 @@
     <button type="button" data-room="personal" data-personal-tab aria-controls="personal"><i class="fas fa-user" aria-hidden="true"></i><span>Cá nhân</span></button>
   </nav>
 
-  <script src="{{ url_for('static', filename='js/dashboard.js') }}?v=20261029_personal11"></script>
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}?v=20261101_refine35"></script>
   <script src="{{ url_for('static', filename='js/overview-weather.js') }}?v=7" defer></script>
   {% if role == 'admin' %}
-  <script src="{{ url_for('static', filename='js/admin.js') }}?v=20261029_weathersettings1"></script>
+  <script src="{{ url_for('static', filename='js/admin.js') }}?v=20261101_refine35"></script>
   {% endif %}
 </body>
 </html>

@@ -278,7 +278,7 @@ def fetch_admin_users():
     return rows
 
 
-def fetch_login_logs(limit=100):
+def fetch_login_logs(limit=100, start_date="", end_date=""):
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -292,10 +292,12 @@ def fetch_login_logs(limit=100):
             ll.timestamp
         from login_logs ll
         left join users u on u.id = ll.user_id
+        where (? = '' or substr(ll.timestamp, 1, 10) >= ?)
+          and (? = '' or substr(ll.timestamp, 1, 10) <= ?)
         order by ll.id desc
         limit ?
         """,
-        (limit,),
+        (start_date, start_date, end_date, end_date, limit),
     )
 
     rows = [dict(row) for row in cur.fetchall()]
@@ -303,7 +305,7 @@ def fetch_login_logs(limit=100):
     return rows
 
 
-def fetch_audit_logs(limit=200):
+def fetch_audit_logs(limit=200, start_date="", end_date=""):
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -317,10 +319,12 @@ def fetch_audit_logs(limit=200):
             al.timestamp
         from audit_logs al
         left join users u on u.id = al.user_id
+        where (? = '' or substr(al.timestamp, 1, 10) >= ?)
+          and (? = '' or substr(al.timestamp, 1, 10) <= ?)
         order by al.id desc
         limit ?
         """,
-        (limit,),
+        (start_date, start_date, end_date, end_date, limit),
     )
 
     rows = [dict(row) for row in cur.fetchall()]
@@ -430,20 +434,29 @@ def fetch_gesture_mappings():
 
 def upsert_gesture_mapping(gesture_name, target_device, action):
     conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        insert into gesture_mappings (gesture_name, target_device, action, updated_at)
-        values (?, ?, ?, datetime('now', '+7 hours'))
-        on conflict(gesture_name) do update set
-            target_device = excluded.target_device,
-            action = excluded.action,
-            updated_at = datetime('now', '+7 hours')
-        """,
-        (gesture_name, target_device, action),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        conn.execute('begin immediate')
+        if target_device not in ('light', 'fan') or action not in ('on', 'off'):
+            raise ValueError('Chỉ hỗ trợ bật/tắt đèn và quạt.')
+        # Replace both the selected gesture's old assignment and the gesture
+        # previously responsible for this action, atomically.
+        conn.execute('delete from gesture_mappings where target_device = ? and action = ? and gesture_name != ?',
+                     (target_device, action, gesture_name))
+        remaining = conn.execute('select count(*) from gesture_mappings where gesture_name != ?', (gesture_name,)).fetchone()[0]
+        if remaining >= 4:
+            raise ValueError('Tối đa 4 ánh xạ cử chỉ.')
+        conn.execute(
+            """insert into gesture_mappings (gesture_name, target_device, action, updated_at)
+            values (?, ?, ?, datetime('now', '+7 hours'))
+            on conflict(gesture_name) do update set target_device=excluded.target_device,
+            action=excluded.action, updated_at=datetime('now', '+7 hours')""",
+            (gesture_name, target_device, action))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def delete_gesture_mapping(gesture_name):

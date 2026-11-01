@@ -1,5 +1,6 @@
 import re
 import time
+from datetime import date
 
 from flask import (
     Response,
@@ -253,7 +254,10 @@ def register_web(app, socketio):
         if action not in valid_actions:
             return jsonify({"ok": False, "message": "Hành động không hợp lệ."}), 400
 
-        upsert_gesture_mapping(gesture, device, action)
+        try:
+            upsert_gesture_mapping(gesture, device, action)
+        except ValueError as error:
+            return jsonify({"ok": False, "message": str(error)}), 400
         iot.reload_gesture_map()
         log_audit(f"Cập nhật cử chỉ: {gesture} -> {device}/{action}", user_id=session.get("user_id"))
         return jsonify({"ok": True, "message": "Đã lưu ánh xạ cử chỉ.", "mappings": fetch_gesture_mappings()})
@@ -370,7 +374,19 @@ def register_web(app, socketio):
     @app.route("/api/admin/logs", methods=["GET"])
     @admin_required
     def api_admin_logs():
-        return jsonify({"ok": True, "login_logs": fetch_login_logs(), "audit_logs": fetch_audit_logs()})
+        start = request.args.get("from", "").strip()
+        end = request.args.get("to", "").strip()
+        try:
+            for value in (start, end):
+                if value and date.fromisoformat(value).isoformat() != value:
+                    raise ValueError()
+            if start and end and start > end:
+                raise ValueError()
+        except ValueError:
+            return jsonify({"ok": False, "message": "Khoảng ngày không hợp lệ."}), 400
+        return jsonify({"ok": True,
+                        "login_logs": fetch_login_logs(limit=-1, start_date=start, end_date=end),
+                        "audit_logs": fetch_audit_logs(limit=-1, start_date=start, end_date=end)})
 
     @app.route("/api/admin/logs", methods=["DELETE"])
     @admin_required

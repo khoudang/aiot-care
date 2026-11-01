@@ -8,52 +8,19 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/type-system.css') }}?v=20261028_6">
+  <script src="{{ url_for('static', filename='js/auth-theme.js') }}?v=20261101_22"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}?v=20261101_auththeme22">
 </head>
 <body class="auth-page login-page">
-  <div class="shell">
-    <!-- Left Hero: Unboxed, prominent branding and typography -->
-    <div class="left">
-      <div class="brand">
-        <div class="brand-mark"><i class="fas fa-house-medical"></i></div>
-        <div>
-          <h1>AIoT Care Station</h1>
-          <span>Giám sát chăm sóc người bệnh</span>
-        </div>
-      </div>
-      <div class="hero">
-        <h2>An tâm chăm sóc.<br>Dù ở bất cứ đâu.</h2>
-        <div class="flist">
-          <div class="fitem"><i class="fas fa-shield-heart"></i><span>Cảnh báo gas – khói – lửa và phát hiện té ngã cho người bệnh.</span></div>
-          <div class="fitem"><i class="fas fa-user-group"></i><span>Tài khoản phân quyền cho từng thành viên và quản trị viên.</span></div>
-          <div class="fitem"><i class="fas fa-lock"></i><span>Bảo mật dữ liệu và kết nối thời gian thực qua WebSockets.</span></div>
-        </div>
-        <div class="status">
-          <div class="sh">
-            <span class="t"><i class="fab fa-bluetooth-b" style="color:var(--primary);margin-right:6px"></i>Không gian được kết nối</span>
-            <span class="b"><i class="fas fa-circle-check"></i> Trực tuyến</span>
-          </div>
-          <div class="rooms">
-            <div class="sroom"><span class="d"></span><span class="n">Phòng<b>Người bệnh</b></span></div>
-            <div class="sroom"><span class="d"></span><span class="n">Phòng<b>Khách</b></span></div>
-            <div class="sroom"><span class="d"></span><span class="n">Phòng<b>Bếp</b></span></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Right Side: Clean Form Box -->
+  <main class="shell">
     <div class="right">
       <div class="form-card">
-        <div class="fc-icon"><i class="fas fa-right-to-bracket"></i></div>
-        <h3>Đăng nhập</h3>
-        <p class="sub">Nhập tài khoản đã được cấp để vào trang điều khiển.</p>
+      <img class="auth-logo" src="{{ url_for('static', filename='images/aiot-care-logo.png') }}" alt="AIoT Care Station">
 
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
             {% for category, message in messages %}
-              <div class="alert {{ category }}">
+              <div class="alert {{ category }}" role="{{ 'alert' if category == 'error' else 'status' }}">
                 <i class="fas {{ 'fa-circle-exclamation' if category == 'error' else 'fa-circle-check' }}"></i>
                 <span>{{ message }}</span>
               </div>
@@ -65,14 +32,14 @@
           <div class="fld">
             <label for="username">Tên đăng nhập</label>
             <div class="iw"><i class="fas fa-user lic"></i>
-              <input type="text" id="username" name="username" placeholder="Tên đăng nhập" autocomplete="username" required autofocus>
+              <input type="text" id="username" name="username" placeholder="Tên đăng nhập" autocomplete="username" autocapitalize="none" spellcheck="false" required>
             </div>
           </div>
           <div class="fld">
             <label for="password">Mật khẩu</label>
             <div class="iw"><i class="fas fa-lock lic"></i>
               <input type="password" id="password" name="password" placeholder="Mật khẩu" autocomplete="current-password" required>
-              <button type="button" class="eye" aria-label="Hiện hoặc ẩn mật khẩu" data-target="password"><i class="fas fa-eye"></i></button>
+              <button type="button" class="eye" aria-label="Hiện hoặc ẩn mật khẩu" aria-pressed="false" aria-controls="password" data-target="password"><i class="fas fa-eye" aria-hidden="true"></i></button>
             </div>
           </div>
           <button type="submit" class="submit"><i class="fas fa-right-to-bracket"></i> Đăng nhập</button>
@@ -87,8 +54,8 @@
         </div>
       </div>
     </div>
-  </div>
+  </main>
 
-  <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/auth.js') }}?v=20261101_2"></script>
 </body>
 </html>

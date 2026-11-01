@@ -1,5 +1,8 @@
 /* ================= AIoT Care Station — client (BLE, không MQTT) ================= */
   const socket = (typeof io !== 'undefined') ? io() : null;
+  // Remove the retired history panel even from a cached dashboard template.
+  document.querySelector('#kitchen .detail-history')?.remove();
+  document.querySelectorAll('#pt-buzzer-tile,#kt-buzzer-tile').forEach(tile=>tile.remove());
 
   function updateGreeting(){
     const heading=document.getElementById('dynamic-greeting');
@@ -12,6 +15,27 @@
   }
   updateGreeting();
   setInterval(updateGreeting,60000);
+
+  /* Align the sidebar divider to the overview header in the desktop shell. */
+  (function alignBrandDivider(){
+    const header=document.querySelector('#overview .overview-heading');
+    const brand=document.getElementById('sidebar-top-brand');
+    const viewport=document.querySelector('.main-wrap');
+    if(!header||!brand||!viewport)return;
+    const desktop=window.matchMedia('(min-width:1024px)');
+    function align(){
+      if(!desktop.matches){brand.style.removeProperty('--brand-divider-height');return;}
+      if(!header.getClientRects().length)return;
+      const height=header.getBoundingClientRect().bottom+viewport.scrollTop-brand.getBoundingClientRect().top;
+      if(height>0)brand.style.setProperty('--brand-divider-height',height+'px');
+    }
+    if(typeof ResizeObserver!=='undefined'){
+      const observer=new ResizeObserver(align);observer.observe(header);
+    }
+    window.addEventListener('resize',align);
+    document.fonts?.ready.then(align);
+    align();
+  })();
 
   (function(){
     const b=document.body;
@@ -31,9 +55,23 @@
   /* Account settings share the main content navigation. */
   const preferencePrefix='aiot-account-'+document.body.dataset.username+'-';
   const dark=document.getElementById('dark-mode-toggle');
+  // Upgrade the old sidebar markup too when Flask still has a cached template.
+  const themeLabel=dark.closest('label');
+  const themeNav=document.querySelector('#sidebar .nav');
+  if(themeLabel&&themeNav){
+    themeLabel.classList.add('sidebar-theme');
+    dark.setAttribute('role','switch');
+    if(!themeLabel.querySelector('.fa-moon')){
+      const moon=document.createElement('i');moon.className='fas fa-moon';moon.setAttribute('aria-hidden','true');themeLabel.prepend(moon);
+    }
+    if(!themeLabel.closest('.theme-nav-item')){
+      const item=document.createElement('li');item.className='theme-nav-item';item.append(themeLabel);themeNav.append(item);
+    }
+  }
   try{dark.checked=localStorage.getItem(preferencePrefix+'dark')==='true';}catch(_){}
   document.body.classList.toggle('dark-mode',dark.checked);
-  dark.addEventListener('change',()=>{document.body.classList.toggle('dark-mode',dark.checked);try{localStorage.setItem(preferencePrefix+'dark',String(dark.checked));}catch(_){}});
+  try{localStorage.setItem('aiot-theme-dark',String(dark.checked));}catch(_){}
+  dark.addEventListener('change',()=>{document.body.classList.toggle('dark-mode',dark.checked);try{localStorage.setItem(preferencePrefix+'dark',String(dark.checked));localStorage.setItem('aiot-theme-dark',String(dark.checked));}catch(_){}});
   const personalDark=document.getElementById('personal-dark-toggle');
   personalDark.checked=dark.checked;
   personalDark.addEventListener('change',()=>{dark.checked=personalDark.checked;dark.dispatchEvent(new Event('change'));});
@@ -52,8 +90,14 @@
     'admin-logs':['Nhật ký & cảnh báo','Lịch sử đăng nhập, hoạt động và cảnh báo'],
     'admin-settings':['Cấu hình hệ thống','Tài khoản, Telegram và kết nối ESP'],
   };
-  function goTo(room){
+  function goTo(room,{historyMode='push'}={}){
     if(!Array.from(rooms).some(r=>r.id===room))return;
+    const url=new URL(window.location.href);
+    if(url.searchParams.get('tab')!==room){
+      url.searchParams.set('tab',room);
+      if(historyMode==='replace')window.history.replaceState(null,'',url);
+      else window.history.pushState(null,'',url);
+    }
     document.querySelectorAll('[data-room]').forEach(i=>i.classList.toggle('active',i.dataset.room===room));
     document.querySelectorAll('#botnav button').forEach(i=>{
       const selected=i.dataset.room===room||(i.hasAttribute('data-personal-tab')&&['gestures','admin-settings','admin-users','admin-logs'].includes(room));
@@ -67,6 +111,15 @@
   }
   document.querySelectorAll('[data-room]').forEach(i=>i.addEventListener('click',()=>goTo(i.dataset.room)));
   document.querySelectorAll('[data-goto]').forEach(el=>el.addEventListener('click',()=>goTo(el.dataset.goto)));
+  function restoreCurrentTab(){
+    const selected=new URL(window.location.href).searchParams.get('tab');
+    const allowed=Array.from(rooms).some(room=>room.id===selected);
+    goTo(allowed?selected:'overview',{historyMode:'replace'});
+  }
+  window.addEventListener('popstate',restoreCurrentTab);
+  // Wait for the rest of this script to initialize telemetry and control state.
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',restoreCurrentTab,{once:true});
+  else queueMicrotask(restoreCurrentTab);
 
   function touch(){
     const stamp=document.getElementById('last-update');
@@ -75,18 +128,55 @@
 
   /* ---- sparklines ---- */
   const sparks={};
-  function spark(id,val,color){
-    const c=document.getElementById(id);if(!c||val==null)return;
-    if(!sparks[id])sparks[id]={data:[]};
-    const s=sparks[id];s.data.push(+val);if(s.data.length>30)s.data.shift();
-    const ctx=c.getContext('2d'),w=c.width=c.clientWidth*2,h=c.height=c.clientHeight*2;
-    ctx.clearRect(0,0,w,h);const d=s.data;if(d.length<2)return;
-    const mn=Math.min(...d),mx=Math.max(...d),rg=(mx-mn)||1;
-    ctx.lineWidth=2.5;ctx.strokeStyle=color;ctx.beginPath();
-    d.forEach((v,i)=>{const x=i/(d.length-1)*w,y=h-7-((v-mn)/rg)*(h-14);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
-    ctx.stroke();const g=ctx.createLinearGradient(0,0,0,h);g.addColorStop(0,color+'33');g.addColorStop(1,color+'00');
-    ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();ctx.fillStyle=g;ctx.fill();
+  const sensorSeries={patient:{temp:'sp-pt-temp',hum:'sp-pt-humi'},living:{temp:'sp-lv-temp',hum:'sp-lv-humi',lux:'sp-lv-lux'},kitchen:{gas:'sp-kt-gas'}};
+  if(!document.getElementById('sp-kt-gas')){
+    const card=document.getElementById('kt-gas-card');
+    if(card){const canvas=document.createElement('canvas');canvas.id='sp-kt-gas';canvas.className='spark';card.append(canvas);}
   }
+  function drawSpark(id){
+    const c=document.getElementById(id),series=sparks[id];
+    if(!c||!series||!c.clientWidth||!c.clientHeight)return;
+    const ratio=window.devicePixelRatio||1;
+    const w=c.width=Math.round(c.clientWidth*ratio),h=c.height=Math.round(c.clientHeight*ratio);
+    const ctx=c.getContext('2d');ctx.clearRect(0,0,w,h);
+    const valid=series.data.filter(v=>typeof v==='number'&&Number.isFinite(v));
+    const caption=c.nextElementSibling;
+    if(!valid.length){if(caption?.classList.contains('sensor-chart-caption'))caption.textContent='Ch\u01b0a c\u00f3 l\u1ecbch s\u1eed';return;}
+    const min=Math.min(...valid),max=Math.max(...valid),range=max-min||1;
+    ctx.lineWidth=1.6*ratio;ctx.strokeStyle=series.color||'#4c9be8';ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();
+    let connected=false;
+    series.data.forEach((value,i)=>{
+      if(typeof value!=='number'||!Number.isFinite(value)){connected=false;return;}
+      const x=5*ratio+(i/Math.max(1,series.data.length-1))*(w-10*ratio);
+      const y=max===min?h/2:h-6*ratio-(value-min)/range*(h-12*ratio);
+      if(connected)ctx.lineTo(x,y);else ctx.moveTo(x,y);
+      connected=true;
+      if(valid.length===1){ctx.arc(x,y,2*ratio,0,Math.PI*2);ctx.fill();}
+    });ctx.stroke();
+    const labels=series.labels||[];
+    const time=labels.length?labels[0]+' \u2013 '+labels[labels.length-1]:'';
+    const text=(time?time+' \u00b7 ':'')+min+' \u2013 '+max;
+    c.setAttribute('role','img');c.setAttribute('aria-label','L\u1ecbch s\u1eed c\u1ea3m bi\u1ebfn: '+text);c.title=text;
+    if(caption?.classList.contains('sensor-chart-caption'))caption.textContent=text;
+  }
+  function spark(id,val,color){
+    if(typeof val!=='number'||!Number.isFinite(val))return;
+    if(!sparks[id])sparks[id]={data:[],labels:[]};
+    const series=sparks[id];series.color=color;series.data.push(val);series.labels.push(new Date().toLocaleTimeString('vi-VN'));
+    if(series.data.length>30){series.data.shift();series.labels.shift();}drawSpark(id);
+  }
+  function renderSensorHistories(histories){
+    if(!histories||typeof histories!=='object')return;
+    for(const [room,fields] of Object.entries(sensorSeries))for(const [key,id] of Object.entries(fields)){
+      if(!Array.isArray(histories[room]?.[key]))continue;
+      sparks[id]={data:histories[room][key].slice(-30),labels:(histories[room].labels||[]).slice(-30),color:'#4c9be8'};drawSpark(id);
+    }
+  }
+  document.querySelectorAll('.detail-room canvas.spark').forEach(canvas=>{
+    const caption=document.createElement('small');caption.className='sensor-chart-caption';caption.textContent='Ch\u01b0a c\u00f3 l\u1ecbch s\u1eed';canvas.after(caption);
+    if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>drawSpark(canvas.id)).observe(canvas);
+  });
+  fetch('/api/history',{cache:'no-store'}).then(response=>response.ok?response.json():null).then(renderSensorHistories).catch(()=>{});
 
   /* ---- gauge ---- */
   function setGauge(v){
@@ -109,7 +199,7 @@
     videoPh.style.display=active?'none':'block';
     document.querySelectorAll('#cam-seg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===camMode));
     if(active){const want='/video_feed';if(!wasActive||!videoFeed.getAttribute('src'))videoFeed.src=want+'?'+Date.now();}
-    if(!active){videoFeed.removeAttribute('src');videoFeed.parentElement.style.aspectRatio='';document.getElementById('oc-gesture').textContent='Cử chỉ: — (camera tắt)';}
+    if(!active){videoFeed.removeAttribute('src');videoFeed.parentElement.style.aspectRatio='';document.getElementById('oc-gesture').textContent='Cử chỉ: camera tắt';}
   }
   document.querySelectorAll('#cam-seg button').forEach(b=>b.addEventListener('click',()=>{
     const m=b.dataset.mode;camMode=m;
@@ -183,7 +273,6 @@
     });
   }
   bindToggle('pt-light-toggle','pt-light-tile','Đang bật','Đang tắt',on=>emitSet('patient','light',{state:on}));
-  bindToggle('pt-buzzer-toggle','pt-buzzer-tile','Đang kêu','Im lặng',on=>emitSet('patient','buzzer',{state:on}));
   bindToggle('pt-fan-toggle','pt-fan-tile','Đang chạy','Đang tắt',on=>{const r=document.getElementById('pt-fan-range');if(!on){r.value=0;document.getElementById('pt-fan-val').textContent=0;}emitSet('patient','fan',{state:on,value:on?(+r.value||100):0});});
   bindRange('pt-fan-range','pt-fan-val',v=>{const t=document.getElementById('pt-fan-toggle');t.checked=v>0;document.getElementById('pt-fan-tile').classList.toggle('on',v>0);document.getElementById('pt-fan-status').textContent=v>0?'Đang chạy':'Đang tắt';emitSet('patient','fan',{state:v>0,value:v});});
   bindToggle('lv-light-toggle','lv-light-tile','Đang bật','Đang tắt',on=>emitSet('living','light',{state:on}));
@@ -194,7 +283,6 @@
   bindToggle('kt-exhaust-toggle','kt-exhaust-tile','Đang hút','Đang tắt',on=>{const r=document.getElementById('kt-exhaust-range'),v=on?(+r.value||100):0;r.value=v;document.getElementById('kt-exhaust-val').textContent=v;emitSet('kitchen','exhaust',{state:on,value:v});});
   bindRange('kt-exhaust-range','kt-exhaust-val',v=>{const on=v>0,t=document.getElementById('kt-exhaust-toggle');t.checked=on;document.getElementById('kt-exhaust-tile').classList.toggle('on',on);document.getElementById('kt-exhaust-status').textContent=on?'Đang hút':'Đang tắt';emitSet('kitchen','exhaust',{state:on,value:v});});
   bindToggle('kt-light-toggle','kt-light-tile','Đang bật','Đang tắt',on=>emitSet('kitchen','light',{state:on}));
-  bindToggle('kt-buzzer-toggle','kt-buzzer-tile','Đang kêu','Im lặng',on=>emitSet('kitchen','buzzer',{state:on}));
 
   /* ---- apply data ---- */
   function badge(el,cls,txt){el.className='rb '+cls;el.textContent=txt;el.dataset.domainClass=cls;el.dataset.domainText=txt;delete el.dataset.telemetryWarning;}
@@ -216,7 +304,7 @@
     else{delete card.dataset.attention;marker.hidden=true;}
     syncOverviewWarning();
   }
-  function setToggle(id,tileId,on,onTxt,offTxt){const el=document.getElementById(id);el.checked=!!on;document.getElementById(tileId).classList.toggle('on',!!on);const st=document.getElementById(id.replace('-toggle','-status'));if(st)st.textContent=on?onTxt:offTxt;}
+  function setToggle(id,tileId,on,onTxt,offTxt){const el=document.getElementById(id);if(el)el.checked=!!on;document.getElementById(tileId)?.classList.toggle('on',!!on);const st=document.getElementById(id.replace('-toggle','-status'));if(st)st.textContent=on?onTxt:offTxt;}
 
   function applyPatient(d){
     d=confirmedData('patient',d);
@@ -226,7 +314,6 @@
     // Node phòng bệnh không có cảm biến gas; nếu firmware cũ từng gửi thì bỏ qua an toàn.
     if(d.gas!=null){const gasVal=document.getElementById('pt-gas'),gasCard=document.getElementById('pt-gas-card');if(gasVal){gasVal.textContent=Math.round(d.gas);spark('sp-pt-gas',d.gas,'#d6982c');}if(gasCard)gasCard.classList.toggle('alarm',d.gas>=2500);}
     if(d.motion!=null)document.getElementById('oc-pir').innerHTML='<i class="fas fa-person-walking"></i> PIR: '+(d.motion?'có chuyển động':'yên tĩnh');
-    if(d.buzzer!=null){document.getElementById('pt-buzzer-toggle').checked=!!d.buzzer;document.getElementById('pt-buzzer-tile').classList.toggle('alarm',!!d.buzzer);document.getElementById('pt-buzzer-status').textContent=d.buzzer?'Đang kêu':'Im lặng';}
     if(d.fan_speed!=null){const r=document.getElementById('pt-fan-range'),v=document.getElementById('pt-fan-val');if(r.dataset.userEditing&&Math.abs(+d.fan_speed-(+r.dataset.desiredValue))<=1){clearTimeout(r._userEditTimeout);delete r.dataset.userEditing;delete r.dataset.desiredValue;}if(!r.dataset.userEditing){r.value=d.fan_speed;v.textContent=d.fan_speed;}const on=d.fan_speed>0;document.getElementById('pt-fan-toggle').checked=on;document.getElementById('pt-fan-tile').classList.toggle('on',on);document.getElementById('pt-fan-status').textContent=on?'Đang chạy':'Đang tắt';}
     touch();
   }
@@ -256,7 +343,6 @@
     if(d.exhaust_speed!=null){const r=document.getElementById('kt-exhaust-range'),v=document.getElementById('kt-exhaust-val');if(r.dataset.userEditing&&Math.abs(+d.exhaust_speed-(+r.dataset.desiredValue))<=1){clearTimeout(r._userEditTimeout);delete r.dataset.userEditing;delete r.dataset.desiredValue;}if(!r.dataset.userEditing){r.value=d.exhaust_speed;v.textContent=d.exhaust_speed;}}
     if(d.exhaust!=null)setToggle('kt-exhaust-toggle','kt-exhaust-tile',d.exhaust,'Đang hút','Đang tắt');
     if(d.light!=null)setToggle('kt-light-toggle','kt-light-tile',d.light,'Đang bật','Đang tắt');
-    if(d.buzzer!=null)setToggle('kt-buzzer-toggle','kt-buzzer-tile',d.buzzer,'Đang kêu','Im lặng');
     const danger=d.flame||d.smoke||(d.gas!=null&&d.gas>=2500),warn=(d.gas!=null&&d.gas>=1500);
     badge(document.getElementById('ov-kitchen-badge'),danger?'bad':(warn?'warn':(kitchenConnected?'ok':'')),danger?'Nguy hiểm':(warn?'Cảnh báo':(kitchenConnected?'An toàn':'Chưa kết nối')));
     if(danger||warn||kitchenConnected)markRoomAttention('kitchen',danger?'Cần kiểm tra phòng bếp':warn?'Kiểm tra khí gas':'',danger?'danger':'warn');
@@ -307,7 +393,7 @@
       else markRoomAttention('patient','','');
       const oc=document.getElementById('oc-fall');
       const fallText=a.observe_only?'NGHI TÉ NGÃ (quan sát)':'TÉ NGÃ';
-      const expectedText=fallSignal?fallText:'Chưa phát hiện tư thế nghi té ngã';
+      const expectedText=fallSignal?fallText:'Té ngã: chưa phát hiện';
       if(oc&&oc.textContent!==expectedText){
         oc.textContent=expectedText;
         oc.classList.toggle('alarm',!!fallSignal);
@@ -458,7 +544,9 @@
     socket.on('connect',()=>{setConn(true);socket.emit('request_initial_state');loadKitchenAlerts();});
     socket.on('disconnect',()=>{clearPendingControls();setConn(false);document.getElementById('state-chip').textContent='Mất kết nối realtime';document.getElementById('state-chip').className='chip';document.getElementById('state-desc').textContent='Trạng thái node được cập nhật qua API khi realtime gián đoạn.';document.getElementById('confirm-btn').disabled=true;});
     socket.on('command_error',e=>{clearPendingControls();showSys(e.message||'Không gửi được lệnh.','light');socket.emit('request_initial_state');});
+    socket.on('sensor_chart_update',renderSensorHistories);
     socket.on('bootstrap',s=>{
+      renderSensorHistories(s.histories);
       if(s.nodes){['patient','living','kitchen'].forEach(r=>setNode(r,!!s.nodes[r]));}
       if(s.rooms){applyPatient(s.rooms.patient||{});applyLiving(s.rooms.living||{});applyKitchen(s.rooms.kitchen||{});}
       if(s.ai)applyAI(s.ai);
@@ -479,14 +567,39 @@
     const gEl=document.getElementById('gm-gesture'),dEl=document.getElementById('gm-device'),aEl=document.getElementById('gm-action'),list=document.getElementById('gm-list');
     if(!gEl)return;
     const labels={gesture:{},device:{},action:{}};
+    let mappings=[];
+    const confirmation=document.createElement('dialog');
+    confirmation.className='gesture-confirmation';
+    confirmation.setAttribute('aria-labelledby','gm-confirm-title');
+    confirmation.setAttribute('aria-describedby','gm-confirm-intro');
+    confirmation.innerHTML='<h2 id="gm-confirm-title">Lưu thay đổi cử chỉ?</h2><p id="gm-confirm-intro">Sau khi lưu, hệ thống sẽ điều khiển thiết bị theo thiết lập mới dưới đây.</p><p class="gm-confirm-summary"></p><p class="gm-confirm-effects"></p><form method="dialog"><button class="btn" value="cancel" autofocus>Quay lại</button><button class="btn accent" value="save">Lưu thay đổi</button></form>';
+    document.body.append(confirmation);
+    function confirmMapping(payload){
+      const describe=m=>`${labels.gesture[m.gesture_name]||m.gesture_name} → ${labels.device[m.target_device]||m.target_device} · ${labels.action[m.action]||m.action}`;
+      const summary=`Dùng cử chỉ “${labels.gesture[payload.gesture_name]||payload.gesture_name}” để ${(labels.action[payload.action]||payload.action).toLowerCase()} ${(labels.device[payload.target_device]||payload.target_device).toLowerCase()}.`;
+      const replaced=mappings.filter(m=>(m.gesture_name===payload.gesture_name||m.target_device===payload.target_device&&m.action===payload.action)&&!(m.gesture_name===payload.gesture_name&&m.target_device===payload.target_device&&m.action===payload.action));
+      const effects=replaced.length?'Các thiết lập cũ sau sẽ không còn được áp dụng: '+replaced.map(describe).join('; ')+'.':'Các thiết lập khác được giữ nguyên.';
+      if(typeof confirmation.showModal!=='function')return Promise.resolve(window.confirm(summary+'\n'+effects));
+      confirmation.querySelector('.gm-confirm-summary').textContent=summary;
+      confirmation.querySelector('.gm-confirm-effects').textContent=effects;
+      confirmation.returnValue='';
+      return new Promise(resolve=>{confirmation.addEventListener('close',()=>resolve(confirmation.returnValue==='save'),{once:true});confirmation.showModal();});
+    }
     async function fj(url,opt={}){const r=await fetch(url,{headers:{'Content-Type':'application/json'},...opt});const d=await r.json().catch(()=>({}));if(!r.ok||d.ok===false)throw new Error(d.message||'Lỗi máy chủ.');return d;}
     function fillSelect(sel,arr){sel.innerHTML=arr.map(o=>`<option value="${o.key}">${o.label}</option>`).join('');}
     function renderList(ms){
-      const cnt=document.getElementById('gcard-count-badge');if(cnt)cnt.textContent=(ms&&ms.length)||0;
+      mappings=ms||[];
+      Array.from(gEl.options).forEach(option=>{
+        const used=mappings.some(m=>m.gesture_name===option.value);
+        option.classList.toggle('gesture-used',used);
+        option.style.color=used?'var(--muted)':'';
+        option.textContent=(labels.gesture[option.value]||option.value)+(used?' · Đang dùng':'');
+      });
+      const cnt=document.getElementById('gcard-count-badge');if(cnt)cnt.textContent=mappings.length+'/4';
       if(!ms||!ms.length){list.innerHTML='<div class="empty">Chưa có ánh xạ. Chọn cử chỉ và lưu để bắt đầu.</div>';return;}
       list.innerHTML=ms.map(m=>{
         const gl=labels.gesture[m.gesture_name]||m.gesture_name,dl=labels.device[m.target_device]||m.target_device,al=labels.action[m.action]||m.action;
-        return `<div class="gmap-item"><span class="gi-gesture">${gl}</span><i class="fas fa-arrow-right gi-arrow"></i><span class="gi-target"><b>${dl}</b> · ${al}</span><button class="gi-del" onclick="delGesture('${m.gesture_name}')"><i class="fas fa-xmark"></i></button></div>`;
+        return `<div class="gmap-item"><span class="gi-gesture">${gl}</span><i class="fas fa-arrow-right gi-arrow"></i><span class="gi-target"><b>${dl}</b> · ${al}</span></div>`;
       }).join('');
     }
     async function load(){
@@ -494,16 +607,21 @@
       o.gestures.forEach(x=>labels.gesture[x.key]=x.label);
       o.devices.forEach(x=>labels.device[x.key]=x.label);
       o.actions.forEach(x=>labels.action[x.key]=x.label);
-      fillSelect(gEl,o.gestures);fillSelect(dEl,o.devices);fillSelect(aEl,o.actions);
+      fillSelect(gEl,o.gestures);fillSelect(dEl,o.devices.filter(x=>['light','fan'].includes(x.key)));fillSelect(aEl,o.actions.filter(x=>['on','off'].includes(x.key)));
       renderList(d.mappings);
     }
     document.getElementById('gm-add').addEventListener('click',async()=>{
       const button=document.getElementById('gm-add'),message=document.getElementById('gm-message');
       if(button.disabled)return;
-      button.disabled=true;message.textContent='Đang lưu…';
-      try{const d=await fj('/api/gesture_mappings',{method:'POST',body:JSON.stringify({gesture_name:gEl.value,target_device:dEl.value,action:aEl.value})});renderList(d.mappings);message.textContent='Đã lưu ánh xạ.';}catch(e){message.textContent=e.message;}finally{button.disabled=false;}
+      const payload={gesture_name:gEl.value,target_device:dEl.value,action:aEl.value};
+      button.disabled=true;
+      try{
+        if(!await confirmMapping(payload))return;
+        message.textContent='Đang lưu…';
+        const d=await fj('/api/gesture_mappings',{method:'POST',body:JSON.stringify(payload)});
+        renderList(d.mappings);message.textContent='Đã lưu ánh xạ.';
+      }catch(e){message.textContent=e.message;}finally{button.disabled=false;}
     });
-    window.delGesture=async g=>{if(!confirm('Xóa ánh xạ cử chỉ này?'))return;try{const d=await fj(`/api/gesture_mappings/${g}`,{method:'DELETE'});renderList(d.mappings);}catch(e){alert(e.message);}};
     /* Thu gọn / mở rộng panel cử chỉ + di chuyển khối dữ liệu (mặc định thu gọn để tránh chạm nhầm) */
     (function(){
       const card=document.getElementById('gesture-card'),head=document.getElementById('gcard-head');

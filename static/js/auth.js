@@ -1,3 +1,8 @@
+document.addEventListener('keydown', event => {
+  if (event.key === 'Tab') document.body.classList.add('keyboard-navigation');
+});
+document.addEventListener('pointerdown', () => document.body.classList.remove('keyboard-navigation'));
+
 document.querySelectorAll('.eye').forEach(button => {
   button.addEventListener('click', () => {
     const input = document.getElementById(button.dataset.target);
