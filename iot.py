@@ -1970,14 +1970,18 @@ _fall_since = 0.0
 
 
 def _landmark_confidence(lm):
+    if lm is None:
+        return 0.0
     for attr in ("visibility", "presence", "confidence"):
         val = getattr(lm, attr, None)
         if val is not None:
             try:
-                return float(val)
+                v = float(val)
+                if not (v != v):  # reject NaN
+                    return v
             except (ValueError, TypeError):
                 pass
-    return 1.0
+    return 0.0
 
 
 def detect_fall(landmarks, w, h):
