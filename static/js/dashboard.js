@@ -337,6 +337,36 @@
   const ktReload=document.getElementById('kt-alerts-reload');
   if(ktReload)ktReload.addEventListener('click',loadKitchenAlerts);
 
+  /* ---- fall confirmation ---- */
+  let fallConfirmation=null;
+  function renderFallConfirmation(){
+    const button=document.getElementById('patient-confirm-safe');
+    const message=document.getElementById('patient-confirm-message');
+    if(!button||!message)return;
+    const status=fallConfirmation,connected=!!socket&&socket.connected;
+    button.disabled=!connected||!status||!status.can_confirm;
+    let text='Đang tải trạng thái cảnh báo té ngã…';
+    if(!connected)text='Mất kết nối realtime; chưa thể gửi xác nhận.';
+    else if(status){
+      if(!status.required)text='Không có cảnh báo té ngã cần xác nhận.';
+      else if(status.blocked_by_kitchen)text='Còn cảnh báo phòng bếp; hãy kiểm tra và xác nhận tại phòng bếp.';
+      else if(status.active)text='AI còn báo dấu hiệu té ngã. Kiểm tra người bệnh trước khi xác nhận.';
+      else if(status.pending)text='Đã gửi xác nhận; đang chờ node phòng bệnh phản hồi. Còi vẫn được khóa an toàn.';
+      else if(!status.node_online)text='Node phòng bệnh chưa kết nối; chờ kết nối lại để xác nhận.';
+      else text='Cảnh báo té ngã đang chờ xác nhận. Chỉ bấm sau khi đã kiểm tra người bệnh an toàn.';
+    }
+    message.textContent=text;
+  }
+  function applyFallConfirmation(status){fallConfirmation=status||null;renderFallConfirmation();}
+  const patientConfirmButton=document.getElementById('patient-confirm-safe');
+  if(patientConfirmButton)patientConfirmButton.addEventListener('click',()=>{
+    if(patientConfirmButton.disabled||!socket||!socket.connected)return;
+    patientConfirmButton.disabled=true;
+    document.getElementById('patient-confirm-message').textContent='Đang gửi xác nhận an toàn…';
+    socket.emit('confirm_fall_safe',{});
+  });
+  renderFallConfirmation();
+
   /* ---- alert state machine ---- */
   const STEPS=['normal','light','emergency','awaiting'];
   function setAlert(level,msg){
@@ -433,6 +463,7 @@
     const c=document.getElementById('conn-chip'),m=document.getElementById('mt-conn');
     if(c){c.className='chip '+(ok?'ok':'bad');c.innerHTML='<i class="fas fa-circle"></i> '+(ok?'Đã kết nối':'Mất kết nối');}
     if(m)m.className='mt-conn '+(ok?'ok':'bad');
+    renderFallConfirmation();
   }
 
   /* ================= SOCKET ================= */
@@ -446,7 +477,8 @@
         if(s.nodes[room]!=null)setNode(room,!!s.nodes[room]);
       });
       applyTelemetry(s.telemetry);
-    }catch(e){applyTelemetry(Object.fromEntries(Object.keys(nodeState).map(room=>[room,{status:'unavailable'}])));}
+      applyFallConfirmation(s.fall_confirmation);
+    }catch(e){applyTelemetry(Object.fromEntries(Object.keys(nodeState).map(room=>[room,{status:'unavailable'}])));applyFallConfirmation(null);}
   }
   refreshNodeStatus();
   setInterval(refreshNodeStatus,3000);
@@ -465,11 +497,13 @@
       if(s.camera){setCameraUI(!!s.camera.active,s.camera.mode);}
       if(s.alert)setAlert(s.alert.level);
       applyTelemetry(s.telemetry);
+      applyFallConfirmation(s.fall_confirmation);
     });
     socket.on('room_update',m=>{if(m.room==='patient')applyPatient(m.data);else if(m.room==='living')applyLiving(m.data);else if(m.room==='kitchen')applyKitchen(m.data);applyTelemetry(telemetryCache);});
     socket.on('node_status',n=>{['patient','living','kitchen'].forEach(r=>{if(n[r]!=null)setNode(r,n[r]===true||n[r]==='online');});applyTelemetry(telemetryCache);});
     socket.on('camera_sync',c=>{setCameraUI(!!c.active,c.mode);});
     socket.on('ai_status',a=>{applyAI(a);});
+    socket.on('fall_confirmation',applyFallConfirmation);
     socket.on('alert_state',a=>{setAlert(a.level,a.message);if(typeof loadKitchenAlerts==='function')loadKitchenAlerts();});
     socket.on('system_alert',a=>{showSys(a.message||'Có cảnh báo mới.',(a.type==='gas'||a.type==='health')?'light':'');if(typeof loadKitchenAlerts==='function')loadKitchenAlerts();});
   }

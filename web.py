@@ -523,6 +523,12 @@ def register_web(app, socketio):
             return
         iot.confirm_safe(user_id=session.get("user_id"))
 
+    @socketio.on("confirm_fall_safe")
+    def handle_confirm_fall_safe(_data):
+        if not socket_auth_required():
+            return
+        iot.confirm_fall_safe(user_id=session.get("user_id"))
+
     @socketio.on("silence_alert")
     def handle_silence_alert(_data):
         if not socket_auth_required():

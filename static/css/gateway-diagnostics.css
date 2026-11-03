@@ -12,3 +12,89 @@ body.dark-mode .device-card-modern .sw .tr:before {
   box-shadow:0 1px 2px rgba(0,0,0,.45);
 }
 
+/* Fall confirmation control inside patient room camera card */
+.patient-safety-confirm {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+.patient-confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  min-height: 38px;
+  border-radius: 8px;
+  font-weight: 600;
+  border: 1px solid var(--ok, #18724f);
+  background: var(--ok-soft, #e6f4ea);
+  color: #18724f;
+  cursor: pointer;
+  transition: background-color .15s ease, opacity .15s ease, border-color .15s ease;
+  white-space: nowrap;
+}
+
+.patient-confirm-btn:hover:not(:disabled) {
+  background: #d4ebd9;
+}
+
+.patient-confirm-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  border-color: var(--border, #d0d7de);
+  background: var(--surface-2, #eef2f6);
+  color: var(--muted, #667085);
+}
+
+#patient-confirm-message {
+  margin: 0;
+  font-size: var(--type-sub, 14px);
+  line-height: 1.4;
+  color: var(--muted, #667085);
+  flex: 1 1 240px;
+}
+
+body.dark-mode .patient-safety-confirm {
+  background: var(--surface);
+  border-top-color: var(--border);
+}
+
+body.dark-mode .patient-confirm-btn {
+  border-color: var(--accent-line, #4e7199);
+  background: var(--ok-soft, #263b53);
+  color: var(--accent, #8bbcf0);
+}
+
+body.dark-mode .patient-confirm-btn:hover:not(:disabled) {
+  background: #2e4766;
+}
+
+body.dark-mode .patient-confirm-btn:disabled {
+  border-color: var(--border, #344152);
+  background: var(--surface-2, #242e3b);
+  color: var(--muted, #acb9ca);
+  opacity: 0.5;
+}
+
+body.dark-mode #patient-confirm-message {
+  color: var(--muted, #acb9ca);
+}
+
+@media (max-width: 680px) {
+  .patient-safety-confirm {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .patient-confirm-btn {
+    width: 100%;
+    min-height: 42px;
+  }
+  #patient-confirm-message {
+    flex: 1 1 100%;
+  }
+}

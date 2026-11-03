@@ -508,6 +508,18 @@ def _record_sensor_sample(room, payload):
                 _sensor_seen_at[room][key] = now
 
 
+def fall_confirmation_status():
+    """A cleared AI pose does not clear the buzzer latch; node telemetry does."""
+    required = _fall_buzzer_saved is not None or bool(AI.get("fall"))
+    active = bool(AI.get("fall"))
+    pending = _fall_restore_target is not None
+    blocked = _emergency_snapshot is not None
+    online = bool(NODE_ONLINE.get("patient"))
+    return {"required": required, "active": active, "pending": pending,
+            "blocked_by_kitchen": blocked, "node_online": online,
+            "can_confirm": required and not active and not pending and not blocked and online}
+
+
 def snapshot_all():
     with state_lock:
         rooms = {r: dict(v) for r, v in ROOMS.items()}
@@ -517,7 +529,8 @@ def snapshot_all():
         cam = {"active": camera_active, "mode": camera_mode, "tracking": tracking_enabled}
         alert = {"level": alert_level}
     return {"rooms": rooms, "nodes": nodes, "node_states": node_states, "ai": ai, "camera": cam,
-            "alert": alert, "histories": snapshot_histories(), "telemetry": telemetry_status()}
+            "alert": alert, "histories": snapshot_histories(), "telemetry": telemetry_status(),
+            "fall_confirmation": fall_confirmation_status()}
 
 
 def push_history(room):
@@ -1289,6 +1302,7 @@ def _observe_fall_restoration(room, payload):
     if type(payload.get("buzzer")) is bool and payload["buzzer"] == _fall_restore_target:
         _fall_buzzer_saved = None
         _fall_restore_target = None
+        _emit("fall_confirmation", fall_confirmation_status())
         _emit("alert_state", {"level": alert_level, "message": "Node đã xác nhận kết thúc cảnh báo té ngã."})
 
 
@@ -1327,6 +1341,24 @@ def silence_alert(user_id=None):
     log_audit("Tắt tiếng còi cảnh báo (giám sát nguy hiểm vẫn hoạt động)", user_id=user_id)
     _emit("alert_state", {"level": alert_level,
                           "message": "Đã tắt tiếng còi; hệ thống vẫn tiếp tục giám sát nguy hiểm."})
+
+
+def confirm_fall_safe(user_id=None):
+    """Patient-room acknowledgement never confirms the kitchen's safety latch."""
+    global _fall_restore_target
+    status = fall_confirmation_status()
+    if not status["can_confirm"]:
+        message = ("Còn cảnh báo phòng bếp; hãy kiểm tra và xác nhận tại phòng bếp."
+                   if status["blocked_by_kitchen"] else
+                   "Chưa thể xác nhận: cần hết dấu hiệu té ngã và node phòng bệnh kết nối; hoặc đang chờ node xác nhận.")
+        _emit("command_error", {"room": "patient", "message": message})
+        return False
+    _fall_restore_target = _fall_buzzer_saved
+    _cancel_commands("patient", "buzzer")
+    set_device("patient", "buzzer", state=_patient_buzzer_target(), source="auto", silent=True)
+    log_audit("Xác nhận an toàn sau cảnh báo té ngã; đang chờ node", user_id=user_id)
+    _emit("fall_confirmation", fall_confirmation_status())
+    return True
 
 
 def confirm_safe(user_id=None):
