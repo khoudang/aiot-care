@@ -14,10 +14,12 @@ class FixUiContractTests(unittest.TestCase):
 
     def test_freshness_and_video_diagnostics_survive_redesign(self):
         template = (ROOT / 'templates/index.html').read_text(encoding='utf-8')
-        for key in ('data-quality-patient', 'data-quality-living', 'data-quality-kitchen',
-                    'ai-observe-mode', 'ai-video-fps', 'ai-age', 'ai-latency'):
+        for key in ('ai-observe-mode', 'ai-video-fps', 'ai-age', 'ai-latency'):
             with self.subTest(key=key):
                 self.assertIn(f'id="{key}"', template)
+        # The per-room freshness strip is rendered from telemetry where it is needed
+        # (room cards), not as a banner repeated at the top of every page.
+        self.assertNotIn('class="gateway-quality"', template)
         script = (ROOT / 'static/js/dashboard.js').read_text(encoding='utf-8')
         for marker in ('function applyTelemetry(', 'applyTelemetry(s.telemetry)',
                        'applyTelemetry(telemetryCache)', 'a.overlay_age_ms', 'a.observe_only'):
