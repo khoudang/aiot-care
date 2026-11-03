@@ -125,6 +125,13 @@ CAMERA_MOTION_TIMEOUT = float(os.getenv("CAMERA_MOTION_TIMEOUT", "20"))  # giây
 FALL_HOLD_SEC = float(os.getenv("FALL_HOLD_SEC", "3.5"))      # giữ tư thế bất thường bao lâu mới báo
 FALL_TORSO_DEG = float(os.getenv("FALL_TORSO_DEG", "55"))     # góc thân so với phương đứng
 FALL_ASPECT = float(os.getenv("FALL_ASPECT", "1.1"))         # tỉ lệ rộng/cao bbox
+FALL_MIN_CONFIDENCE = float(os.getenv("FALL_MIN_CONFIDENCE", "0.5"))  # độ tin cậy tối thiểu của landmark
+FALL_MIN_BODY_SIZE = float(os.getenv("FALL_MIN_BODY_SIZE", "0.15"))   # kích thước cơ thể tối thiểu (tỉ lệ khung hình)
+FALL_MAX_BODY_SIZE = float(os.getenv("FALL_MAX_BODY_SIZE", "1.25"))   # kích thước cơ thể tối đa hợp lý
+
+# Cử chỉ tay
+GESTURE_MIN_SIZE = float(os.getenv("GESTURE_MIN_SIZE", "0.08"))       # kích thước bàn tay tối thiểu (tỉ lệ khung hình)
+GESTURE_STABLE_CYCLES = int(os.getenv("GESTURE_STABLE_CYCLES", "2"))   # số chu kỳ suy luận liên tiếp đạt cùng cử chỉ
 
 
 # ------------------------------------------------------------------ #

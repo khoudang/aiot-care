@@ -22,6 +22,16 @@ def load_iot():
     config.GAS_SMOOTH_WINDOW = 5
     config.GAS_WARN_THRESHOLD = 1500
     config.GAS_HIGH_THRESHOLD = 2500
+    config.FALL_HOLD_SEC = 3.5
+    config.FALL_TORSO_DEG = 55.0
+    config.FALL_ASPECT = 1.1
+    config.FALL_MIN_CONFIDENCE = 0.5
+    config.FALL_MIN_BODY_SIZE = 0.15
+    config.FALL_MAX_BODY_SIZE = 1.25
+    config.GESTURE_MIN_SIZE = 0.08
+    config.GESTURE_STABLE_CYCLES = 1
+    config.OVERLAY_MAX_AGE_SEC = 0.8
+    config.PROCESS_EVERY_N_FRAMES = 3
     dependencies = {name: Mock() for name in (
         'cv2', 'requests', 'flask_socketio', 'mediapipe', 'bleak', 'serial', 'database')}
     dependencies['config'] = config

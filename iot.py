@@ -63,10 +63,15 @@ from config import (
     FALL_ASPECT,
     FALL_HOLD_SEC,
     FALL_TORSO_DEG,
+    FALL_MIN_CONFIDENCE,
+    FALL_MIN_BODY_SIZE,
+    FALL_MAX_BODY_SIZE,
     GAS_HIGH_THRESHOLD,
     GAS_SMOOTH_WINDOW,
     GAS_WARN_THRESHOLD,
     GESTURE_COOLDOWN_SEC,
+    GESTURE_MIN_SIZE,
+    GESTURE_STABLE_CYCLES,
     JPEG_QUALITY,
     MAX_HISTORY,
     NODES,
@@ -1854,14 +1859,41 @@ def _finger_states(hand_landmarks, frame_w, frame_h):
     return st
 
 
+def _is_valid_hand(hand):
+    try:
+        lms = getattr(hand, "landmark", None)
+        if not lms or len(lms) < 21:
+            return False
+        # Toạ độ phải nằm trong khung hình chuẩn hoá [0.0, 1.0]
+        for p in lms:
+            if not (0.0 <= p.x <= 1.0 and 0.0 <= p.y <= 1.0):
+                return False
+        # Kích thước bàn tay phải đạt tối thiểu GESTURE_MIN_SIZE
+        xs = [p.x for p in lms]
+        ys = [p.y for p in lms]
+        bw_norm = max(xs) - min(xs)
+        bh_norm = max(ys) - min(ys)
+        min_size = float(globals().get("GESTURE_MIN_SIZE", 0.08))
+        if max(bw_norm, bh_norm) < min_size:
+            return False
+        return True
+    except Exception:
+        return False
+
+
 def detect_gesture(hands_list, frame_w, frame_h):
-    """Nhận 1-2 bàn tay -> gesture key (canonical) hoặc None."""
+    """Nhận 1-2 bàn tay -> gesture key (canonical) hoặc None.
+    Yêu cầu bàn tay nằm trong khung hình [0.0, 1.0] và đạt kích thước tối thiểu GESTURE_MIN_SIZE."""
     if not hands_list:
         return None
-    all_states = [_finger_states(h, frame_w, frame_h) for h in hands_list]
+    valid_hands = [h for h in hands_list if _is_valid_hand(h)]
+    if not valid_hands:
+        return None
+
+    all_states = [_finger_states(h, frame_w, frame_h) for h in valid_hands]
     counts = [sum(s) for s in all_states]
 
-    if len(hands_list) >= 2 and all(c >= 4 for c in counts[:2]):
+    if len(valid_hands) >= 2 and all(c >= 4 for c in counts[:2]):
         return "two_hands_open"
 
     idx = counts.index(max(counts))            # dùng tay nhiều ngón nhất
@@ -1937,9 +1969,51 @@ def _apply_gesture(gesture_key):
 _fall_since = 0.0
 
 
+def _landmark_confidence(lm):
+    for attr in ("visibility", "presence", "confidence"):
+        val = getattr(lm, attr, None)
+        if val is not None:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                pass
+    return 1.0
+
+
 def detect_fall(landmarks, w, h):
-    """Heuristic: góc thân so phương đứng + tỉ lệ bbox. Trả về True/False (nghi ngờ)."""
+    """Positive-evidence gate: kiểm tra đầy đủ mốc, độ tin cậy, kích thước, trong khung hình và hình học nằm ngang."""
     try:
+        if not landmarks or len(landmarks) < 33:
+            return False
+
+        # Gate 1: Điểm mốc giải phẫu chính (vai 11/12, hông 23/24, cổ chân 27/28)
+        conf = _landmark_confidence
+        min_conf = float(globals().get("FALL_MIN_CONFIDENCE", 0.5))
+        if min(conf(landmarks[11]), conf(landmarks[12])) < min_conf:
+            return False
+        if min(conf(landmarks[23]), conf(landmarks[24])) < min_conf:
+            return False
+        # Cổ chân: cho phép nằm nghiêng che 1 chân nhưng từ chối mất hoàn toàn cả 2 chân
+        if max(conf(landmarks[27]), conf(landmarks[28])) < min_conf:
+            return False
+
+        # Gate 2: Toạ độ chuẩn hoá nằm trong khung hình [0.0, 1.0]
+        for p in landmarks:
+            if not (0.0 <= p.x <= 1.0 and 0.0 <= p.y <= 1.0):
+                return False
+
+        # Gate 3: Kích thước cơ thể hợp lý
+        xs = [p.x for p in landmarks]
+        ys = [p.y for p in landmarks]
+        bw_norm = max(xs) - min(xs)
+        bh_norm = max(ys) - min(ys)
+        body_size = max(bw_norm, bh_norm)
+        min_body = float(globals().get("FALL_MIN_BODY_SIZE", 0.15))
+        max_body = float(globals().get("FALL_MAX_BODY_SIZE", 1.25))
+        if not (min_body <= body_size <= max_body):
+            return False
+
+        # Gate 4: Hình học nằm ngang: đồng thời góc thân > FALL_TORSO_DEG VÀ aspect > FALL_ASPECT
         ls, rs = landmarks[11], landmarks[12]    # shoulders
         lh, rh = landmarks[23], landmarks[24]    # hips
         sx = (ls.x + rs.x) / 2 * w
@@ -1952,13 +2026,14 @@ def detect_fall(landmarks, w, h):
         # góc so với phương thẳng đứng (0 = đứng thẳng)
         angle = abs(math.degrees(math.atan2(abs(dx), abs(dy) + 1e-6)))
 
-        xs = [p.x for p in landmarks]
-        ys = [p.y for p in landmarks]
-        bw = (max(xs) - min(xs)) * w
-        bh = (max(ys) - min(ys)) * h
+        bw = bw_norm * w
+        bh = bh_norm * h
         aspect = bw / (bh + 1e-6)
 
-        return angle > FALL_TORSO_DEG or aspect > FALL_ASPECT
+        torso_deg = float(globals().get("FALL_TORSO_DEG", 55.0))
+        fall_aspect = float(globals().get("FALL_ASPECT", 1.1))
+
+        return (angle > torso_deg) and (aspect > fall_aspect)
     except Exception:
         return False
 
@@ -2170,6 +2245,9 @@ def _camera_ai_worker(session_id):
     inference_cycle = 0
     ai_fps_times = deque(maxlen=20)
     last_emit = 0.0
+    stable_gesture = None
+    stable_count = 0
+    actioned_gesture = None
 
     try:
         if mp is not None and hasattr(mp, "solutions"):
@@ -2240,7 +2318,7 @@ def _camera_ai_worker(session_id):
             pose_lms = None
             hands_lms = None
             action_angle = None
-            fall_event = None
+            fall_event = False if ENABLE_FALL else None
             gesture_key = None
             hand_status = "unavailable" if ENABLE_GESTURE else "disabled"
 
@@ -2260,6 +2338,10 @@ def _camera_ai_worker(session_id):
                         action_angle = update_tracking(cx, w)
                     if ENABLE_FALL:
                         fall_event = detect_fall(lms, w, h)
+                elif ENABLE_FALL:
+                    fall_event = False
+            elif ENABLE_FALL:
+                fall_event = False
 
             # Revalidate session
             with _camera_session_lock:
@@ -2283,16 +2365,39 @@ def _camera_ai_worker(session_id):
                     if not camera_active or session_id != _camera_session_id:
                         break
 
+                gkey = None
                 if hres and hres.multi_hand_landmarks:
                     hands_lms = hres.multi_hand_landmarks
                     gkey = detect_gesture(hands_lms, w, h)
                     if gkey:
-                        gesture_key = gkey
                         gesture = GESTURE_LABELS.get(gkey, gkey)
+                        if gkey == stable_gesture:
+                            stable_count += 1
+                        else:
+                            stable_gesture = gkey
+                            stable_count = 1
+                            actioned_gesture = None
+
+                        min_stable = int(globals().get("GESTURE_STABLE_CYCLES", 2))
+                        if stable_count >= min_stable:
+                            if actioned_gesture != stable_gesture:
+                                gesture_key = stable_gesture
+                                actioned_gesture = stable_gesture
+                    else:
+                        stable_gesture = None
+                        stable_count = 0
+                        actioned_gesture = None
+                else:
+                    hands_lms = None
+                    gesture = "—"
+                    stable_gesture = None
+                    stable_count = 0
+                    actioned_gesture = None
+
                 last_hands_lms = hands_lms
                 last_hand_gesture = gesture
                 last_hands_source_ts = source_ts
-                last_hand_status = "detected" if gesture_key else ("unrecognized" if hands_lms else "not_detected")
+                last_hand_status = "detected" if gkey else ("unrecognized" if hands_lms else "not_detected")
                 hand_status = last_hand_status
             elif last_hands_source_ts and time.perf_counter() - last_hands_source_ts <= OVERLAY_MAX_AGE_SEC:
                 # Skipped inference is not a negative detection. Reuse only a
@@ -2302,6 +2407,9 @@ def _camera_ai_worker(session_id):
                 hand_status = last_hand_status
             elif hands is not None:
                 hand_status = "stale" if last_hands_source_ts else "waiting"
+                stable_gesture = None
+                stable_count = 0
+                actioned_gesture = None
 
             # Serialize state commits and actions under session lock (RLock enables safe same-thread reentry)
             with _camera_session_lock:
