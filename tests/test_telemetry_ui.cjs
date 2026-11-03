@@ -42,8 +42,8 @@ assert.doesNotMatch(nodes['data-quality-patient'].textContent, /mất nguồn|t�
 console.log('PASS: base freshness renderer checks');
 // Exercise real production socket handlers, not hand-written equivalents.
 const eventElements = {}, callbacks = {};
-const eventCtx = {document: {getElementById: id => eventElements[id] || (eventElements[id] = new Element())},
-  nodeState: {patient:true,living:true,kitchen:true}, telemetryCache: {}, setGauge() {}, touch() {},
+const eventCtx = {document: {getElementById: id => eventElements[id] || (eventElements[id] = new Element()), querySelectorAll: () => [], querySelector: () => null},
+  nodeState: {patient:true,living:true,kitchen:true}, telemetryCache: {}, pendingControls: new Map(), clearTimeout, setGauge() {}, touch() {},
   socket: {on: (name, fn) => callbacks[name] = fn}};
 vm.createContext(eventCtx);
 function loadActual(first, next) {
@@ -51,6 +51,7 @@ function loadActual(first, next) {
   vm.runInContext(source.slice(a,b),eventCtx);
 }
 loadActual('  function badge(', '  function setToggle(');
+loadActual('  function confirmedData(', '  function clearPendingControls(');
 loadActual('  function applyKitchen(', '  function applyAI(');
 loadActual('  function setNode(', '  function setConn(');
 for(const event of ['node_status','room_update']){

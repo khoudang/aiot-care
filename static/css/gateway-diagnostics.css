@@ -1,0 +1,11 @@
+/* Gateway diagnostics complement fix_ui; connection is not sensor freshness. */
+.gateway-quality { display:flex; flex-wrap:wrap; gap:6px 12px; margin:0 0 14px; font-size:.73rem; line-height:1.5; }
+.gateway-quality-room { display:flex; flex-wrap:wrap; align-items:center; gap:5px; min-width:0; }
+.gateway-quality-room > strong { font-weight:600; }
+.gateway-quality .badge { white-space:normal; overflow-wrap:anywhere; }
+.cam-stat-pill { flex-wrap:wrap; }
+.cam-stat-pill[hidden] { display:none !important; }
+@media (max-width:600px) {
+  .gateway-quality { gap:5px; }
+  .gateway-quality-room { width:100%; }
+}

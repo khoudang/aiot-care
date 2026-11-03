@@ -666,6 +666,13 @@ def _make_notify_handler(room):
                         if pending and payload.get("status") in ("applied", "rejected"):
                             del _pending_commands[room][payload["ack"]]
                             timing_tracer.record_ack(room, payload["ack"], payload["status"])
+                            command = json.loads(pending["text"])
+                            if command.get("request_id"):
+                                _emit("command_result", {
+                                    "room": room, "device": command["cmd"],
+                                    "request_id": command["request_id"],
+                                    "status": payload["status"],
+                                })
                             if payload["status"] == "rejected":
                                 _fail_restoration(room)
                                 _emit("command_error", {"room": room, "message": "Node rejected command"})
@@ -1016,13 +1023,15 @@ _DEVICE_LABELS = {
 }
 
 
-def set_device(room, device, state=None, value=None, source="manual", user_id=None, silent=False):
+def set_device(room, device, state=None, value=None, source="manual", user_id=None, silent=False, request_id=None):
     """Queue a validated command; only node telemetry confirms device state."""
     try:
         room, cmd = build_command(room, device, state, value)
     except ValueError as exc:
         _emit("command_error", {"room": room, "device": device, "message": str(exc)})
         return
+    if isinstance(request_id, str) and 0 < len(request_id) <= 80:
+        cmd["request_id"] = request_id
     if source != "auto" and (_emergency_snapshot is not None or
                              room == "patient" and device == "buzzer" and
                              (AI.get("fall") or _fall_buzzer_saved is not None)):
@@ -2121,6 +2130,10 @@ def _camera_pub_worker(session_id):
 def _camera_ai_worker(session_id):
     pose = None
     hands = None
+    last_hands_lms = None
+    last_hand_gesture = "—"
+    last_hands_source_ts = 0.0
+    last_hand_status = "waiting"
     inference_cycle = 0
     ai_fps_times = deque(maxlen=20)
     last_emit = 0.0
@@ -2185,6 +2198,7 @@ def _camera_ai_worker(session_id):
             action_angle = None
             fall_event = None
             gesture_key = None
+            hand_status = "unavailable" if ENABLE_GESTURE else "disabled"
 
             # ----- Pose: tracking + té ngã -----
             if pose is not None:
@@ -2231,6 +2245,19 @@ def _camera_ai_worker(session_id):
                     if gkey:
                         gesture_key = gkey
                         gesture = GESTURE_LABELS.get(gkey, gkey)
+                last_hands_lms = hands_lms
+                last_hand_gesture = gesture
+                last_hands_source_ts = source_ts
+                last_hand_status = "detected" if gesture_key else ("unrecognized" if hands_lms else "not_detected")
+                hand_status = last_hand_status
+            elif last_hands_source_ts and time.perf_counter() - last_hands_source_ts <= OVERLAY_MAX_AGE_SEC:
+                # Skipped inference is not a negative detection. Reuse only a
+                # bounded display result; never replay its actuator action.
+                hands_lms = last_hands_lms
+                gesture = last_hand_gesture
+                hand_status = last_hand_status
+            elif hands is not None:
+                hand_status = "stale" if last_hands_source_ts else "waiting"
 
             # Serialize state commits and actions under session lock (RLock enables safe same-thread reentry)
             with _camera_session_lock:
@@ -2261,6 +2288,9 @@ def _camera_ai_worker(session_id):
                     AI.update({
                         "gesture": gesture,
                         "fps": fps,
+                        "hand_status": hand_status,
+                        "hands_detected": len(hands_lms) if hands_lms else 0,
+                        "hand_result_age_ms": max(0, int((t_completion - last_hands_source_ts) * 1000)) if last_hands_source_ts else None,
                         "latency": work_ms,
                         "work_ms": work_ms,
                         "overlay_age_ms": source_age_ms,

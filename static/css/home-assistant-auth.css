@@ -1,0 +1,19 @@
+/* Compact authentication surfaces that share the dashboard's Home Assistant palette. */
+:root{--auth-bg:#f2f3f5;--auth-paper:#fff;--auth-ink:#202b36;--auth-muted:#66727e;--auth-border:#d9dde2;--auth-accent:#039be5;--auth-accent-dark:#0288d1}
+body.auth-page{min-height:100vh;padding:24px;background:var(--auth-bg);color:var(--auth-ink);font-family:Roboto,"Segoe UI",system-ui,Arial,sans-serif}
+.login-page .shell{display:block;width:min(100%,440px);margin:auto;background:var(--auth-paper);border:1px solid var(--auth-border);border-radius:6px;box-shadow:0 2px 8px #14243318}
+.login-page .left{display:none}.login-page .right{padding:30px 32px}.login-page .form-card{max-width:none}
+.auth-page .fc-icon,.auth-page .head .icon{width:42px;height:42px;border-radius:50%;background:#e3f4fc;color:#0277bd}
+.auth-page .form-card h3,.auth-page .head h2{font-family:inherit;color:var(--auth-ink);font-size:22px;font-weight:500;letter-spacing:0}
+.auth-page .sub,.auth-page .head p{font-size:13px;color:var(--auth-muted)}
+.auth-page .fld label{font-size:12px;color:#394956;font-weight:500}
+.auth-page .iw input{background:#fff;border:1px solid #aeb8c2;border-radius:4px;color:var(--auth-ink);font:400 14px Roboto,"Segoe UI",sans-serif;min-height:44px}
+.auth-page .iw input::placeholder{color:#74808b;opacity:1}.auth-page .iw input:focus{border-color:var(--auth-accent);box-shadow:0 0 0 1px var(--auth-accent)}
+.auth-page .iw .lic,.auth-page .eye{color:#60717e}
+.auth-page .submit{min-height:44px;background:var(--auth-accent);border-radius:4px;font:500 14px Roboto,"Segoe UI",sans-serif;box-shadow:none}
+.auth-page .submit:hover{background:var(--auth-accent-dark);transform:none}
+.auth-page .bottom{font-size:12px;color:var(--auth-muted)}.auth-page .bottom a{color:#0277bd}
+.auth-page .alert{border-radius:4px}.auth-page .note{border-radius:4px}
+.register-page .card{width:min(100%,440px);padding:30px 32px;background:#fff;border:1px solid var(--auth-border);border-radius:6px;box-shadow:0 2px 8px #14243318}
+.register-page .head .icon{margin-bottom:15px}.register-page .head{text-align:left}.register-page .head h2{font-size:21px}.register-page .head p{margin-bottom:22px}
+@media(max-width:520px){body.auth-page{padding:12px}.login-page .right,.register-page .card{padding:24px 20px}.login-page .shell,.register-page .card{border-radius:6px}}
