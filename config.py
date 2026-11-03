@@ -106,6 +106,8 @@ CAMERA_WIDTH = int(os.getenv("CAMERA_WIDTH", "320"))
 CAMERA_HEIGHT = int(os.getenv("CAMERA_HEIGHT", "240"))
 JPEG_QUALITY = int(os.getenv("JPEG_QUALITY", "65"))
 PROCESS_EVERY_N_FRAMES = int(os.getenv("PROCESS_EVERY_N_FRAMES", "3"))  # cử chỉ chạy mỗi N frame
+# Pose/Hands chỉ cần ảnh nhỏ; hạ chiều rộng đưa vào suy luận để giảm CPU/nhiệt.
+AI_INFERENCE_WIDTH = int(os.getenv("AI_INFERENCE_WIDTH", "320"))
 STREAM_SLEEP = float(os.getenv("STREAM_SLEEP", "0.01"))
 STATUS_EMIT_INTERVAL = float(os.getenv("STATUS_EMIT_INTERVAL", "0.2"))
 OVERLAY_MAX_AGE_SEC = float(os.getenv("OVERLAY_MAX_AGE_SEC", "0.8"))

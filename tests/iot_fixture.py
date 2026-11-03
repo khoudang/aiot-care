@@ -15,6 +15,7 @@ def load_iot():
             for name in node.names:
                 setattr(config, name.name, 1)
     config.AI_OBSERVE_ONLY = False
+    config.AI_INFERENCE_WIDTH = 320
     config.TELEMETRY_STALE_SEC = 10.0
     config.NODES = []
     config.MAX_HISTORY = 10

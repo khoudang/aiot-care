@@ -47,6 +47,7 @@ except Exception:
 
 from config import (
     ALERT_COOLDOWN_SEC,
+    AI_INFERENCE_WIDTH,
     AI_OBSERVE_ONLY,
     OVERLAY_MAX_AGE_SEC,
     TELEMETRY_STALE_SEC,
@@ -2191,6 +2192,17 @@ def _camera_ai_worker(session_id):
                     rgb = raw_frame
             except Exception:
                 rgb = raw_frame
+
+            # Suy luận trên ảnh thu nhỏ: giữ nguyên toạ độ chuẩn hoá nên overlay và
+            # hình học (té ngã, tracking) vẫn đúng, nhưng ít pixel hơn nhiều lần.
+            if (AI_INFERENCE_WIDTH >= 64 and w > AI_INFERENCE_WIDTH
+                    and getattr(rgb, "shape", None) is not None and len(rgb.shape) >= 2):
+                infer_h = max(1, int(round(h * (AI_INFERENCE_WIDTH / float(w)))))
+                try:
+                    rgb = cv2.resize(rgb, (AI_INFERENCE_WIDTH, infer_h), interpolation=cv2.INTER_AREA)
+                    w, h = AI_INFERENCE_WIDTH, infer_h
+                except Exception:
+                    pass
 
             gesture = "—"
             pose_lms = None
