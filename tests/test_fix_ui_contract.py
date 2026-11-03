@@ -24,5 +24,15 @@ class FixUiContractTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, script)
 
+    def test_patient_room_does_not_advertise_a_missing_gas_sensor(self):
+        template = (ROOT / 'templates/index.html').read_text(encoding='utf-8')
+        self.assertNotIn('id="pt-gas-card"', template)
+        self.assertNotIn('id="pt-gas"', template)
+
+    def test_switch_knob_stays_visible_when_off(self):
+        css = (ROOT / 'static/css/gateway-diagnostics.css').read_text(encoding='utf-8')
+        self.assertIn('.device-card-modern .sw .tr:before', css)
+        self.assertIn('background:#fff', css)
+
 if __name__ == '__main__':
     unittest.main()

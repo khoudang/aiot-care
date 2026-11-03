@@ -5,6 +5,16 @@
 .gateway-quality .badge { white-space:normal; overflow-wrap:anywhere; }
 .cam-stat-pill { flex-wrap:wrap; }
 .cam-stat-pill[hidden] { display:none !important; }
+
+/* fix_ui làm nền công tắc sáng màu; núm phải tương phản rõ cả khi đang tắt. */
+.device-card-modern .sw .tr:before {
+  background:#fff;
+  box-shadow:0 1px 2px rgba(16,24,40,.35), 0 0 0 1px rgba(16,24,40,.06);
+}
+body.dark-mode .device-card-modern .sw .tr:before {
+  background:#eef2f6;
+  box-shadow:0 1px 2px rgba(0,0,0,.45);
+}
 @media (max-width:600px) {
   .gateway-quality { gap:5px; }
   .gateway-quality-room { width:100%; }
