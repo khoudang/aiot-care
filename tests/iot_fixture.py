@@ -17,6 +17,13 @@ def load_iot():
     config.AI_OBSERVE_ONLY = False
     config.AI_INFERENCE_WIDTH = 320
     config.TELEMETRY_STALE_SEC = 10.0
+    config.YOLO_CFG_PATH = 'missing-test-model.cfg'
+    config.YOLO_WEIGHTS_PATH = 'missing-test-model.weights'
+    config.YOLO_CONFIDENCE = .5
+    config.YOLO_NMS_THRESHOLD = .4
+    config.YOLO_INTERVAL_SEC = .5
+    config.YOLO_TARGET_TTL_SEC = 1.5
+    config.YOLO_INPUT_SIZE = 224
     config.NODES = []
     config.MAX_HISTORY = 10
     config.GAS_SMOOTH_WINDOW = 5

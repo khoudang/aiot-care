@@ -8,21 +8,17 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/type-system.css') }}?v=20261028_6">
+  <script src="{{ url_for('static', filename='js/auth-theme.js') }}?v=ui-integrated-20261104"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}?v=ui-integrated-20261104">
 </head>
-<body class="auth-page register-page">
-  <div class="card">
-    <div class="head">
-      <div class="icon"><i class="fas fa-user-plus"></i></div>
-      <h2>Tạo tài khoản thành viên</h2>
-      <p>Đăng ký để cùng theo dõi và chăm sóc trên hệ thống.</p>
-    </div>
+<body class="auth-page login-page register-page">
+  <main class="shell"><div class="right"><div class="form-card">
+      <img class="auth-logo" src="{{ url_for('static', filename='images/aiot-care-logo.png') }}" alt="AIoT Care Station">
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
-          <div class="alert {{ category }}">
+          <div class="alert {{ category }}" role="{{ 'alert' if category == 'error' else 'status' }}">
             <i class="fas {{ 'fa-circle-exclamation' if category == 'error' else 'fa-circle-check' }}"></i>
             <span>{{ message }}</span>
           </div>
@@ -34,39 +30,36 @@
       <div class="fld">
         <label for="username">Tên đăng nhập</label>
         <div class="iw"><i class="fas fa-user lic"></i>
-          <input type="text" id="username" name="username" placeholder="Từ 3 ký tự" required autofocus>
+          <input type="text" id="username" name="username" placeholder="Từ 3 ký tự" autocomplete="username" autocapitalize="none" spellcheck="false" minlength="3" required>
         </div>
       </div>
       <div class="fld">
         <label for="password">Mật khẩu</label>
         <div class="iw"><i class="fas fa-lock lic"></i>
-          <input type="password" id="password" name="password" placeholder="Tối thiểu 6 ký tự" minlength="6" required>
-          <button type="button" class="eye" aria-label="Hiện hoặc ẩn mật khẩu" data-target="password"><i class="fas fa-eye"></i></button>
+          <input type="password" id="password" name="password" placeholder="Tối thiểu 6 ký tự" autocomplete="new-password" minlength="6" required>
+          <button type="button" class="eye" aria-label="Hiện hoặc ẩn mật khẩu" aria-pressed="false" aria-controls="password" data-target="password"><i class="fas fa-eye" aria-hidden="true"></i></button>
         </div>
       </div>
       <div class="fld">
         <label for="confirm_password">Xác nhận mật khẩu</label>
         <div class="iw"><i class="fas fa-shield-halved lic"></i>
-          <input type="password" id="confirm_password" name="confirm_password" placeholder="Nhập lại mật khẩu" required>
-          <button type="button" class="eye" aria-label="Hiện hoặc ẩn mật khẩu" data-target="confirm_password"><i class="fas fa-eye"></i></button>
+          <input type="password" id="confirm_password" name="confirm_password" placeholder="Nhập lại mật khẩu" autocomplete="new-password" required>
+          <button type="button" class="eye" aria-label="Hiện hoặc ẩn mật khẩu" aria-pressed="false" aria-controls="confirm_password" data-target="confirm_password"><i class="fas fa-eye" aria-hidden="true"></i></button>
         </div>
       </div>
       <div class="fld code">
         <label for="register_code">Mã nội bộ</label>
         <div class="iw"><i class="fas fa-key lic"></i>
-          <input type="text" id="register_code" name="register_code" placeholder="Nhập mã do quản trị cấp" required>
+          <input type="text" id="register_code" name="register_code" placeholder="Nhập mã do quản trị cấp" aria-describedby="register-code-help" required>
         </div>
+        <p class="field-help" id="register-code-help">Liên hệ quản trị viên nếu bạn chưa có mã.</p>
       </div>
       <button type="submit" class="submit"><i class="fas fa-circle-check"></i> Tạo tài khoản</button>
     </form>
 
-    <div class="note">
-      <i class="fas fa-circle-info"></i>
-      <span>Mã nội bộ do quản trị viên cấp để giới hạn người được phép tạo tài khoản. Liên hệ quản trị nếu bạn chưa có mã.</span>
-    </div>
     <div class="bottom">Đã có tài khoản? <a href="{{ url_for('login') }}">Quay lại đăng nhập</a></div>
-  </div>
+  </div></div></main>
 
-  <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/auth.js') }}?v=ui-integrated-20261104"></script>
 </body>
 </html>

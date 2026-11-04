@@ -17,3 +17,6 @@ venv311/
 .coverage
 htmlcov/
 *.log
+node_modules/
+*.weights
+models/

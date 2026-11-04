@@ -81,6 +81,8 @@ class WebFeaturesTests(unittest.TestCase):
         self.iot.set_camera_mode.return_value = {'active': False, 'mode': 'off'}
         socket.emit('set_camera_mode', {'mode': 'off'})
         self.iot.set_camera_mode.assert_called_with('off', user_id=1)
+        socket.emit('confirm_fall_safe', {})
+        self.iot.confirm_fall_safe.assert_called_with(user_id=1)
 
     def test_login_is_still_required(self):
         self.assertEqual(self.client.get('/dashboard').status_code, 302)

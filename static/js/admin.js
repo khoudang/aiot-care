@@ -1,39 +1,69 @@
 /* ================= ADMIN ================= */
   (function(){
     const $=id=>document.getElementById(id);
+    const settings=$('admin-settings');
+    if(settings&&!settings.querySelector('.settings-scroll')){
+      const scroll=document.createElement('div');scroll.className='settings-scroll';
+      Array.from(settings.children).filter(el=>!el.classList.contains('detail-heading')).forEach(el=>scroll.append(el));
+      settings.append(scroll);
+    }
+    // A running server may still render the previous dashboard template.
+    const logsHeading=document.querySelector('#admin-logs>.detail-heading');
+    if(logsHeading&&!$('logs-from')){
+      const filter=document.createElement('div');filter.className='logs-filter';
+      filter.innerHTML='<label for="logs-from">Từ ngày</label><input type="date" id="logs-from"><label for="logs-to">Đến ngày</label><input type="date" id="logs-to"><span id="logs-filter-message" role="status" aria-live="polite"></span>';
+      logsHeading.append(filter);
+    }
+    const logsFilter=logsHeading?.querySelector('.logs-filter');
+    if(logsFilter&&!$('logs-apply')){
+      const apply=document.createElement('button');apply.id='logs-apply';apply.type='button';apply.className='btn';
+      apply.innerHTML='<i class="fas fa-filter" aria-hidden="true"></i> Lọc';
+      logsFilter.insertBefore(apply,$('logs-filter-message'));
+      apply.addEventListener('click',()=>loadLogs().catch(()=>{}));
+    }
     const usersBody=$('users-body'),loginBody=$('login-body'),auditBody=$('audit-body');
-    let loginAll=[],auditAll=[],loginExp=false,auditExp=false;const LIMIT=10;
+    let loginAll=[],auditAll=[];let logRequest=0;
     async function fj(url,opt={}){const r=await fetch(url,{headers:{'Content-Type':'application/json'},...opt});const d=await r.json().catch(()=>({}));if(!r.ok||d.ok===false)throw new Error(d.message||'Lỗi máy chủ.');return d;}
     function fmtSql(v){if(!v)return'--';const d=new Date(String(v).replace(' ','T'));return isNaN(d)?v:d.toLocaleString('vi-VN');}
+    let accountUsers=[];
+    const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
     function renderUsers(us){
+      accountUsers=us||[];
       if(!us||!us.length){usersBody.innerHTML='<tr><td colspan="6"><div class="empty">Chưa có tài khoản nào.</div></td></tr>';return;}
       usersBody.innerHTML=us.map(u=>{
         const rb=u.role==='admin'?'<span class="pill admin"><i class="fas fa-crown"></i> admin</span>':'<span class="pill member"><i class="fas fa-user"></i> member</span>';
         const sus=Number(u.is_suspended)===1;
         const sb=sus?'<span class="pill off"><i class="fas fa-lock"></i> Đã khóa</span>':'<span class="pill on"><i class="fas fa-lock-open"></i> Hoạt động</span>';
-        const un=String(u.username).replace(/'/g,"\\'");
-        return `<tr class="${sus?'dim':''}"><td>${u.id}</td><td>${u.username}</td><td>${rb}</td><td>${sb}</td><td>${fmtSql(u.created_at)}</td>
+        return `<tr class="${sus?'dim':''}"><td>${Number(u.id)}</td><td>${escapeHtml(u.username)}</td><td>${rb}</td><td>${sb}</td><td>${escapeHtml(fmtSql(u.created_at))}</td>
           <td><div class="act-group">
-            <button class="btn sm" onclick="editUser(${u.id},'${un}')"><i class="fas fa-pen"></i></button>
-            <button class="btn sm ${sus?'ok':''}" onclick="toggleSuspend(${u.id})"><i class="fas fa-user-lock"></i> ${sus?'Mở':'Khóa'}</button>
-            <button class="btn sm danger" onclick="delUser(${u.id},'${un}')"><i class="fas fa-trash"></i></button>
+            <button type="button" class="btn sm" data-user-action="edit" data-user-id="${Number(u.id)}" aria-label="Sửa tài khoản ${escapeHtml(u.username)}"><i class="fas fa-pen"></i></button>
+            <button type="button" class="btn sm ${sus?'ok':''}" data-user-action="suspend" data-user-id="${Number(u.id)}">${sus?'Mở khóa':'Khóa'}</button>
+            <button type="button" class="btn sm danger" data-user-action="delete" data-user-id="${Number(u.id)}" aria-label="Xóa tài khoản ${escapeHtml(u.username)}"><i class="fas fa-trash"></i></button>
           </div></td></tr>`;}).join('');
     }
-    const loginRow=l=>`<tr><td>${l.id}</td><td>${l.username||('user #'+(l.user_id??''))}</td><td>${l.ip_address||'--'}</td><td>${fmtSql(l.timestamp)}</td></tr>`;
-    function paintLogin(){const more=$('login-more');
-      if(!loginAll.length){loginBody.innerHTML='<tr><td colspan="4"><div class="empty">Chưa có dữ liệu.</div></td></tr>';more.style.display='none';return;}
-      loginBody.innerHTML=(loginExp?loginAll:loginAll.slice(0,LIMIT)).map(loginRow).join('');
-      if(loginAll.length>LIMIT){more.style.display='';more.innerHTML=loginExp?'<i class="fas fa-chevron-up"></i> Thu gọn':`<i class="fas fa-chevron-down"></i> Xem thêm (${loginAll.length-LIMIT})`;}else more.style.display='none';}
+    const loginRow=l=>`<tr><td>${l.username||('user #'+(l.user_id??''))}</td><td>${l.ip_address||'--'}</td><td>${fmtSql(l.timestamp)}</td></tr>`;
+    function paintLogin(){loginBody.innerHTML=loginAll.length?loginAll.map(loginRow).join(''):'<tr><td colspan="3"><div class="empty">Chưa có dữ liệu.</div></td></tr>';}
     function renderLogin(ls){loginAll=ls||[];paintLogin();}
     function isWarn(a){const t=String(a||'').toLowerCase();return t.includes('cảnh báo')||t.includes('gas')||t.includes('cháy')||t.includes('té ngã')||t.includes('khẩn')||t.includes('sức khỏe');}
-    const auditRow=l=>{const w=isWarn(l.action);const a=w?`<span class="warn-txt"><i class="fas fa-triangle-exclamation"></i> ${l.action}</span>`:l.action;return `<tr class="${w?'warn-row':''}"><td>${l.id}</td><td>${l.username||(l.user_id?('user #'+l.user_id):'hệ thống')}</td><td>${a}</td><td>${fmtSql(l.timestamp)}</td></tr>`;};
-    function paintAudit(){const more=$('audit-more');
-      if(!auditAll.length){auditBody.innerHTML='<tr><td colspan="4"><div class="empty">Chưa có dữ liệu.</div></td></tr>';more.style.display='none';return;}
-      auditBody.innerHTML=(auditExp?auditAll:auditAll.slice(0,LIMIT)).map(auditRow).join('');
-      if(auditAll.length>LIMIT){more.style.display='';more.innerHTML=auditExp?'<i class="fas fa-chevron-up"></i> Thu gọn':`<i class="fas fa-chevron-down"></i> Xem thêm (${auditAll.length-LIMIT})`;}else more.style.display='none';}
+    const auditRow=l=>{const w=isWarn(l.action);const a=w?`<span class="warn-txt"><i class="fas fa-triangle-exclamation"></i> ${l.action}</span>`:l.action;return `<tr class="${w?'warn-row':''}"><td>${l.username||(l.user_id?('user #'+l.user_id):'hệ thống')}</td><td>${a}</td><td>${fmtSql(l.timestamp)}</td></tr>`;};
+    function paintAudit(){auditBody.innerHTML=auditAll.length?auditAll.map(auditRow).join(''):'<tr><td colspan="3"><div class="empty">Chưa có dữ liệu.</div></td></tr>';}
     function renderAudit(ls){auditAll=ls||[];paintAudit();}
     async function loadUsers(){usersBody.innerHTML='<tr><td colspan="6"><div class="empty">Đang tải…</div></td></tr>';renderUsers((await fj('/api/admin/users')).users||[]);}
-    async function loadLogs(){const d=await fj('/api/admin/logs');renderLogin(d.login_logs||[]);renderAudit(d.audit_logs||[]);}
+    async function loadLogs(){
+      const from=$('logs-from')?.value||'',to=$('logs-to')?.value||'';
+      const message=$('logs-filter-message');
+      if(from&&to&&from>to){if(message)message.textContent='Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.';return;}
+      const token=++logRequest;
+      if(message)message.textContent='Đang tải…';
+      try{
+        const d=await fj('/api/admin/logs?'+new URLSearchParams({from,to}));
+        if(token!==logRequest)return;
+        renderLogin(d.login_logs||[]);renderAudit(d.audit_logs||[]);
+        if(message)message.textContent='';
+        document.querySelectorAll('#admin-logs .table-wrap').forEach(el=>el.scrollTop=0);
+      }catch(error){if(token===logRequest&&message)message.textContent=error.message;throw error;}
+    }
+    ['logs-from','logs-to'].forEach(id=>$(id)?.addEventListener('change',()=>loadLogs().catch(()=>{})));
     async function loadConfig(){const c=(await fj('/api/admin/configs')).configs||{};$('cfg-code').value=c.admin_register_code||'';$('cfg-token').value=c.telegram_bot_token||'';$('cfg-chat').value=c.telegram_chat_id||'';}
     const bleNames={patient:'Phòng người bệnh',living:'Phòng khách',kitchen:'Phòng bếp'};
     const bleStatus=state=>{
@@ -70,17 +100,58 @@
     $('ble-scan').addEventListener('click',async()=>{const btn=$('ble-scan');btn.disabled=true;$('ble-message').textContent='Đang quét BLE…';try{const devices=(await fj('/api/admin/ble-scan')).devices||[];scannedBleDevices=devices;document.querySelectorAll('.ble-device-select').forEach(fillBleChoices);$('ble-message').textContent=devices.length?`Tìm thấy ${devices.length} thiết bị. Mở danh sách thiết bị ở phòng tương ứng, chọn MAC rồi nhấn Lưu.`:'Không tìm thấy thiết bị đang phát BLE.';}catch(err){$('ble-message').textContent=err.message;}finally{btn.disabled=false;}});
     if(typeof socket!=='undefined'&&socket)socket.on('node_status',statuses=>{document.querySelectorAll('.ble-row').forEach(row=>{row.querySelector('.ble-state').textContent=bleStatus(statuses[row.dataset.room]);});});
     if(typeof socket!=='undefined'&&socket)socket.on('node_state',states=>{document.querySelectorAll('.ble-row').forEach(row=>{row.querySelector('.ble-state').textContent=bleStatus(states[row.dataset.room]);});});
-    window.editUser=async(id,cur)=>{const u=prompt('Username mới:',cur);if(u===null)return;const un=u.trim();if(!un){alert('Không được để trống.');return;}const p=prompt('Mật khẩu mới (trống nếu giữ nguyên):','');if(p===null)return;try{const d=await fj(`/api/admin/users/${id}/edit`,{method:'POST',body:JSON.stringify({username:un,password:p.trim()})});renderUsers(d.users||[]);loadLogs();alert(d.message||'Đã cập nhật.');}catch(e){alert(e.message);}};
-    window.toggleSuspend=async id=>{try{const d=await fj(`/api/admin/users/${id}/suspend`,{method:'POST'});renderUsers(d.users||[]);loadLogs();alert(d.message||'Đã cập nhật.');}catch(e){alert(e.message);}};
-    window.delUser=async(id,n)=>{if(!confirm(`Xóa vĩnh viễn tài khoản "${n}"?`))return;try{const d=await fj(`/api/admin/users/${id}`,{method:'DELETE'});renderUsers(d.users||[]);loadLogs();alert(d.message||'Đã xóa.');}catch(e){alert(e.message);}};
-    $('reload-users').addEventListener('click',()=>loadUsers().catch(e=>alert(e.message)));
+    let accountBusy=false,editId=null,deleteId=null;
+    const usersMessage=$('users-message');
+    const accountMessage=text=>{usersMessage.textContent=text;};
+    async function mutateAccount(url,options,onSuccess){
+      if(accountBusy)return;
+      accountBusy=true;accountMessage('Đang xử lý…');
+      const buttons=Array.from($('admin-users').querySelectorAll('button'));
+      buttons.forEach(button=>button.disabled=true);
+      try{
+        const data=await fj(url,options);
+        renderUsers(data.users||[]);
+        onSuccess?.();accountMessage(data.message||'Đã cập nhật.');
+        loadLogs().catch(()=>{});
+      }catch(error){accountMessage(error.message);}
+      finally{accountBusy=false;buttons.forEach(button=>button.disabled=false);}
+    }
+    $('user-create-form').addEventListener('submit',event=>{
+      event.preventDefault();
+      mutateAccount('/api/admin/users',{method:'POST',body:JSON.stringify({username:$('new-username').value.trim(),password:$('new-password').value.trim()})},()=>{$('user-create-form').reset();});
+    });
+    usersBody.addEventListener('click',event=>{
+      const button=event.target.closest('[data-user-action]');
+      if(!button||accountBusy)return;
+      const id=Number(button.dataset.userId),user=accountUsers.find(item=>Number(item.id)===id);
+      if(!user)return;
+      if(button.dataset.userAction==='suspend'){
+        mutateAccount(`/api/admin/users/${id}/suspend`,{method:'POST'});
+      }else if(button.dataset.userAction==='edit'){
+        editId=id;$('user-delete-panel').hidden=true;deleteId=null;
+        $('edit-username').value=user.username;$('edit-password').value='';
+        $('user-edit-panel').hidden=false;$('edit-username').focus();
+      }else if(button.dataset.userAction==='delete'){
+        deleteId=id;$('user-edit-panel').hidden=true;editId=null;$('edit-password').value='';
+        $('user-delete-description').textContent=`Xóa vĩnh viễn tài khoản "${user.username}" và nhật ký của tài khoản? Không thể hoàn tác.`;
+        $('user-delete-panel').hidden=false;$('user-delete-cancel').focus();
+      }
+    });
+    $('user-edit-cancel').addEventListener('click',()=>{$('user-edit-panel').hidden=true;editId=null;$('edit-password').value='';});
+    $('user-delete-cancel').addEventListener('click',()=>{$('user-delete-panel').hidden=true;deleteId=null;});
+    $('user-edit-form').addEventListener('submit',event=>{
+      event.preventDefault();if(editId===null)return;
+      mutateAccount(`/api/admin/users/${editId}/edit`,{method:'POST',body:JSON.stringify({username:$('edit-username').value.trim(),password:$('edit-password').value.trim()})},()=>{$('user-edit-panel').hidden=true;editId=null;$('edit-password').value='';});
+    });
+    $('user-delete-confirm').addEventListener('click',()=>{
+      if(deleteId===null)return;
+      mutateAccount(`/api/admin/users/${deleteId}`,{method:'DELETE'},()=>{$('user-delete-panel').hidden=true;deleteId=null;});
+    });
+    $('reload-users').addEventListener('click',()=>loadUsers().catch(e=>accountMessage(e.message)));
     $('reload-logs').addEventListener('click',()=>loadLogs().catch(e=>alert(e.message)));
     $('reload-audit').addEventListener('click',()=>loadLogs().catch(e=>alert(e.message)));
-    $('login-more').addEventListener('click',()=>{loginExp=!loginExp;paintLogin();});
-    $('audit-more').addEventListener('click',()=>{auditExp=!auditExp;paintAudit();});
-    $('clear-login').addEventListener('click',async()=>{if(!confirm('Xóa toàn bộ lịch sử đăng nhập?'))return;try{const d=await fj('/api/admin/logs',{method:'DELETE',body:JSON.stringify({target:'login'})});loginExp=false;renderLogin(d.login_logs||[]);renderAudit(d.audit_logs||[]);}catch(e){alert(e.message);}});
-    $('clear-audit').addEventListener('click',async()=>{if(!confirm('Xóa toàn bộ lịch sử hoạt động & cảnh báo?'))return;try{const d=await fj('/api/admin/logs',{method:'DELETE',body:JSON.stringify({target:'audit'})});auditExp=false;renderAudit(d.audit_logs||[]);renderLogin(d.login_logs||[]);}catch(e){alert(e.message);}});
-    $('reload-config').addEventListener('click',()=>loadConfig().catch(e=>alert(e.message)));
+    $('clear-login').addEventListener('click',async()=>{if(!confirm('Xóa toàn bộ lịch sử đăng nhập?'))return;try{const d=await fj('/api/admin/logs',{method:'DELETE',body:JSON.stringify({target:'login'})});await loadLogs();}catch(e){alert(e.message);}});
+    $('clear-audit').addEventListener('click',async()=>{if(!confirm('Xóa toàn bộ lịch sử hoạt động & cảnh báo?'))return;try{const d=await fj('/api/admin/logs',{method:'DELETE',body:JSON.stringify({target:'audit'})});await loadLogs();}catch(e){alert(e.message);}});
     $('config-form').addEventListener('submit',async e=>{e.preventDefault();try{const d=await fj('/api/admin/configs',{method:'POST',body:JSON.stringify({admin_register_code:$('cfg-code').value.trim(),telegram_bot_token:$('cfg-token').value.trim(),telegram_chat_id:$('cfg-chat').value.trim()})});alert(d.message||'Đã lưu.');loadLogs();}catch(err){alert(err.message);}});
     const weatherForm=$('weather-config-form'),weatherSelect=$('cfg-weather-city'),weatherMessage=$('weather-config-message');
     if(weatherForm){
@@ -98,5 +169,7 @@
       });
     }
     loadBleNodes().catch(err=>{$('ble-message').textContent=err.message;});
-    Promise.all([loadUsers(),loadLogs(),loadConfig()]).catch(()=>{usersBody.innerHTML='<tr><td colspan="6"><div class="empty">Không tải được dữ liệu — kiểm tra kết nối máy chủ.</div></td></tr>';});
+    loadUsers().catch(error=>{accountMessage(error.message);usersBody.innerHTML='<tr><td colspan="6"><div class="empty">Không tải được danh sách tài khoản.</div></td></tr>';});
+    loadLogs().catch(()=>{});
+    loadConfig().catch(()=>{});
   })();

@@ -546,3 +546,292 @@ body #personal #personal-dark-toggle:checked{background:var(--accent);border-col
 body #personal #personal-dark-toggle:checked::before{transform:translateX(18px)}
 body #personal #personal-dark-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 @media(prefers-reduced-motion:reduce){body #personal #personal-dark-toggle,body #personal #personal-dark-toggle::before{transition:none}}
+/* Desktop overview: keep forecasts and room monitoring within a typical laptop viewport. */
+@media(min-width:1024px){
+ body .main:has(#overview.active){padding-top:20px;padding-bottom:16px}
+ body #overview .overview-weather{margin-bottom:16px}
+ body #overview .overview-weather .overview-heading{padding-bottom:12px}
+ body #overview #overview-date{margin-top:3px}
+ body #overview #weather-data:not([hidden]){grid-template-columns:minmax(175px,23%) minmax(0,1fr)}
+ body #overview #weather-current{padding:14px 18px 14px 0}
+ body #overview .weather-temperature{margin:10px 0}
+ body #overview .weather-temperature #weather-temperature{font-size:56px!important;line-height:1}
+ body #overview .weather-outlook{padding:10px 0 0 16px}
+ body #overview .weather-outlook-heading{min-height:38px}
+ body #overview #weather-hourly{padding:10px 0;gap:6px}
+ body #overview .hourly-item{flex-basis:65px;gap:7px}
+ body #overview .hourly-item i{font-size:20px}
+ body #overview .weather-days-title{padding-top:8px;margin:4px 0 0}
+ body #overview #weather-forecast li{min-height:42px;padding:8px 0;gap:8px}
+ body #overview #weather-forecast .forecast-date{display:none}
+ body #overview .forecast-day{gap:0}
+ body #overview .overview-sections{gap:16px;align-items:stretch}
+ body #overview .ha-area.ovr{padding:16px!important}
+ body #overview .ha-area-heading{margin-bottom:12px}
+ body #overview .ha-area.ovr .ha-entity{min-height:64px}
+ body #overview .entity-label{min-height:34px;line-height:1.35}
+ body #overview .entity-reading{margin-top:2px}
+ body .main:has(#overview.active)>.app-footer{margin-top:14px;padding-top:10px;padding-bottom:0}
+}
+@media(min-width:1024px) and (max-height:720px){
+ body .main:has(#overview.active){padding-top:14px;padding-bottom:12px}
+ body #overview .overview-weather .overview-heading{padding-bottom:8px}
+ body #overview .overview-weather h1{font-size:22px!important}
+ body #overview .overview-weather{margin-bottom:12px}
+ body #overview #weather-hourly{padding:8px 0}
+ body #overview #weather-forecast li{min-height:38px;padding:6px 0}
+ body #overview .ha-area.ovr{padding:14px!important}
+ body .main:has(#overview.active)>.app-footer{margin-top:10px;padding-top:8px}
+}
+/* Uppercase only the three room page headings. */
+body :is(#patient,#living,#kitchen)>.detail-heading>h1{text-transform:uppercase}
+/* A shared measured baseline keeps the logo and overview dividers aligned. */
+@media(min-width:1024px){
+ body .sidebar-top-brand{height:var(--brand-divider-height,auto);min-height:0;padding:0 0 8px;overflow:hidden}
+ body .sidebar-top-brand .sidebar-brand-logo{max-height:100%;width:100%;object-fit:contain}
+}
+/* Native pop-up options need their own colors, not just the closed select. */
+body select{color-scheme:light}
+body select :is(option,optgroup){background-color:var(--surface,#fff);color:var(--text,#20354b)}
+body.dark-mode select{color-scheme:dark;background-color:var(--surface-2);color:var(--text)}
+body.dark-mode select :is(option,optgroup){background-color:#1b232e;color:#e6edf5}
+body.dark-mode select option:checked{background-color:#263b53;color:#e6edf5}
+body.dark-mode select:disabled{color:var(--muted);background-color:var(--surface)}
+/* No separator under the overview greeting. */
+body #overview .overview-weather .overview-heading{border-bottom:0}
+/* Theme is a navigation row with a compact switch, below configuration. */
+body .nav li.theme-nav-item{display:block;padding:0;background:transparent!important;cursor:default}
+body .nav .sidebar-theme{display:grid;grid-template-columns:22px minmax(0,1fr) 42px;align-items:center;gap:12px;width:100%;padding:12px 10px;color:var(--muted);cursor:pointer}
+body .nav .sidebar-theme i{color:var(--muted);font-size:18px}
+body .nav #dark-mode-toggle{appearance:none;-webkit-appearance:none;position:relative;display:block;width:42px;height:26px;margin:0;padding:0;border:1px solid var(--border);border-radius:16px;background:var(--border);cursor:pointer}
+body .nav #dark-mode-toggle::before{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .15s ease}
+body .nav #dark-mode-toggle:checked{background:var(--accent);border-color:var(--accent)}
+body .nav #dark-mode-toggle:checked::before{transform:translateX(16px)}
+body .nav #dark-mode-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+/* Flat logs: three matching columns in both headers and data rows. */
+body #admin-logs>div{grid-template-columns:minmax(0,.9fr) minmax(0,1.3fr)!important;gap:28px!important}
+body #admin-logs .card{min-width:0;padding:0!important;border:0;border-radius:0;background:transparent!important;box-shadow:none}
+body #admin-logs .card-h{padding:0 0 14px!important;align-items:center;gap:12px;background:transparent}
+body #admin-logs .card-h h3{margin:0 0 4px}body #admin-logs .card-h p{margin:0;color:var(--muted);font-size:14px!important}
+body #admin-logs .table-wrap{border:0;border-radius:0;box-shadow:none;background:transparent;overflow-x:auto}
+body #admin-logs .atable{width:100%;border-collapse:collapse;table-layout:auto;background:transparent}
+body #admin-logs .atable :is(th,td){padding:11px 10px;border:0;border-bottom:1px solid var(--border);background:transparent!important;vertical-align:top;text-align:left;font-size:14px!important;line-height:1.5}
+body #admin-logs .atable thead{background:var(--surface-2)}
+body #admin-logs .atable th{font-weight:700;color:var(--text);white-space:nowrap}
+body #admin-logs .atable :is(th,td):first-child{padding-left:10px;width:22%}
+body #admin-logs .atable :is(th,td):last-child{width:30%;white-space:normal;font-variant-numeric:tabular-nums}
+body #admin-logs .atable td{overflow-wrap:anywhere;color:var(--text)}
+body #admin-logs .atable tr.warn-row td{color:var(--warn)}
+body #admin-logs .atable .warn-txt{color:var(--warn);font-size:14px!important}
+body #admin-logs .btn{background:transparent;box-shadow:none}
+@media(max-width:1200px){body #admin-logs>div{grid-template-columns:minmax(0,1fr)!important;gap:28px!important}}
+@media(prefers-reduced-motion:reduce){body .nav #dark-mode-toggle::before{transition:none}}
+/* Switch styling also covers older cached sidebar markup. */
+body #sidebar #dark-mode-toggle{appearance:none!important;-webkit-appearance:none!important;position:relative;display:block;flex-shrink:0;width:42px;height:26px;margin:0;padding:0;border:1px solid var(--border);border-radius:16px;background:var(--border);cursor:pointer;box-sizing:border-box}
+body #sidebar #dark-mode-toggle::before{content:'';position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .15s ease}
+body #sidebar #dark-mode-toggle:checked{background:var(--accent);border-color:var(--accent)}
+body #sidebar #dark-mode-toggle:checked::before{transform:translateX(16px)}
+body #admin-logs .card-h button{display:inline-grid;place-items:center;min-width:36px;min-height:36px;padding:6px;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;color:var(--muted);cursor:pointer}
+body #admin-logs .card-h button:hover{color:var(--accent)}
+body #admin-logs .card-h button.danger:hover{color:var(--bad)}
+body #admin-logs .table-wrap{overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+body #admin-logs .atable th{position:sticky;top:0;z-index:1;background:var(--surface-2)!important}
+body #admin-logs :is(#login-more,#audit-more){background:transparent!important;border:0;box-shadow:none;padding:8px;color:var(--accent)}
+@media(min-width:1024px){
+ body .main:has(#admin-logs.active){height:100%;min-height:0;overflow:hidden;padding-top:20px;padding-bottom:16px}
+ body #admin-logs.active{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+ body #admin-logs>.detail-heading{flex-shrink:0;margin-bottom:20px}
+ body #admin-logs>div{display:grid!important;grid-template-columns:minmax(0,.9fr) minmax(0,1.3fr)!important;flex:1;min-height:0;gap:24px!important}
+ body #admin-logs .card{display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden}
+ body #admin-logs .card-h{flex-shrink:0}
+ body #admin-logs .table-wrap{flex:1;min-height:0;overflow:auto}
+ body #admin-logs .card>.table-wrap+div{flex-shrink:0}
+ body .main:has(#admin-logs.active)>.app-footer{flex-shrink:0;margin-top:14px;padding-top:8px}
+}
+@media(max-width:1023px){body #admin-logs .table-wrap{max-height:45svh;overflow:auto}}
+@media(prefers-reduced-motion:reduce){body #sidebar #dark-mode-toggle::before{transition:none}}
+/* Administrative page titles remain visible while their content scrolls. */
+body :is(#admin-users,#gestures,#admin-logs,#admin-settings)>.detail-heading{position:sticky;top:0;z-index:30;background:var(--bg);padding:12px 0 16px;margin-top:0;align-items:center}
+body :is(#admin-users,#gestures,#admin-logs,#admin-settings)>.detail-heading h1{text-transform:uppercase}
+body #admin-logs>.detail-heading{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
+body #admin-logs .logs-filter{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px 10px;margin-left:auto}
+body #admin-logs .logs-filter label{font-size:13px!important;color:var(--muted)}
+body #admin-logs .logs-filter input{width:145px;max-width:100%;min-height:38px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font:inherit;font-size:13px!important;color-scheme:light}
+body.dark-mode #admin-logs .logs-filter input{color-scheme:dark}
+body #admin-logs #logs-filter-message{flex-basis:100%;text-align:right;color:var(--muted);font-size:12px!important}
+body #admin-logs #logs-filter-message:empty{display:none}
+body #admin-logs>.logs-panel{padding:18px;gap:24px!important;border:1px solid var(--border);border-radius:10px;background:var(--surface);min-width:0}
+body #admin-logs .logs-panel>.card{padding:0!important;background:transparent!important}
+body #admin-logs .logs-panel>.card+.card{padding-left:22px!important;border-left:1px solid var(--border)}
+body #admin-logs .atable{table-layout:fixed;min-width:0}
+body #admin-logs .atable :is(th,td){white-space:normal!important;overflow-wrap:anywhere;min-width:0}
+body #admin-logs .atable :is(th,td):first-child{width:22%}
+body #admin-logs .atable :is(th,td):nth-child(2){width:43%}
+body #admin-logs .atable :is(th,td):last-child{width:35%}
+body #admin-logs .table-wrap{scrollbar-gutter:stable}
+@media(min-width:1024px){body #admin-logs>.logs-panel{grid-template-columns:minmax(0,1fr) minmax(0,1.35fr)!important}}
+@media(max-width:1023px){body #admin-logs .logs-panel>.card+.card{padding-left:0!important;padding-top:20px!important;border-left:0;border-top:1px solid var(--border)}body #admin-logs .logs-filter{margin-left:0;justify-content:flex-start}body #admin-logs>.logs-panel{padding:14px}body #admin-logs .table-wrap{max-height:45svh}body #admin-logs .logs-filter input{width:125px}}
+body #admin-logs .logs-filter{display:flex!important;visibility:visible;align-items:center;gap:8px;margin-left:auto}
+body #admin-logs #logs-apply{display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--accent);font:inherit;font-size:13px!important;white-space:nowrap;cursor:pointer}
+body #admin-logs>.detail-heading{width:100%;flex-shrink:0;overflow:visible}
+@media(max-width:1023px){body #admin-logs .logs-filter{margin-left:0;width:100%;justify-content:flex-start}}
+/* Separate visible outlines for the two scrollable log tables. */
+body #admin-logs .table-wrap{border:1px solid var(--border-2,var(--border));border-radius:8px;background:var(--surface);box-shadow:none}
+body #admin-logs .atable tbody tr:last-child td{border-bottom:0}
+/* Sidebar separators share the same thin theme border. */
+body .sidebar .side-foot{border-top:0}
+body .sidebar .sidebar-top-brand{border-bottom:1px solid var(--border)}
+body .sidebar .nav-divider{height:1px;min-height:1px;border:0;background:var(--border)}
+/* Unified compact workspace for patient, living and kitchen rooms. */
+body .detail-room>.detail-heading{position:sticky;top:0;z-index:25;background:var(--bg);padding:10px 0 14px;margin-bottom:16px;flex-direction:row;align-items:center}
+body .detail-room .detail-group{padding:16px;border-radius:10px;background:var(--surface);border-color:var(--border)}
+body .detail-room .detail-group>h2{padding-bottom:10px;margin-bottom:10px}
+body .detail-room :is(.sensor-cards-grid,.living-2cards-grid):has(>.balanced-sensor-card){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0}
+body .detail-room .balanced-sensor-card{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:8px;min-height:90px;padding:10px 12px;background:transparent;border:0}
+body .detail-room .balanced-sensor-card:nth-child(even){border-left:1px solid var(--border)}
+body .detail-room .bsc-header{width:100%;flex:0 0 auto;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+body .detail-room .bsc-name{color:var(--muted);font-size:14px!important;font-weight:400!important;line-height:1.4}
+body .detail-room .balanced-sensor-card .bsc-name::after{content:none}
+body .detail-room .bsc-val{font-size:20px!important;line-height:1.4;text-align:left;color:var(--text)}
+body .detail-room .bsc-val>span{font-size:inherit!important}
+body .detail-room .bsc-val small{font-size:14px!important}
+body .detail-room :is(#kt-smoke-status,#kt-flame-status,#lv-motion-status){font-size:16px!important}
+body .detail-room .device-card-modern{min-height:68px;padding:10px 0;gap:4px 10px;background:transparent;box-shadow:none}
+body .detail-room .device-icon-wrapper{background:transparent!important;border-radius:0;box-shadow:none}
+body .detail-room .device-meta-info h5{font-size:15px!important;line-height:1.4}
+body .detail-room .device-meta-info p{font-size:13px!important;margin-top:2px;line-height:1.4}
+body .detail-room .device-slider-control{margin-top:4px}
+body .detail-room .device-card-modern.on{background:transparent}
+body .detail-room .balanced-sensor-card.alarm{background:var(--bad-soft);color:var(--bad);border-radius:6px}
+body .detail-room .balanced-sensor-card.alarm :is(.bsc-name,.bsc-val){color:var(--bad)}
+body #patient .cam-header-row{padding:12px 14px;gap:10px;align-items:center;justify-content:space-between}
+body #patient .cam-title-group h4{font-size:15px!important;margin:0}
+body #patient .cam-title-group p{font-size:13px!important;margin:3px 0 0}
+body #patient .live-feed-container{position:relative;aspect-ratio:4/3;min-height:0;background:#0c141e;overflow:hidden}
+body #patient #video-feed{position:absolute;inset:0;max-height:100%;width:100%;height:100%;object-fit:contain}
+body #patient .video-placeholder-box{position:absolute;inset:0;padding:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#c5d3e1;text-align:center}
+body #patient .video-placeholder-box h5{margin:12px 0 4px}
+body #patient .video-placeholder-box p{margin:0;font-size:13px!important;max-width:340px}
+body #patient .cam-overlay-stats{position:static;display:flex;flex-wrap:wrap;gap:6px 18px;padding:10px 14px;background:var(--surface);color:var(--text);pointer-events:auto}
+body #patient .cam-stat-pill{padding:0;line-height:1.5;font-size:13px!important;background:transparent;color:var(--muted)}
+body #patient .cam-stat-pill.alarm{color:var(--bad)}
+body #patient .camera-diagnostics{order:2;flex-basis:100%;color:var(--muted)}
+body #patient .camera-diagnostics summary{font-size:12px!important;cursor:pointer;width:fit-content}
+body #patient .camera-diagnostics[open] .cam-stat-pill{padding-top:6px}
+body #kitchen .sensor-cards-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+body #kitchen #kt-gas-card{grid-column:1/-1;border-bottom:1px solid var(--border)}
+body #kitchen #kt-smoke-tile{border-left:0}
+body #kitchen #kt-flame-tile{border-left:1px solid var(--border)}
+@media(min-width:1024px){
+ body .main:has(.detail-room.active){padding-top:16px;padding-bottom:16px}
+ body .detail-patient-layout{grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);gap:18px;align-items:start}
+ body .detail-side{grid-template-columns:1fr;gap:16px}
+ body #patient .live-feed-container{height:clamp(210px,calc(100svh - 290px),440px);aspect-ratio:auto}
+ body .detail-columns{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+ body .main:has(.detail-room.active)>.app-footer{margin-top:16px;padding-top:10px}
+}
+@media(min-width:761px) and (max-width:1023px){body .detail-patient-layout{grid-template-columns:1fr}body .detail-side{grid-template-columns:repeat(2,minmax(0,1fr))}body #patient .live-feed-container{height:340px;aspect-ratio:auto}}
+@media(max-width:760px){body .detail-patient-layout,body .detail-columns,body .detail-side{grid-template-columns:1fr;gap:14px}body .detail-room>.detail-heading h1{font-size:22px!important}body .detail-room>.detail-heading{flex-wrap:wrap;gap:6px}body #patient .cam-header-row{flex-direction:row;flex-wrap:wrap}body .detail-room .balanced-sensor-card{padding:10px 8px;min-height:84px}body .detail-room .detail-group{padding:14px}body #patient .live-feed-container{aspect-ratio:4/3;height:auto;min-height:0}}
+/* Replace legacy light/green panel colors with the active dark palette. */
+body.dark-mode{--text-sub:var(--muted);--text-muted:var(--muted);--primary-dark:#b3d5f7;--input-bg:var(--surface-2)}
+body.dark-mode :is(.detail-group,.card-h,.cam-header-row,.cam-overlay-stats,.table-wrap,.form-grid,.head){background-color:var(--surface);color:var(--text);border-color:var(--border)}
+body.dark-mode :is(.device-icon-wrapper,.bsc-header,.device-meta-info,.personal-tools,.personal-theme){background-color:transparent;color:var(--text)}
+body.dark-mode :is(.seg,.fb-select){background:var(--surface-2);color:var(--text);border-color:var(--border)}
+body.dark-mode .seg button{color:var(--muted);background:transparent}
+body.dark-mode .seg button.on{background:#356faa;color:#fff}
+body.dark-mode .detail-room :is(.balanced-sensor-card,.device-card-modern){background:transparent}
+body.dark-mode .detail-room .balanced-sensor-card.alarm{background:var(--bad-soft)}
+body.dark-mode :is(.nav li.active,.nav li:not(.active):hover){background:transparent!important}
+/* Flat configuration and gesture sections must not acquire panel backgrounds. */
+body.dark-mode :is(#admin-settings,#gestures) :is(.form-grid,.card-h,.head){background:transparent}
+/* Hide the retired kitchen history if Flask is still serving old markup. */
+/* Keep the existing kitchen warning history available. */
+/* Each reading and device is an individual card inside a clearly titled zone. */
+body .detail-room .detail-group{padding:0;border:0;border-radius:0;background:transparent}
+body .detail-room .detail-group>h2{border:0;padding:0;margin:0 0 12px}
+body .detail-room :is(.sensor-cards-grid,.living-2cards-grid):has(>.balanced-sensor-card){gap:12px}
+body .detail-room .sensor-cards-grid+.sensor-cards-grid{border-top:0;margin-top:12px}
+body .detail-room :is(.devices-card-grid,.living-2cards-grid):has(>.device-card-modern){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch}
+body .detail-room .balanced-sensor-card,body .detail-room .balanced-sensor-card:nth-child(even),body #kitchen :is(#kt-gas-card,#kt-smoke-tile,#kt-flame-tile){padding:14px;min-height:100px;border:1px solid var(--border);border-radius:10px;background:var(--surface);box-shadow:none}
+body .detail-room .device-card-modern,body .detail-room .device-card-modern:last-child{padding:14px;min-height:105px;grid-template-columns:24px minmax(0,1fr) 42px;gap:6px 8px;align-content:start;border:1px solid var(--border);border-radius:10px;background:var(--surface);box-shadow:none}
+body .detail-room .device-icon-wrapper{width:24px;height:26px}
+body .detail-room .device-card-modern.on{background:var(--surface);border-color:var(--accent-line)}
+body .detail-room .device-card-modern.alarm{background:var(--bad-soft);border-color:var(--bad)}
+body .detail-room .balanced-sensor-card.alarm{background:var(--bad-soft);border-color:var(--bad)}
+body #living #lv-auto-tile{margin-top:12px;min-height:80px}
+/* Existing buzzer switches retain backend safety enforcement. */
+body.dark-mode .detail-room .detail-group{background:transparent}
+body.dark-mode .detail-room :is(.balanced-sensor-card,.device-card-modern){background:var(--surface);border-color:var(--border)}
+body.dark-mode .detail-room .device-card-modern.on{border-color:var(--accent-line)}
+body.dark-mode .detail-room :is(.balanced-sensor-card.alarm,.device-card-modern.alarm){background:var(--bad-soft);border-color:var(--bad)}
+@media(max-width:480px){body .detail-room :is(.devices-card-grid,.living-2cards-grid):has(>.device-card-modern){grid-template-columns:1fr}body .detail-room .device-card-modern{min-height:80px}body .detail-room .balanced-sensor-card{padding:12px}}
+/* Even card spacing and concise room summaries. */
+body #living .living-2cards-grid+.sensor-cards-grid{margin-top:12px;border:0}
+body #living .detail-columns{align-items:start}
+body #kitchen .sensor-cards-grid,body #kitchen .devices-card-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;grid-auto-rows:minmax(108px,auto)}
+body #kitchen #kt-gas-card{grid-column:auto}
+body #kitchen :is(#kt-gas-card,#kt-smoke-tile,#kt-flame-tile){display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:16px;min-height:108px;border:1px solid var(--border)}
+body #kitchen .bsc-header{flex:1;width:auto;display:flex;flex-direction:column;gap:6px}
+body #kitchen .bsc-val{flex-shrink:0}
+body #kitchen #kt-gas-state{border:0;background:transparent;padding:0;border-radius:0;font-size:12px!important}
+body #kitchen .device-card-modern{min-height:108px;align-content:center}
+body .detail-room .device-meta-info h5{font-size:14px!important}
+body .detail-room .device-slider-control{margin:6px 0 0}
+body #patient .devices-card-grid{grid-template-columns:1fr}
+body #patient .device-card-modern{min-height:80px}
+body #patient .cam-overlay-stats{gap:6px 12px;padding:8px 12px}
+body #patient .cam-stat-pill{font-size:12px!important}
+body #patient #oc-fps{display:none}
+body #patient .camera-diagnostics #oc-fps{display:block}
+/* Preserve existing buzzer device cards. */
+@media(min-width:1024px){
+ body .detail-patient-layout{grid-template-columns:minmax(0,1.45fr) minmax(300px,1fr);gap:18px}
+ body #patient .live-feed-container{height:clamp(200px,calc(100svh - 320px),350px)}
+ body #patient .cam-header-row{padding:10px 12px}
+ body #patient .cam-title-group p{display:none}
+ body #patient .detail-side{gap:14px}
+ body #patient .balanced-sensor-card{min-height:90px;padding:12px}
+ body #patient .detail-heading{margin-bottom:12px}
+}
+@media(max-width:760px){body #kitchen :is(.sensor-cards-grid,.devices-card-grid){grid-auto-rows:auto}body #kitchen .device-card-modern,body #kitchen :is(#kt-gas-card,#kt-smoke-tile,#kt-flame-tile){min-height:92px}}
+/* Read-only mapping list and a reviewable save confirmation. */
+body #gestures .gmap-item{grid-template-columns:minmax(90px,.8fr) 16px minmax(0,1.4fr)}
+body #gestures .gmap-item .gi-del{display:none}
+body .gesture-confirmation{width:min(440px,calc(100vw - 40px));max-height:calc(100svh - 40px);padding:24px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);box-shadow:0 8px 28px #0002}
+body .gesture-confirmation::backdrop{background:#0006}
+body .gesture-confirmation h2{margin:0 0 16px;line-height:1.5}
+body .gesture-confirmation p{margin:0 0 12px;line-height:1.6;overflow-wrap:anywhere}
+body .gesture-confirmation .gm-confirm-summary{font-weight:600;color:var(--text)}
+body .gesture-confirmation .gm-confirm-effects{color:var(--muted)}
+body .gesture-confirmation form{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:12px;margin-top:24px}
+body .gesture-confirmation button{min-height:42px;padding:8px 14px;cursor:pointer}
+/* Configuration uses an independent content scroller below a stationary title. */
+body .main:has(#admin-settings.active){height:100%;min-height:0;overflow:hidden;padding-top:16px;padding-bottom:16px}
+body #admin-settings.active{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+body #admin-settings>.detail-heading{position:static;flex-shrink:0;margin-bottom:12px;padding-top:0}
+body #admin-settings .settings-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding-right:10px;scrollbar-gutter:stable}
+body .main:has(#admin-settings.active)>.app-footer{flex-shrink:0;margin-top:12px}
+/* Used gestures remain selectable for reassignment but are visually muted. */
+body #gm-gesture option.gesture-used{color:var(--muted);font-style:italic}
+body dialog.gesture-confirmation{position:fixed;inset:0;margin:auto;width:min(480px,calc(100vw - 32px));height:fit-content;max-height:calc(100svh - 32px);padding:26px;overflow:auto;border-radius:12px;line-height:1.6}
+body .gesture-confirmation h2{font-size:20px!important;margin:0 0 10px}
+body .gesture-confirmation #gm-confirm-intro{font-size:14px!important;color:var(--muted);margin-bottom:18px}
+body .gesture-confirmation .gm-confirm-summary{padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);font-size:15px!important}
+body .gesture-confirmation .gm-confirm-effects{font-size:13px!important;margin-top:14px}
+body .gesture-confirmation form{margin-top:22px}
+/* Horizontal sensor rows with visible, server-backed history charts. */
+body :is(#living,#kitchen) .detail-columns{grid-template-columns:minmax(0,1fr);gap:20px}
+body #living .living-2cards-grid:has(>.balanced-sensor-card){grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+body #kitchen .sensor-cards-grid{grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:auto}
+body #kitchen .devices-card-grid{grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:auto}
+body .detail-room .balanced-sensor-card,body #kitchen :is(#kt-gas-card,#kt-smoke-tile,#kt-flame-tile){display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;min-height:128px;gap:8px;padding:14px}
+body .detail-room .bsc-header{flex:0 0 auto;min-height:20px;width:100%}
+body .detail-room .bsc-val{min-height:28px;align-self:flex-start}
+body .detail-room canvas.spark{display:block;width:100%;height:54px;min-height:54px;max-height:54px;margin:4px 0 0;flex:0 0 54px}
+body .detail-room .sensor-chart-caption{display:block;color:var(--muted);font-size:10px!important;line-height:1.4;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+body .detail-room .bsc-sub{display:none}
+body #kitchen #kt-gas-card .bsc-header{flex-direction:row;justify-content:space-between}
+body #living #lv-motion-tile{justify-content:flex-start}
+@media(max-width:1000px){body #living .living-2cards-grid:has(>.balanced-sensor-card){grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){body #kitchen :is(.sensor-cards-grid,.devices-card-grid){grid-template-columns:repeat(2,minmax(0,1fr))}body #kitchen #kt-gas-card{grid-column:1/-1}body .main:has(#admin-settings.active){padding-top:16px;padding-bottom:16px}body dialog.gesture-confirmation{padding:20px}}
+@media(max-width:480px){body #kitchen .devices-card-grid{grid-template-columns:1fr}}

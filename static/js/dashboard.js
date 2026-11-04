@@ -1,5 +1,8 @@
 /* ================= AIoT Care Station — client (BLE, không MQTT) ================= */
   const socket = (typeof io !== 'undefined') ? io() : null;
+  // Remove the retired history panel even from a cached dashboard template.
+
+
 
   function updateGreeting(){
     const heading=document.getElementById('dynamic-greeting');
@@ -12,6 +15,27 @@
   }
   updateGreeting();
   setInterval(updateGreeting,60000);
+
+  /* Align the sidebar divider to the overview header in the desktop shell. */
+  (function alignBrandDivider(){
+    const header=document.querySelector('#overview .overview-heading');
+    const brand=document.getElementById('sidebar-top-brand');
+    const viewport=document.querySelector('.main-wrap');
+    if(!header||!brand||!viewport)return;
+    const desktop=window.matchMedia('(min-width:1024px)');
+    function align(){
+      if(!desktop.matches){brand.style.removeProperty('--brand-divider-height');return;}
+      if(!header.getClientRects().length)return;
+      const height=header.getBoundingClientRect().bottom+viewport.scrollTop-brand.getBoundingClientRect().top;
+      if(height>0)brand.style.setProperty('--brand-divider-height',height+'px');
+    }
+    if(typeof ResizeObserver!=='undefined'){
+      const observer=new ResizeObserver(align);observer.observe(header);
+    }
+    window.addEventListener('resize',align);
+    document.fonts?.ready.then(align);
+    align();
+  })();
 
   (function(){
     const b=document.body;
@@ -31,9 +55,23 @@
   /* Account settings share the main content navigation. */
   const preferencePrefix='aiot-account-'+document.body.dataset.username+'-';
   const dark=document.getElementById('dark-mode-toggle');
+  // Upgrade the old sidebar markup too when Flask still has a cached template.
+  const themeLabel=dark.closest('label');
+  const themeNav=document.querySelector('#sidebar .nav');
+  if(themeLabel&&themeNav){
+    themeLabel.classList.add('sidebar-theme');
+    dark.setAttribute('role','switch');
+    if(!themeLabel.querySelector('.fa-moon')){
+      const moon=document.createElement('i');moon.className='fas fa-moon';moon.setAttribute('aria-hidden','true');themeLabel.prepend(moon);
+    }
+    if(!themeLabel.closest('.theme-nav-item')){
+      const item=document.createElement('li');item.className='theme-nav-item';item.append(themeLabel);themeNav.append(item);
+    }
+  }
   try{dark.checked=localStorage.getItem(preferencePrefix+'dark')==='true';}catch(_){}
   document.body.classList.toggle('dark-mode',dark.checked);
-  dark.addEventListener('change',()=>{document.body.classList.toggle('dark-mode',dark.checked);try{localStorage.setItem(preferencePrefix+'dark',String(dark.checked));}catch(_){}});
+  try{localStorage.setItem('aiot-theme-dark',String(dark.checked));}catch(_){}
+  dark.addEventListener('change',()=>{document.body.classList.toggle('dark-mode',dark.checked);try{localStorage.setItem(preferencePrefix+'dark',String(dark.checked));localStorage.setItem('aiot-theme-dark',String(dark.checked));}catch(_){}});
   const personalDark=document.getElementById('personal-dark-toggle');
   personalDark.checked=dark.checked;
   personalDark.addEventListener('change',()=>{dark.checked=personalDark.checked;dark.dispatchEvent(new Event('change'));});
@@ -52,8 +90,14 @@
     'admin-logs':['Nhật ký & cảnh báo','Lịch sử đăng nhập, hoạt động và cảnh báo'],
     'admin-settings':['Cấu hình hệ thống','Tài khoản, Telegram và kết nối ESP'],
   };
-  function goTo(room){
+  function goTo(room,{historyMode='push'}={}){
     if(!Array.from(rooms).some(r=>r.id===room))return;
+    const url=new URL(window.location.href);
+    if(url.searchParams.get('tab')!==room){
+      url.searchParams.set('tab',room);
+      if(historyMode==='replace')window.history.replaceState(null,'',url);
+      else window.history.pushState(null,'',url);
+    }
     document.querySelectorAll('[data-room]').forEach(i=>i.classList.toggle('active',i.dataset.room===room));
     document.querySelectorAll('#botnav button').forEach(i=>{
       const selected=i.dataset.room===room||(i.hasAttribute('data-personal-tab')&&['gestures','admin-settings','admin-users','admin-logs'].includes(room));
@@ -67,6 +111,15 @@
   }
   document.querySelectorAll('[data-room]').forEach(i=>i.addEventListener('click',()=>goTo(i.dataset.room)));
   document.querySelectorAll('[data-goto]').forEach(el=>el.addEventListener('click',()=>goTo(el.dataset.goto)));
+  function restoreCurrentTab(){
+    const selected=new URL(window.location.href).searchParams.get('tab');
+    const allowed=Array.from(rooms).some(room=>room.id===selected);
+    goTo(allowed?selected:'overview',{historyMode:'replace'});
+  }
+  window.addEventListener('popstate',restoreCurrentTab);
+  // Wait for the rest of this script to initialize telemetry and control state.
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',restoreCurrentTab,{once:true});
+  else queueMicrotask(restoreCurrentTab);
 
   function touch(){
     const stamp=document.getElementById('last-update');
@@ -75,18 +128,55 @@
 
   /* ---- sparklines ---- */
   const sparks={};
-  function spark(id,val,color){
-    const c=document.getElementById(id);if(!c||val==null)return;
-    if(!sparks[id])sparks[id]={data:[]};
-    const s=sparks[id];s.data.push(+val);if(s.data.length>30)s.data.shift();
-    const ctx=c.getContext('2d'),w=c.width=c.clientWidth*2,h=c.height=c.clientHeight*2;
-    ctx.clearRect(0,0,w,h);const d=s.data;if(d.length<2)return;
-    const mn=Math.min(...d),mx=Math.max(...d),rg=(mx-mn)||1;
-    ctx.lineWidth=2.5;ctx.strokeStyle=color;ctx.beginPath();
-    d.forEach((v,i)=>{const x=i/(d.length-1)*w,y=h-7-((v-mn)/rg)*(h-14);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
-    ctx.stroke();const g=ctx.createLinearGradient(0,0,0,h);g.addColorStop(0,color+'33');g.addColorStop(1,color+'00');
-    ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();ctx.fillStyle=g;ctx.fill();
+  const sensorSeries={patient:{temp:'sp-pt-temp',hum:'sp-pt-humi'},living:{temp:'sp-lv-temp',hum:'sp-lv-humi',lux:'sp-lv-lux'},kitchen:{gas:'sp-kt-gas'}};
+  if(!document.getElementById('sp-kt-gas')){
+    const card=document.getElementById('kt-gas-card');
+    if(card){const canvas=document.createElement('canvas');canvas.id='sp-kt-gas';canvas.className='spark';card.append(canvas);}
   }
+  function drawSpark(id){
+    const c=document.getElementById(id),series=sparks[id];
+    if(!c||!series||!c.clientWidth||!c.clientHeight)return;
+    const ratio=window.devicePixelRatio||1;
+    const w=c.width=Math.round(c.clientWidth*ratio),h=c.height=Math.round(c.clientHeight*ratio);
+    const ctx=c.getContext('2d');ctx.clearRect(0,0,w,h);
+    const valid=series.data.filter(v=>typeof v==='number'&&Number.isFinite(v));
+    const caption=c.nextElementSibling;
+    if(!valid.length){if(caption?.classList.contains('sensor-chart-caption'))caption.textContent='Ch\u01b0a c\u00f3 l\u1ecbch s\u1eed';return;}
+    const min=Math.min(...valid),max=Math.max(...valid),range=max-min||1;
+    ctx.lineWidth=1.6*ratio;ctx.strokeStyle=series.color||'#4c9be8';ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();
+    let connected=false;
+    series.data.forEach((value,i)=>{
+      if(typeof value!=='number'||!Number.isFinite(value)){connected=false;return;}
+      const x=5*ratio+(i/Math.max(1,series.data.length-1))*(w-10*ratio);
+      const y=max===min?h/2:h-6*ratio-(value-min)/range*(h-12*ratio);
+      if(connected)ctx.lineTo(x,y);else ctx.moveTo(x,y);
+      connected=true;
+      if(valid.length===1){ctx.arc(x,y,2*ratio,0,Math.PI*2);ctx.fill();}
+    });ctx.stroke();
+    const labels=series.labels||[];
+    const time=labels.length?labels[0]+' \u2013 '+labels[labels.length-1]:'';
+    const text=(time?time+' \u00b7 ':'')+min+' \u2013 '+max;
+    c.setAttribute('role','img');c.setAttribute('aria-label','L\u1ecbch s\u1eed c\u1ea3m bi\u1ebfn: '+text);c.title=text;
+    if(caption?.classList.contains('sensor-chart-caption'))caption.textContent=text;
+  }
+  function spark(id,val,color){
+    if(typeof val!=='number'||!Number.isFinite(val))return;
+    if(!sparks[id])sparks[id]={data:[],labels:[]};
+    const series=sparks[id];series.color=color;series.data.push(val);series.labels.push(new Date().toLocaleTimeString('vi-VN'));
+    if(series.data.length>30){series.data.shift();series.labels.shift();}drawSpark(id);
+  }
+  function renderSensorHistories(histories){
+    if(!histories||typeof histories!=='object')return;
+    for(const [room,fields] of Object.entries(sensorSeries))for(const [key,id] of Object.entries(fields)){
+      if(!Array.isArray(histories[room]?.[key]))continue;
+      sparks[id]={data:histories[room][key].slice(-30),labels:(histories[room].labels||[]).slice(-30),color:'#4c9be8'};drawSpark(id);
+    }
+  }
+  document.querySelectorAll('.detail-room canvas.spark').forEach(canvas=>{
+    const caption=document.createElement('small');caption.className='sensor-chart-caption';caption.textContent='Ch\u01b0a c\u00f3 l\u1ecbch s\u1eed';canvas.after(caption);
+    if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>drawSpark(canvas.id)).observe(canvas);
+  });
+  fetch('/api/history',{cache:'no-store'}).then(response=>response.ok?response.json():null).then(renderSensorHistories).catch(()=>{});
 
   /* ---- gauge ---- */
   function setGauge(v){
@@ -109,7 +199,7 @@
     videoPh.style.display=active?'none':'block';
     document.querySelectorAll('#cam-seg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===camMode));
     if(active){const want='/video_feed';if(!wasActive||!videoFeed.getAttribute('src'))videoFeed.src=want+'?'+Date.now();}
-    if(!active){videoFeed.removeAttribute('src');videoFeed.parentElement.style.aspectRatio='';document.getElementById('oc-gesture').textContent='Cử chỉ: — (camera tắt)';}
+    if(!active){videoFeed.removeAttribute('src');videoFeed.parentElement.style.aspectRatio='';document.getElementById('oc-gesture').textContent='Cử chỉ: camera tắt';}
   }
   document.querySelectorAll('#cam-seg button').forEach(b=>b.addEventListener('click',()=>{
     const m=b.dataset.mode;camMode=m;
@@ -182,8 +272,8 @@
       el._userEditTimeout=editingTimer;
     });
   }
-  bindToggle('pt-light-toggle','pt-light-tile','Đang bật','Đang tắt',on=>emitSet('patient','light',{state:on}));
   bindToggle('pt-buzzer-toggle','pt-buzzer-tile','Đang kêu','Im lặng',on=>emitSet('patient','buzzer',{state:on}));
+  bindToggle('pt-light-toggle','pt-light-tile','Đang bật','Đang tắt',on=>emitSet('patient','light',{state:on}));
   bindToggle('pt-fan-toggle','pt-fan-tile','Đang chạy','Đang tắt',on=>{const r=document.getElementById('pt-fan-range');if(!on){r.value=0;document.getElementById('pt-fan-val').textContent=0;}emitSet('patient','fan',{state:on,value:on?(+r.value||100):0});});
   bindRange('pt-fan-range','pt-fan-val',v=>{const t=document.getElementById('pt-fan-toggle');t.checked=v>0;document.getElementById('pt-fan-tile').classList.toggle('on',v>0);document.getElementById('pt-fan-status').textContent=v>0?'Đang chạy':'Đang tắt';emitSet('patient','fan',{state:v>0,value:v});});
   bindToggle('lv-light-toggle','lv-light-tile','Đang bật','Đang tắt',on=>emitSet('living','light',{state:on}));
@@ -193,8 +283,8 @@
   bindToggle('kt-window-toggle','kt-window-tile','Đang mở','Đang đóng',on=>emitSet('kitchen','window',{state:on}));
   bindToggle('kt-exhaust-toggle','kt-exhaust-tile','Đang hút','Đang tắt',on=>{const r=document.getElementById('kt-exhaust-range'),v=on?(+r.value||100):0;r.value=v;document.getElementById('kt-exhaust-val').textContent=v;emitSet('kitchen','exhaust',{state:on,value:v});});
   bindRange('kt-exhaust-range','kt-exhaust-val',v=>{const on=v>0,t=document.getElementById('kt-exhaust-toggle');t.checked=on;document.getElementById('kt-exhaust-tile').classList.toggle('on',on);document.getElementById('kt-exhaust-status').textContent=on?'Đang hút':'Đang tắt';emitSet('kitchen','exhaust',{state:on,value:v});});
-  bindToggle('kt-light-toggle','kt-light-tile','Đang bật','Đang tắt',on=>emitSet('kitchen','light',{state:on}));
   bindToggle('kt-buzzer-toggle','kt-buzzer-tile','Đang kêu','Im lặng',on=>emitSet('kitchen','buzzer',{state:on}));
+  bindToggle('kt-light-toggle','kt-light-tile','Đang bật','Đang tắt',on=>emitSet('kitchen','light',{state:on}));
 
   /* ---- apply data ---- */
   function badge(el,cls,txt){el.className='rb '+cls;el.textContent=txt;el.dataset.domainClass=cls;el.dataset.domainText=txt;delete el.dataset.telemetryWarning;}
@@ -216,7 +306,7 @@
     else{delete card.dataset.attention;marker.hidden=true;}
     syncOverviewWarning();
   }
-  function setToggle(id,tileId,on,onTxt,offTxt){const el=document.getElementById(id);el.checked=!!on;document.getElementById(tileId).classList.toggle('on',!!on);const st=document.getElementById(id.replace('-toggle','-status'));if(st)st.textContent=on?onTxt:offTxt;}
+  function setToggle(id,tileId,on,onTxt,offTxt){const el=document.getElementById(id);if(el)el.checked=!!on;document.getElementById(tileId)?.classList.toggle('on',!!on);const st=document.getElementById(id.replace('-toggle','-status'));if(st)st.textContent=on?onTxt:offTxt;}
 
   function applyPatient(d){
     d=confirmedData('patient',d);
@@ -307,7 +397,7 @@
       else markRoomAttention('patient','','');
       const oc=document.getElementById('oc-fall');
       const fallText=a.observe_only?'NGHI TÉ NGÃ (quan sát)':'TÉ NGÃ';
-      const expectedText=fallSignal?fallText:'Chưa phát hiện tư thế nghi té ngã';
+      const expectedText=fallSignal?fallText:'Té ngã: chưa phát hiện';
       if(oc&&oc.textContent!==expectedText){
         oc.textContent=expectedText;
         oc.classList.toggle('alarm',!!fallSignal);
@@ -336,6 +426,36 @@
   }
   const ktReload=document.getElementById('kt-alerts-reload');
   if(ktReload)ktReload.addEventListener('click',loadKitchenAlerts);
+
+  /* ---- fall confirmation ---- */
+  let fallConfirmation=null;
+  function renderFallConfirmation(){
+    const button=document.getElementById('patient-confirm-safe');
+    const message=document.getElementById('patient-confirm-message');
+    if(!button||!message)return;
+    const status=fallConfirmation,connected=!!socket&&socket.connected;
+    button.disabled=!connected||!status||!status.can_confirm;
+    let text='Đang tải trạng thái cảnh báo té ngã…';
+    if(!connected)text='Mất kết nối realtime; chưa thể gửi xác nhận.';
+    else if(status){
+      if(!status.required)text='Không có cảnh báo té ngã cần xác nhận.';
+      else if(status.blocked_by_kitchen)text='Còn cảnh báo phòng bếp; hãy kiểm tra và xác nhận tại phòng bếp.';
+      else if(status.active)text='AI còn báo dấu hiệu té ngã. Kiểm tra người bệnh trước khi xác nhận.';
+      else if(status.pending)text='Đã gửi xác nhận; đang chờ node phòng bệnh phản hồi. Còi vẫn được khóa an toàn.';
+      else if(!status.node_online)text='Node phòng bệnh chưa kết nối; chờ kết nối lại để xác nhận.';
+      else text='Cảnh báo té ngã đang chờ xác nhận. Chỉ bấm sau khi đã kiểm tra người bệnh an toàn.';
+    }
+    message.textContent=text;
+  }
+  function applyFallConfirmation(status){fallConfirmation=status||null;renderFallConfirmation();}
+  const patientConfirmButton=document.getElementById('patient-confirm-safe');
+  if(patientConfirmButton)patientConfirmButton.addEventListener('click',()=>{
+    if(patientConfirmButton.disabled||!socket||!socket.connected)return;
+    patientConfirmButton.disabled=true;
+    document.getElementById('patient-confirm-message').textContent='Đang gửi xác nhận an toàn…';
+    socket.emit('confirm_fall_safe',{});
+  });
+  renderFallConfirmation();
 
   /* ---- alert state machine ---- */
   const STEPS=['normal','light','emergency','awaiting'];
@@ -433,6 +553,7 @@
     const c=document.getElementById('conn-chip'),m=document.getElementById('mt-conn');
     if(c){c.className='chip '+(ok?'ok':'bad');c.innerHTML='<i class="fas fa-circle"></i> '+(ok?'Đã kết nối':'Mất kết nối');}
     if(m)m.className='mt-conn '+(ok?'ok':'bad');
+    renderFallConfirmation();
   }
 
   /* ================= SOCKET ================= */
@@ -446,7 +567,8 @@
         if(s.nodes[room]!=null)setNode(room,!!s.nodes[room]);
       });
       applyTelemetry(s.telemetry);
-    }catch(e){applyTelemetry(Object.fromEntries(Object.keys(nodeState).map(room=>[room,{status:'unavailable'}])));}
+      applyFallConfirmation(s.fall_confirmation);
+    }catch(e){applyTelemetry(Object.fromEntries(Object.keys(nodeState).map(room=>[room,{status:'unavailable'}])));applyFallConfirmation(null);}
   }
   refreshNodeStatus();
   setInterval(refreshNodeStatus,3000);
@@ -458,18 +580,22 @@
     socket.on('connect',()=>{setConn(true);socket.emit('request_initial_state');loadKitchenAlerts();});
     socket.on('disconnect',()=>{clearPendingControls();setConn(false);document.getElementById('state-chip').textContent='Mất kết nối realtime';document.getElementById('state-chip').className='chip';document.getElementById('state-desc').textContent='Trạng thái node được cập nhật qua API khi realtime gián đoạn.';document.getElementById('confirm-btn').disabled=true;});
     socket.on('command_error',e=>{clearPendingControls();showSys(e.message||'Không gửi được lệnh.','light');socket.emit('request_initial_state');});
+    socket.on('sensor_chart_update',renderSensorHistories);
     socket.on('bootstrap',s=>{
+      renderSensorHistories(s.histories);
       if(s.nodes){['patient','living','kitchen'].forEach(r=>setNode(r,!!s.nodes[r]));}
       if(s.rooms){applyPatient(s.rooms.patient||{});applyLiving(s.rooms.living||{});applyKitchen(s.rooms.kitchen||{});}
       if(s.ai)applyAI(s.ai);
       if(s.camera){setCameraUI(!!s.camera.active,s.camera.mode);}
       if(s.alert)setAlert(s.alert.level);
       applyTelemetry(s.telemetry);
+      applyFallConfirmation(s.fall_confirmation);
     });
     socket.on('room_update',m=>{if(m.room==='patient')applyPatient(m.data);else if(m.room==='living')applyLiving(m.data);else if(m.room==='kitchen')applyKitchen(m.data);applyTelemetry(telemetryCache);});
     socket.on('node_status',n=>{['patient','living','kitchen'].forEach(r=>{if(n[r]!=null)setNode(r,n[r]===true||n[r]==='online');});applyTelemetry(telemetryCache);});
     socket.on('camera_sync',c=>{setCameraUI(!!c.active,c.mode);});
     socket.on('ai_status',a=>{applyAI(a);});
+    socket.on('fall_confirmation',applyFallConfirmation);
     socket.on('alert_state',a=>{setAlert(a.level,a.message);if(typeof loadKitchenAlerts==='function')loadKitchenAlerts();});
     socket.on('system_alert',a=>{showSys(a.message||'Có cảnh báo mới.',(a.type==='gas'||a.type==='health')?'light':'');if(typeof loadKitchenAlerts==='function')loadKitchenAlerts();});
   }

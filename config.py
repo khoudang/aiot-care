@@ -117,6 +117,21 @@ ENABLE_GESTURE = os.getenv("ENABLE_GESTURE", "1") == "1"
 ENABLE_TRACKING = os.getenv("ENABLE_TRACKING", "1") == "1"
 ENABLE_FALL = os.getenv("ENABLE_FALL", "1") == "1"
 
+# COCO YOLOv3-tiny person boxes drive ONE horizontal pan servo; Pose remains for falls.
+_MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
+YOLO_CFG_PATH = os.getenv("YOLO_CFG_PATH", os.path.join(_MODEL_DIR, "yolov3-tiny.cfg"))
+YOLO_WEIGHTS_PATH = os.getenv("YOLO_WEIGHTS_PATH", os.path.join(_MODEL_DIR, "yolov3-tiny.weights"))
+YOLO_CONFIDENCE = float(os.getenv("YOLO_CONFIDENCE", "0.5"))
+YOLO_NMS_THRESHOLD = float(os.getenv("YOLO_NMS_THRESHOLD", "0.4"))
+YOLO_INTERVAL_SEC = float(os.getenv("YOLO_INTERVAL_SEC", "0.5"))
+YOLO_TARGET_TTL_SEC = float(os.getenv("YOLO_TARGET_TTL_SEC", "1.5"))
+YOLO_INPUT_SIZE = int(os.getenv("YOLO_INPUT_SIZE", "224"))
+if not (0 < YOLO_CONFIDENCE <= 1 and 0 < YOLO_NMS_THRESHOLD <= 1
+        and 0 < YOLO_INTERVAL_SEC < float("inf")
+        and 0 < YOLO_TARGET_TTL_SEC < float("inf")
+        and YOLO_INPUT_SIZE >= 32 and YOLO_INPUT_SIZE % 32 == 0):
+    raise ValueError("Invalid YOLO tracking thresholds, interval, TTL or input size")
+
 # Camera bật theo PIR: "auto" = tự bật khi có chuyển động, tự tắt sau timeout.
 CAMERA_MODE_DEFAULT = os.getenv("CAMERA_MODE_DEFAULT", "auto")  # auto | on | off
 CAMERA_MOTION_TIMEOUT = float(os.getenv("CAMERA_MOTION_TIMEOUT", "20"))  # giây không thấy PIR -> tắt

@@ -18,7 +18,7 @@ def open_hand():
 class GestureCadenceTests(unittest.TestCase):
     def run_worker(self,expire=False):
         iot=load_iot();iot.PROCESS_EVERY_N_FRAMES=3
-        iot.ENABLE_GESTURE=True;iot.ENABLE_TRACKING=True;iot.ENABLE_FALL=False
+        iot.ENABLE_GESTURE=True;iot.ENABLE_TRACKING=False;iot.ENABLE_FALL=True
         iot.camera_active=True;iot._camera_session_id=1;iot.socketio=None
         iot._latest_raw_slot.update(frame=np.zeros((24,32,3),dtype=np.uint8),gen=1,session_id=1,w=32,h=24,ts=time.perf_counter())
         observed=[]

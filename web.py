@@ -1,5 +1,7 @@
 import re
+import sqlite3
 import time
+from datetime import date
 
 from flask import (
     Response,
@@ -253,7 +255,10 @@ def register_web(app, socketio):
         if action not in valid_actions:
             return jsonify({"ok": False, "message": "Hành động không hợp lệ."}), 400
 
-        upsert_gesture_mapping(gesture, device, action)
+        try:
+            upsert_gesture_mapping(gesture, device, action)
+        except ValueError as error:
+            return jsonify({"ok": False, "message": str(error)}), 400
         iot.reload_gesture_map()
         log_audit(f"Cập nhật cử chỉ: {gesture} -> {device}/{action}", user_id=session.get("user_id"))
         return jsonify({"ok": True, "message": "Đã lưu ánh xạ cử chỉ.", "mappings": fetch_gesture_mappings()})
@@ -275,9 +280,26 @@ def register_web(app, socketio):
     # ----------------------------------------------------------------- #
     #  Admin REST (giữ nguyên)
     # ----------------------------------------------------------------- #
-    @app.route("/api/admin/users", methods=["GET"])
+    @app.route("/api/admin/users", methods=["GET", "POST"])
     @admin_required
     def api_admin_users():
+        if request.method == "POST":
+            payload = request.get_json(silent=True)
+            if not isinstance(payload, dict):
+                return jsonify({"ok": False, "message": "Thông tin tài khoản không hợp lệ."}), 400
+            username, password = payload.get("username"), payload.get("password")
+            if not isinstance(username, str) or len(username.strip()) < 3:
+                return jsonify({"ok": False, "message": "Tên đăng nhập phải từ 3 ký tự trở lên."}), 400
+            if not isinstance(password, str) or len(password.strip()) < 6:
+                return jsonify({"ok": False, "message": "Mật khẩu phải từ 6 ký tự trở lên."}), 400
+            if payload.get("role", "member") != "member":
+                return jsonify({"ok": False, "message": "Chỉ tạo tài khoản thành viên tại đây."}), 400
+            try:
+                create_user(username.strip(), password.strip(), role="member")
+            except sqlite3.IntegrityError:
+                return jsonify({"ok": False, "message": "Tên đăng nhập đã tồn tại."}), 409
+            log_audit(f"Tạo tài khoản mới: {username.strip()}", user_id=session.get("user_id"))
+            return jsonify({"ok": True, "message": "Tạo tài khoản thành công.", "users": fetch_admin_users()}), 201
         return jsonify({"ok": True, "users": fetch_admin_users()})
 
     @app.route("/api/admin/users/<int:user_id>/edit", methods=["POST"])
@@ -370,7 +392,19 @@ def register_web(app, socketio):
     @app.route("/api/admin/logs", methods=["GET"])
     @admin_required
     def api_admin_logs():
-        return jsonify({"ok": True, "login_logs": fetch_login_logs(), "audit_logs": fetch_audit_logs()})
+        start = request.args.get("from", "").strip()
+        end = request.args.get("to", "").strip()
+        try:
+            for value in (start, end):
+                if value and date.fromisoformat(value).isoformat() != value:
+                    raise ValueError()
+            if start and end and start > end:
+                raise ValueError()
+        except ValueError:
+            return jsonify({"ok": False, "message": "Khoảng ngày không hợp lệ."}), 400
+        return jsonify({"ok": True,
+                        "login_logs": fetch_login_logs(limit=-1, start_date=start, end_date=end),
+                        "audit_logs": fetch_audit_logs(limit=-1, start_date=start, end_date=end)})
 
     @app.route("/api/admin/logs", methods=["DELETE"])
     @admin_required
@@ -522,6 +556,12 @@ def register_web(app, socketio):
         if not socket_auth_required():
             return
         iot.confirm_safe(user_id=session.get("user_id"))
+
+    @socketio.on("confirm_fall_safe")
+    def handle_confirm_fall_safe(_data):
+        if not socket_auth_required():
+            return
+        iot.confirm_fall_safe(user_id=session.get("user_id"))
 
     @socketio.on("silence_alert")
     def handle_silence_alert(_data):

@@ -234,7 +234,7 @@ class VideoPipelineTests(unittest.TestCase):
         iot._camera_session_id = 1
         iot._latest_raw_slot.update(frame=np.zeros((4, 4, 3), dtype=np.uint8), gen=1, ts=0.0, session_id=1, w=4, h=4)
         iot.mp = Mock()
-        iot.ENABLE_FALL = False
+        iot.ENABLE_FALL = True  # Pose is now fall-only; keep the mocked lifecycle stage active.
         iot.tracking_enabled = False
         def process(_):
             iot.camera_active = False
@@ -251,7 +251,7 @@ class VideoPipelineTests(unittest.TestCase):
         iot._camera_session_id = 1
         iot._latest_raw_slot.update(frame=np.zeros((4, 4, 3), dtype=np.uint8), gen=1, ts=0.0, session_id=1, w=4, h=4)
         iot.mp = Mock()
-        iot.ENABLE_FALL = False
+        iot.ENABLE_FALL = True  # Pose is now fall-only; keep the mocked lifecycle stage active.
         iot.tracking_enabled = False
         iot._apply_gesture = Mock()
         def process(_):
@@ -270,7 +270,7 @@ class VideoPipelineTests(unittest.TestCase):
         iot._camera_session_id = 1
         iot._latest_raw_slot.update(frame=np.zeros((4, 4, 3), dtype=np.uint8), gen=1, ts=0.0, session_id=1, w=4, h=4)
         iot.mp = Mock()
-        iot.ENABLE_FALL = False
+        iot.ENABLE_FALL = True  # Pose is now fall-only; keep the mocked lifecycle stage active.
         iot.tracking_enabled = False
         iot.PROCESS_EVERY_N_FRAMES = 3
         count = 0
@@ -426,7 +426,7 @@ class VideoPipelineTests(unittest.TestCase):
         iot._camera_session_id = 1
         iot._latest_raw_slot.update(frame=np.zeros((4, 4, 3), dtype=np.uint8), gen=1, ts=0.0, session_id=1, w=4, h=4)
         iot.mp = Mock()
-        iot.ENABLE_FALL = False
+        iot.ENABLE_FALL = True  # Pose is now fall-only; keep the mocked lifecycle stage active.
         iot.tracking_enabled = False
         iot.PROCESS_EVERY_N_FRAMES = 1
 
@@ -490,7 +490,7 @@ class VideoPipelineTests(unittest.TestCase):
         iot.camera_active = True
         iot._camera_session_id = 1
         iot._latest_raw_slot.update(frame=np.zeros((4, 4, 3), dtype=np.uint8), gen=1, ts=0.0, session_id=1, w=4, h=4)
-        iot.ENABLE_FALL = False
+        iot.ENABLE_FALL = True  # Pose is now fall-only; keep the mocked lifecycle stage active.
         iot.tracking_enabled = False
         iot.PROCESS_EVERY_N_FRAMES = 1
         iot.mp = Mock()

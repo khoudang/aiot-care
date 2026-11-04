@@ -179,22 +179,14 @@ def get_user_by_id(user_id):
 
 def create_user(username, password, role="member"):
     conn = get_db_connection()
-    cur = conn.cursor()
-
-    cur.execute(
-        """
-        insert into users (username, password_hash, role, is_suspended)
-        values (?, ?, ?, 0)
-        """,
-        (
-            username.strip(),
-            generate_password_hash(password),
-            role,
-        ),
-    )
-
-    conn.commit()
-    conn.close()
+    try:
+        with conn:
+            conn.execute(
+                "insert into users (username, password_hash, role, is_suspended) values (?, ?, ?, 0)",
+                (username.strip(), generate_password_hash(password), role),
+            )
+    finally:
+        conn.close()
 
 
 def get_config_value(key_name, default=""):
@@ -278,7 +270,7 @@ def fetch_admin_users():
     return rows
 
 
-def fetch_login_logs(limit=100):
+def fetch_login_logs(limit=100, start_date="", end_date=""):
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -292,10 +284,12 @@ def fetch_login_logs(limit=100):
             ll.timestamp
         from login_logs ll
         left join users u on u.id = ll.user_id
+        where (? = '' or substr(ll.timestamp, 1, 10) >= ?)
+          and (? = '' or substr(ll.timestamp, 1, 10) <= ?)
         order by ll.id desc
         limit ?
         """,
-        (limit,),
+        (start_date, start_date, end_date, end_date, limit),
     )
 
     rows = [dict(row) for row in cur.fetchall()]
@@ -303,7 +297,7 @@ def fetch_login_logs(limit=100):
     return rows
 
 
-def fetch_audit_logs(limit=200):
+def fetch_audit_logs(limit=200, start_date="", end_date=""):
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -317,10 +311,12 @@ def fetch_audit_logs(limit=200):
             al.timestamp
         from audit_logs al
         left join users u on u.id = al.user_id
+        where (? = '' or substr(al.timestamp, 1, 10) >= ?)
+          and (? = '' or substr(al.timestamp, 1, 10) <= ?)
         order by al.id desc
         limit ?
         """,
-        (limit,),
+        (start_date, start_date, end_date, end_date, limit),
     )
 
     rows = [dict(row) for row in cur.fetchall()]

@@ -5,7 +5,7 @@ Chức năng:
   * Kết nối BLE tới 3 node (patient / living / kitchen), nhận telemetry JSON,
     gửi lệnh điều khiển thiết bị theo từng phòng.
   * Camera phòng người bệnh: bật theo PIR (auto) hoặc toggle thủ công qua web;
-    chạy MediaPipe Pose để bám người (tracking) + phát hiện té ngã, và
+    chạy YOLOv3-tiny để bám bbox người trái/phải, MediaPipe Pose phát hiện té ngã, và
     MediaPipe Hands (giãn cách frame) để nhận cử chỉ điều khiển đèn/quạt.
   * Gửi góc servo pan qua UART tới ESP(1) để camera bám người trái/phải.
   * Máy trạng thái cảnh báo 3 mức (bình thường / nhẹ / khẩn cấp) + chờ xác nhận,
@@ -22,6 +22,7 @@ import sys
 import threading
 import time
 from node_protocol import build_command
+from person_tracker import PersonTracker, bounded_pan_step
 from collections import deque
 
 import cv2
@@ -60,6 +61,13 @@ from config import (
     ENABLE_FALL,
     ENABLE_GESTURE,
     ENABLE_TRACKING,
+    YOLO_CFG_PATH,
+    YOLO_WEIGHTS_PATH,
+    YOLO_CONFIDENCE,
+    YOLO_NMS_THRESHOLD,
+    YOLO_INTERVAL_SEC,
+    YOLO_TARGET_TTL_SEC,
+    YOLO_INPUT_SIZE,
     FALL_ASPECT,
     FALL_HOLD_SEC,
     FALL_TORSO_DEG,
@@ -508,6 +516,18 @@ def _record_sensor_sample(room, payload):
                 _sensor_seen_at[room][key] = now
 
 
+def fall_confirmation_status():
+    """A cleared AI pose does not clear the buzzer latch; node telemetry does."""
+    required = _fall_buzzer_saved is not None or bool(AI.get("fall"))
+    active = bool(AI.get("fall"))
+    pending = _fall_restore_target is not None
+    blocked = _emergency_snapshot is not None
+    online = bool(NODE_ONLINE.get("patient"))
+    return {"required": required, "active": active, "pending": pending,
+            "blocked_by_kitchen": blocked, "node_online": online,
+            "can_confirm": required and not active and not pending and not blocked and online}
+
+
 def snapshot_all():
     with state_lock:
         rooms = {r: dict(v) for r, v in ROOMS.items()}
@@ -517,7 +537,8 @@ def snapshot_all():
         cam = {"active": camera_active, "mode": camera_mode, "tracking": tracking_enabled}
         alert = {"level": alert_level}
     return {"rooms": rooms, "nodes": nodes, "node_states": node_states, "ai": ai, "camera": cam,
-            "alert": alert, "histories": snapshot_histories(), "telemetry": telemetry_status()}
+            "alert": alert, "histories": snapshot_histories(), "telemetry": telemetry_status(),
+            "fall_confirmation": fall_confirmation_status()}
 
 
 def push_history(room):
@@ -1116,27 +1137,22 @@ def uart_send_angle(angle):
             print("[UART] write error:", exc)
 
 
+_last_tracking_update = None
+
+
 def update_tracking(center_x, frame_w):
-    """Điều khiển tỉ lệ (P) + vùng chết + làm mượt EMA -> góc servo."""
-    err = center_x - frame_w / 2.0
+    """Horizontal P correction with bounded monotonic-time motion; None means hold."""
+    global _last_tracking_update
+    now = time.perf_counter()
     with state_lock:
-        cur = AI["angle"]
-
-    if abs(err) < SERVO_DEADZONE_PX:
-        return cur
-
-    step = SERVO_KP * err
-    if SERVO_INVERT:
-        step = -step
-
-    target = cur + step
-    target = max(SERVO_MIN, min(SERVO_MAX, target))
-    smoothed = cur * (1 - SERVO_SMOOTHING) + target * SERVO_SMOOTHING
-    smoothed = max(SERVO_MIN, min(SERVO_MAX, smoothed))
-
-    with state_lock:
-        AI["angle"] = round(smoothed, 1)
-    return smoothed
+        elapsed = .5 if _last_tracking_update is None else now - _last_tracking_update
+        _last_tracking_update = now
+        angle = bounded_pan_step(center_x, frame_w, AI["angle"], elapsed,
+            kp=SERVO_KP, smoothing=SERVO_SMOOTHING, deadzone=SERVO_DEADZONE_PX,
+            minimum=SERVO_MIN, maximum=SERVO_MAX, invert=SERVO_INVERT)
+        if angle is not None:
+            AI["angle"] = angle
+        return angle
 
 
 # ================================================================== #
@@ -1289,6 +1305,7 @@ def _observe_fall_restoration(room, payload):
     if type(payload.get("buzzer")) is bool and payload["buzzer"] == _fall_restore_target:
         _fall_buzzer_saved = None
         _fall_restore_target = None
+        _emit("fall_confirmation", fall_confirmation_status())
         _emit("alert_state", {"level": alert_level, "message": "Node đã xác nhận kết thúc cảnh báo té ngã."})
 
 
@@ -1327,6 +1344,24 @@ def silence_alert(user_id=None):
     log_audit("Tắt tiếng còi cảnh báo (giám sát nguy hiểm vẫn hoạt động)", user_id=user_id)
     _emit("alert_state", {"level": alert_level,
                           "message": "Đã tắt tiếng còi; hệ thống vẫn tiếp tục giám sát nguy hiểm."})
+
+
+def confirm_fall_safe(user_id=None):
+    """Patient-room acknowledgement never confirms the kitchen's safety latch."""
+    global _fall_restore_target
+    status = fall_confirmation_status()
+    if not status["can_confirm"]:
+        message = ("Còn cảnh báo phòng bếp; hãy kiểm tra và xác nhận tại phòng bếp."
+                   if status["blocked_by_kitchen"] else
+                   "Chưa thể xác nhận: cần hết dấu hiệu té ngã và node phòng bệnh kết nối; hoặc đang chờ node xác nhận.")
+        _emit("command_error", {"room": "patient", "message": message})
+        return False
+    _fall_restore_target = _fall_buzzer_saved
+    _cancel_commands("patient", "buzzer")
+    set_device("patient", "buzzer", state=_patient_buzzer_target(), source="auto", silent=True)
+    log_audit("Xác nhận an toàn sau cảnh báo té ngã; đang chờ node", user_id=user_id)
+    _emit("fall_confirmation", fall_confirmation_status())
+    return True
 
 
 def confirm_safe(user_id=None):
@@ -2129,6 +2164,17 @@ def _camera_pub_worker(session_id):
 
 
 def _camera_ai_worker(session_id):
+    tracker = None
+    tracking_error = None
+    if ENABLE_TRACKING:
+        try:
+            tracker = PersonTracker(YOLO_CFG_PATH, YOLO_WEIGHTS_PATH, cv=cv2,
+                confidence=YOLO_CONFIDENCE, nms=YOLO_NMS_THRESHOLD,
+                interval=YOLO_INTERVAL_SEC, ttl=YOLO_TARGET_TTL_SEC,
+                input_size=YOLO_INPUT_SIZE)
+        except Exception as exc:
+            tracking_error = str(exc)
+            print("[tracking] YOLOv3-tiny unavailable; tracking disabled (no nose fallback):", exc)
     pose = None
     hands = None
     last_hands_lms = None
@@ -2141,7 +2187,7 @@ def _camera_ai_worker(session_id):
 
     try:
         if mp is not None and hasattr(mp, "solutions"):
-            if ENABLE_TRACKING or ENABLE_FALL:
+            if ENABLE_FALL:
                 pose = mp.solutions.pose.Pose(
                     model_complexity=0,
                     min_detection_confidence=0.5,
@@ -2212,7 +2258,21 @@ def _camera_ai_worker(session_id):
             gesture_key = None
             hand_status = "unavailable" if ENABLE_GESTURE else "disabled"
 
-            # ----- Pose: tracking + té ngã -----
+            tracking_cx = None
+            tracking_width = raw_frame.shape[1]
+            if tracker is not None and tracking_enabled:
+                try:
+                    # Same captured BGR frame, not MediaPipe's RGB/resized buffer.
+                    tracking_cx = tracker.process(raw_frame)
+                except Exception as exc:
+                    tracking_error = str(exc)
+                    print("[tracking] YOLO inference failed; tracking disabled (no nose fallback):", exc)
+                    tracker = None
+                with _camera_session_lock:
+                    if not camera_active or session_id != _camera_session_id:
+                        break
+
+            # ----- Pose: té ngã only (never use nose for pan tracking) -----
             if pose is not None:
                 pres = pose.process(rgb)
                 # Revalidate session immediately after blocking pose.process
@@ -2223,9 +2283,6 @@ def _camera_ai_worker(session_id):
                 if pres and pres.pose_landmarks:
                     pose_lms = pres.pose_landmarks
                     lms = pres.pose_landmarks.landmark
-                    cx = lms[0].x * w
-                    if tracking_enabled:
-                        action_angle = update_tracking(cx, w)
                     if ENABLE_FALL:
                         fall_event = detect_fall(lms, w, h)
 
@@ -2307,9 +2364,18 @@ def _camera_ai_worker(session_id):
                         "work_ms": work_ms,
                         "overlay_age_ms": source_age_ms,
                         "camera": True,
+                        "tracking_backend": "yolov3-tiny" if tracker is not None else ("unavailable" if ENABLE_TRACKING else "disabled"),
+                        "tracking_status": tracker.status if tracker is not None and tracking_enabled else ("error" if tracking_error else "disabled"),
+                        "tracking_error": tracking_error,
+                        "tracking_target": list(tracker.target) if tracker is not None and tracker.target is not None else None,
+                        "tracking_detection_age_ms": max(0, int((t_completion - tracker.last_seen) * 1000)) if tracker is not None and tracker.last_seen is not None else None,
+                        "tracking_work_ms": round(tracker.work_ms, 1) if tracker is not None else None,
                     })
 
                 # Dispatch actions strictly serialized against stop/supersession
+                if (tracking_cx is not None and tracking_enabled and not AI_OBSERVE_ONLY
+                        and t_completion - source_ts <= OVERLAY_MAX_AGE_SEC):
+                    action_angle = update_tracking(tracking_cx, tracking_width)
                 if action_angle is not None:
                     uart_send_angle(action_angle)
                 if fall_event is not None:

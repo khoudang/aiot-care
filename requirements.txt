@@ -1,6 +1,6 @@
 flask
 flask-socketio
-opencv-python
+opencv-python>=4.11,<5
 mediapipe
 requests
 bleak
