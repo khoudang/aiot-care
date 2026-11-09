@@ -23,6 +23,7 @@ import threading
 import time
 from node_protocol import build_command
 from person_tracker import PersonTracker, bounded_pan_step
+from camera_cadence import CadencePolicy, FrameMotionProbe
 from collections import deque
 
 import cv2
@@ -55,7 +56,10 @@ from config import (
     BLE_RECONNECT_DELAY,
     CAMERA_HEIGHT,
     CAMERA_MODE_DEFAULT,
-    CAMERA_MOTION_TIMEOUT,
+    CAMERA_IDLE_AFTER_SEC,
+    CAMERA_ACTIVE_VIDEO_FPS,
+    CAMERA_IDLE_VIDEO_FPS,
+    CAMERA_IDLE_AI_FPS,
     CAMERA_WIDTH,
     COMMAND_DEBOUNCE_SEC,
     ENABLE_FALL,
@@ -174,9 +178,11 @@ _SENSOR_FIELDS = {"patient": ("temp", "hum", "motion"),
                   "kitchen": ("gas", "flame")}
 _sensor_seen_at = {room: dict.fromkeys(fields) for room, fields in _SENSOR_FIELDS.items()}
 
+_CAMERA_OFF_METRICS = {'camera_profile': 'off', 'camera_profile_reason': 'offline',
+                       'target_video_fps': 0.0, 'target_ai_fps': 0.0}
 AI = {
     "gesture": "—", "fps": "--", "video_fps": "--", "latency": "--", "work_ms": 0, "overlay_age_ms": 0,
-    "angle": SERVO_CENTER, "fall": False, "camera": False,
+    "angle": SERVO_CENTER, "fall": False, "camera": False, **_CAMERA_OFF_METRICS,
     "observe_only": AI_OBSERVE_ONLY, "fall_suspected": False,
 }
 
@@ -185,6 +191,9 @@ camera_active = False
 camera_mode = CAMERA_MODE_DEFAULT          # auto | on | off
 tracking_enabled = ENABLE_TRACKING
 last_motion_ts = 0.0
+_camera_policy = CadencePolicy(idle_after=CAMERA_IDLE_AFTER_SEC,
+    active_video_fps=CAMERA_ACTIVE_VIDEO_FPS,
+    idle_video_fps=CAMERA_IDLE_VIDEO_FPS, idle_ai_fps=CAMERA_IDLE_AI_FPS)
 camera_thread = None
 latest_frame = None
 latest_frame_gen = 0
@@ -618,6 +627,7 @@ def apply_node_payload(room, payload):
     # PIR phòng bệnh -> bật camera theo chế độ auto
     if room == "patient" and ROOMS["patient"]["motion"]:
         last_motion_ts = now_ts()
+        _camera_policy.activity(time.monotonic(), 'pir')
         _maybe_auto_camera_on()
 
     evaluate_alerts()
@@ -1329,8 +1339,8 @@ def _enter_emergency():
     for room in ("patient", "living"):
         set_device(room, "fan", state=False, source="auto", silent=True)
     set_device("patient", "buzzer", state=True, source="auto", silent=True)
-    # đảm bảo camera bật để quan sát người bệnh
-    set_camera_mode("on", user_id=None)
+    # Emergency affects cadence, never the user's camera authorization/mode.
+    _maybe_auto_camera_on()
 
 
 def silence_alert(user_id=None):
@@ -1594,7 +1604,7 @@ class _CameraLifecycle:
                     "latency": "--",
                     "work_ms": 0,
                     "overlay_age_ms": 0,
-                    "camera": False,
+                    "camera": False, **_CAMERA_OFF_METRICS,
                 })
             with _ai_results_lock:
                 _latest_ai_results.update({
@@ -1637,7 +1647,7 @@ class _CameraLifecycle:
                         "latency": "--",
                         "work_ms": 0,
                         "overlay_age_ms": 0,
-                        "camera": False,
+                        "camera": False, **_CAMERA_OFF_METRICS,
                     })
                 with _ai_results_lock:
                     _latest_ai_results.update({
@@ -1697,12 +1707,14 @@ def _start_camera(user_id=None):
     global camera_active, camera_owner_user_id, camera_thread
     global _camera_session_id, _pub_thread, _ai_thread
     with _camera_session_lock:
-        if camera_active:
+        # Recheck authorization here: an automatic caller may predate Off.
+        if camera_mode == "off" or camera_active:
             return
         camera_active = True
         camera_owner_user_id = user_id
         _camera_session_id += 1
         current_session = _camera_session_id
+        _camera_policy.activity(time.monotonic(), 'startup')
 
         # Clean prior-session slots and overlays under current session startup ownership
         with _new_raw_frame_cond:
@@ -1726,11 +1738,14 @@ def _start_camera(user_id=None):
         camera_thread = _pub_thread
 
 
-def _stop_camera():
+def _stop_camera(only_if_off=False):
     global camera_active, camera_owner_user_id
     pub_t = None
     ai_t = None
     with _camera_session_lock:
+        # A delayed Off must not stop a newer, authorized On/Auto request.
+        if only_if_off and camera_mode != "off":
+            return
         if not camera_active:
             return
         camera_active = False
@@ -1759,6 +1774,21 @@ def _stop_camera():
     _CameraLifecycle.handle_pub_worker_exit(stopping_session)
 
 
+def _camera_profile():
+    now = time.monotonic()
+    with state_lock:
+        seen = _sensor_seen_at['patient']['motion']
+        pir_fresh = (NODE_ONLINE['patient'] and seen is not None
+                     and now - seen <= TELEMETRY_STALE_SEC)
+        alarm = bool(AI.get('fall') or AI.get('fall_suspected')
+                     or globals().get('_fall_since')
+                     or globals().get('_fall_buzzer_saved') is not None
+                     or globals().get('_emergency_snapshot') is not None
+                     or globals().get('alert_level', 'normal') != 'normal')
+    return _camera_policy.profile(now, mode=camera_mode,
+                                  pir_fresh=pir_fresh, alarm=alarm)
+
+
 def _maybe_auto_camera_on():
     if camera_mode == "auto":
         _start_camera(None)
@@ -1768,15 +1798,15 @@ def set_camera_mode(mode, user_id=None):
     """mode: auto | on | off."""
     global camera_mode
     mode = mode if mode in ("auto", "on", "off") else "auto"
-    camera_mode = mode
+    with _camera_session_lock:
+        camera_mode = mode
 
-    if mode == "on":
+    # Start/stop recheck authorization under the same lock. Do not keep it
+    # across stop: joining workers requires them to acquire the session lock.
+    if mode in ("on", "auto"):
         _start_camera(user_id)
-    elif mode == "off":
-        _stop_camera()
-    else:  # auto
-        if now_ts() - last_motion_ts > CAMERA_MOTION_TIMEOUT:
-            _stop_camera()
+    else:
+        _stop_camera(only_if_off=True)
 
     _emit("camera_sync", {"active": camera_active, "mode": camera_mode})
     return {"active": camera_active, "mode": camera_mode}
@@ -2013,7 +2043,13 @@ def _handle_fall(is_suspect):
 def _camera_pub_worker(session_id):
     global latest_frame, latest_frame_gen, camera_active
 
-    cap = cv2.VideoCapture(VIDEO_SOURCE)
+    # A worker can be scheduled after Off has already returned. Serialize the
+    # actual resource open with mode changes, not just worker creation.
+    with _camera_session_lock:
+        if (camera_mode == "off" or not camera_active
+                or session_id != _camera_session_id):
+            return
+        cap = cv2.VideoCapture(VIDEO_SOURCE)
     if not cap.isOpened():
         _CameraLifecycle.handle_pub_open_failure(session_id)
         if hasattr(cap, "release"):
@@ -2042,6 +2078,8 @@ def _camera_pub_worker(session_id):
     _emit("camera_sync", {"active": True, "mode": camera_mode})
 
     pub_fps_times = deque(maxlen=20)
+    last_publication = None
+    motion_probe = FrameMotionProbe()
     draw = None
     if mp is not None and hasattr(mp, "solutions") and hasattr(mp.solutions, "drawing_utils"):
         draw = mp.solutions.drawing_utils
@@ -2061,6 +2099,22 @@ def _camera_pub_worker(session_id):
             if not ok or img is None:
                 time.sleep(0.01)
                 continue
+
+            # Drain capture continuously; throttle expensive handoff/encoding, not
+            # cap.read(), since many USB cameras ignore buffer-size/FPS settings.
+            changed = motion_probe.changed(img)
+            with _camera_session_lock:
+                if not camera_active or session_id != _camera_session_id:
+                    break
+                if changed:
+                    _camera_policy.activity(time.monotonic(), 'visual')
+                profile = _camera_profile()
+            now = time.perf_counter()
+            if profile['profile'] == 'off' or (last_publication is not None
+                    and now - last_publication < 1.0 / profile['video_fps']):
+                time.sleep(STREAM_SLEEP)
+                continue
+            last_publication = now
 
             try:
                 flipped = cv2.flip(img, 1)
@@ -2130,6 +2184,10 @@ def _camera_pub_worker(session_id):
                 if session_id == _camera_session_id and camera_active:
                     with state_lock:
                         AI["video_fps"] = v_fps
+                        AI.update(camera_profile=profile['profile'],
+                                  camera_profile_reason=profile['reason'],
+                                  target_video_fps=profile['video_fps'],
+                                  target_ai_fps=profile['ai_fps'])
 
             ret, buffer = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
             if ret:
@@ -2141,13 +2199,7 @@ def _camera_pub_worker(session_id):
                             latest_frame_gen += 1
                             camera_cond.notify_all()
 
-            # Auto shutdown on motion timeout
-            if camera_mode == "auto" and (now_ts() - last_motion_ts) > CAMERA_MOTION_TIMEOUT:
-                with _camera_session_lock:
-                    if session_id == _camera_session_id:
-                        camera_active = False
-                break
-
+            # Auto remains open; inactivity will only change processing cadence.
             time.sleep(STREAM_SLEEP)
     except Exception as exc:
         print("[camera pub] error:", exc)
@@ -2182,6 +2234,7 @@ def _camera_ai_worker(session_id):
     last_hands_source_ts = 0.0
     last_hand_status = "waiting"
     inference_cycle = 0
+    last_inference = None
     ai_fps_times = deque(maxlen=20)
     last_emit = 0.0
 
@@ -2232,6 +2285,12 @@ def _camera_ai_worker(session_id):
                 continue
 
             t0 = time.perf_counter()
+            profile = _camera_profile()
+            if profile['profile'] == 'off' or (profile['ai_fps'] > 0
+                    and last_inference is not None
+                    and t0 - last_inference < 1.0 / profile['ai_fps']):
+                continue
+            last_inference = t0
             try:
                 rgb = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2RGB)
                 if not isinstance(rgb, np.ndarray):
@@ -2373,6 +2432,8 @@ def _camera_ai_worker(session_id):
                     })
 
                 # Dispatch actions strictly serialized against stop/supersession
+                if fall_event or (run_hands and hands_lms):
+                    _camera_policy.activity(time.monotonic(), 'ai')
                 if (tracking_cx is not None and tracking_enabled and not AI_OBSERVE_ONLY
                         and t_completion - source_ts <= OVERLAY_MAX_AGE_SEC):
                     action_angle = update_tracking(tracking_cx, tracking_width)
@@ -2425,6 +2486,6 @@ def start_background_services():
     load_gesture_map()
     init_uart()
     threading.Thread(target=_ble_thread, daemon=True).start()
-    if camera_mode == "on":
+    if camera_mode in ("on", "auto"):
         _start_camera()
     print(f"[iot] background services started (BLE x{len(NODES)}; UART configured={bool(UART_ENABLE)})")

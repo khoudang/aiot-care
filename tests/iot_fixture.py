@@ -3,10 +3,11 @@ import ast
 from pathlib import Path
 import sys
 import types
+from typing import Any
 from unittest.mock import Mock, patch
 
 
-def load_iot():
+def load_iot() -> Any:
     path = Path(__file__).resolve().parents[1] / 'iot.py'
     source = path.read_text(encoding='utf-8')
     config = types.ModuleType('config')
@@ -17,6 +18,10 @@ def load_iot():
     config.AI_OBSERVE_ONLY = False
     config.AI_INFERENCE_WIDTH = 320
     config.TELEMETRY_STALE_SEC = 10.0
+    config.CAMERA_IDLE_AFTER_SEC = 30.0
+    config.CAMERA_ACTIVE_VIDEO_FPS = 15.0
+    config.CAMERA_IDLE_VIDEO_FPS = 3.0
+    config.CAMERA_IDLE_AI_FPS = 2.0
     config.YOLO_CFG_PATH = 'missing-test-model.cfg'
     config.YOLO_WEIGHTS_PATH = 'missing-test-model.weights'
     config.YOLO_CONFIDENCE = .5
@@ -35,6 +40,7 @@ def load_iot():
     module = types.ModuleType('isolated_iot')
     with patch.dict(sys.modules, dependencies):
         exec(compile(source, str(path), 'exec'), module.__dict__)
+    module._real_set_camera_mode = module.set_camera_mode
     for name in ('_emit', 'log_audit', 'send_telegram_alert_async',
                  'set_camera_mode', 'push_history'):
         setattr(module, name, Mock())

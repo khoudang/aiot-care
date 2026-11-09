@@ -132,9 +132,18 @@ if not (0 < YOLO_CONFIDENCE <= 1 and 0 < YOLO_NMS_THRESHOLD <= 1
         and YOLO_INPUT_SIZE >= 32 and YOLO_INPUT_SIZE % 32 == 0):
     raise ValueError("Invalid YOLO tracking thresholds, interval, TTL or input size")
 
-# Camera bật theo PIR: "auto" = tự bật khi có chuyển động, tự tắt sau timeout.
+# Auto keeps capture open and adapts video/AI work; on uses the active profile.
 CAMERA_MODE_DEFAULT = os.getenv("CAMERA_MODE_DEFAULT", "auto")  # auto | on | off
-CAMERA_MOTION_TIMEOUT = float(os.getenv("CAMERA_MOTION_TIMEOUT", "20"))  # giây không thấy PIR -> tắt
+CAMERA_MOTION_TIMEOUT = float(os.getenv("CAMERA_MOTION_TIMEOUT", "20"))  # legacy; no longer closes Auto
+CAMERA_IDLE_AFTER_SEC = float(os.getenv("CAMERA_IDLE_AFTER_SEC", "30"))
+CAMERA_ACTIVE_VIDEO_FPS = float(os.getenv("CAMERA_ACTIVE_VIDEO_FPS", "15"))
+CAMERA_IDLE_VIDEO_FPS = float(os.getenv("CAMERA_IDLE_VIDEO_FPS", "3"))
+CAMERA_IDLE_AI_FPS = float(os.getenv("CAMERA_IDLE_AI_FPS", "2"))
+if not all(0 < v < float("inf") for v in (CAMERA_IDLE_AFTER_SEC,
+        CAMERA_ACTIVE_VIDEO_FPS, CAMERA_IDLE_VIDEO_FPS, CAMERA_IDLE_AI_FPS)):
+    raise ValueError("Camera cadence values must be finite and positive")
+if CAMERA_IDLE_VIDEO_FPS > CAMERA_ACTIVE_VIDEO_FPS:
+    raise ValueError("Idle video FPS cannot exceed active video FPS")
 
 # Phát hiện té ngã (heuristic từ pose)
 FALL_HOLD_SEC = float(os.getenv("FALL_HOLD_SEC", "3.5"))      # giữ tư thế bất thường bao lâu mới báo

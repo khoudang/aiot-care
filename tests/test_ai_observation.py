@@ -25,7 +25,7 @@ class AIObservationSafetyTests(unittest.TestCase):
         iot._handle_fall(False)
         self.assertFalse(iot.AI['fall_suspected'])
 
-    def test_startup_honors_camera_on_once_without_affecting_auto(self):
+    def test_startup_opens_on_and_auto_once_but_preserves_off(self):
         for mode in ('on', 'auto', 'off'):
             with self.subTest(mode=mode):
                 iot = load_iot()
@@ -37,7 +37,7 @@ class AIObservationSafetyTests(unittest.TestCase):
                 with patch.object(iot.threading, 'Thread'):
                     iot.start_background_services()
                     iot.start_background_services()
-                self.assertEqual(iot._start_camera.call_count, int(mode == 'on'))
+                self.assertEqual(iot._start_camera.call_count, int(mode in ('on', 'auto')))
 
     def test_observed_suspicion_cannot_reconcile_or_resync_into_an_alarm(self):
         iot = load_iot()
