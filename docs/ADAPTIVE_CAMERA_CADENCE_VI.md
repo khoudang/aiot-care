@@ -27,6 +27,14 @@ Capture tiếp tục đọc/drain ảnh camera, kể cả trong idle, để hạ
 
 `ai.camera_profile`, `camera_profile_reason`, `target_video_fps`, `target_ai_fps` trong trạng thái chẩn đoán phản ánh profile/lý do và giới hạn mục tiêu; `target_ai_fps=0` ở active nghĩa là không bổ sung cap, không phải tắt AI. Khi camera dừng, các giá trị mục tiêu được xóa về 0. Số đo `fps` và `video_fps` vẫn là số đo riêng, không lấy mục tiêu để giả làm kết quả.
 
+## Tracking: tự về Home khi không thấy người
+
+- Khi YOLO liên tục không phát hiện người trong ít nhất **5 giây**, pan bắt đầu trở về Home (`SERVO_CENTER`, mặc định 90°). Thời gian tính từ khung âm tính đầu tiên của phiên camera, không phải từ lúc boot.
+- Về Home từng bước tối đa 3°/lần và ngân sách 6°/giây, không nhảy ngay về tâm; tới Home thì ngừng gửi. Phát hiện người trở lại sẽ hủy timeout và tiếp tục tracking.
+- Một người khác còn trong ảnh cũng hủy timeout dù mục tiêu cũ bị mất. Lượt YOLO bị skip không tự tạo lệnh về Home.
+- Chỉ tác động khi tracking bật, khung còn mới và phiên camera còn hợp lệ. Không về Home khi observe-only, lỗi/mất model hoặc camera tắt; timeout không mang sang phiên mới.
+- Đã có regression mô phỏng worker/clock/UART trong `tests/test_tracking_home.py`; chưa nghiệm thu chuyển động servo vật lý. Mốc 5 giây là điều kiện bắt đầu, lệnh thực tế còn phụ thuộc nhịp khung và suy luận.
+
 ## Kiểm thử và ranh giới triển khai
 
 Chạy test bằng hardware stubs, không import/chạy entrypoint `app.py`, không dùng camera/BLE/UART thật:

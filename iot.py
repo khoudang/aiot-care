@@ -1150,6 +1150,23 @@ def uart_send_angle(angle):
 _last_tracking_update = None
 
 
+def update_tracking_home():
+    """Return toward configured center with the same 3 deg/step, 6 deg/s budget."""
+    global _last_tracking_update
+    now = time.perf_counter()
+    with state_lock:
+        elapsed = .5 if _last_tracking_update is None else now - _last_tracking_update
+        _last_tracking_update = now
+        current = AI["angle"]
+        home = max(SERVO_MIN, min(SERVO_MAX, SERVO_CENTER))
+        limit = min(3., 6. * max(0., min(.5, elapsed)))
+        angle = current + max(-limit, min(limit, home - current))
+        if angle == current:
+            return None
+        AI["angle"] = angle
+        return angle
+
+
 def update_tracking(center_x, frame_w):
     """Horizontal P correction with bounded monotonic-time motion; None means hold."""
     global _last_tracking_update
@@ -2218,6 +2235,7 @@ def _camera_pub_worker(session_id):
 def _camera_ai_worker(session_id):
     tracker = None
     tracking_error = None
+    no_person_since = None  # Session-local: never carry an old timeout across restart.
     if ENABLE_TRACKING:
         try:
             tracker = PersonTracker(YOLO_CFG_PATH, YOLO_WEIGHTS_PATH, cv=cv2,
@@ -2434,9 +2452,24 @@ def _camera_ai_worker(session_id):
                 # Dispatch actions strictly serialized against stop/supersession
                 if fall_event or (run_hands and hands_lms):
                     _camera_policy.activity(time.monotonic(), 'ai')
-                if (tracking_cx is not None and tracking_enabled and not AI_OBSERVE_ONLY
-                        and t_completion - source_ts <= OVERLAY_MAX_AGE_SEC):
-                    action_angle = update_tracking(tracking_cx, tracking_width)
+                fresh_tracking = (tracker is not None and tracking_enabled
+                                  and t_completion - source_ts <= OVERLAY_MAX_AGE_SEC)
+                empty_detection = False
+                if not fresh_tracking:
+                    no_person_since = None
+                elif tracker is not None and (tracking_cx is not None or tracker.detections):
+                    no_person_since = None
+                elif tracker is not None and tracker.status in ('lost', 'not_detected'):
+                    empty_detection = True
+                    if no_person_since is None:
+                        no_person_since = source_ts
+                # A skipped YOLO run is neither absence evidence nor a motion command.
+                if fresh_tracking and not AI_OBSERVE_ONLY:
+                    if tracking_cx is not None:
+                        action_angle = update_tracking(tracking_cx, tracking_width)
+                    elif (empty_detection and no_person_since is not None
+                          and source_ts - no_person_since >= 5.0):
+                        action_angle = update_tracking_home()
                 if action_angle is not None:
                     uart_send_angle(action_angle)
                 if fall_event is not None:

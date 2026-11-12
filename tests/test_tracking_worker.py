@@ -25,7 +25,7 @@ class TrackingWorkerTests(unittest.TestCase):
         pose = Mock(process=Mock(return_value=SimpleNamespace(pose_landmarks=SimpleNamespace(landmark=lms))))
         iot.mp = SimpleNamespace(solutions=SimpleNamespace(pose=SimpleNamespace(Pose=lambda **kw:pose)))
         tracker = SimpleNamespace(process=Mock(return_value=center), target=(200.,0.,280.,200.),
-            last_seen=time.perf_counter(), work_ms=12., status='detected')
+            last_seen=time.perf_counter(), work_ms=12., status='detected', detections=[])
         if supersede:
             def process(*args, **kwargs):
                 iot._camera_session_id = 2
