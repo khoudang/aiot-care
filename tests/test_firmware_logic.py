@@ -46,13 +46,32 @@ int main() {
   bool light = false;
   int pwm = 0;
   living.update(10, true, 20, 28, 50, true, light, pwm);
-  assert(light && pwm == 128);
-  living.update(20, false, 200, 31, 50, true, light, pwm);
-  assert(!light && pwm == 255);
-  living.update(120010, false, 20, 31, 50, true, light, pwm);
+  assert(!light && pwm == 128); // Darkness must persist for 15 seconds.
+  living.update(15010, true, 20, 28, 50, true, light, pwm);
+  assert(light);
+  living.update(20010, true, 220, 31, 50, true, light, pwm);
+  assert(light && pwm == 255 && living.lampValid);
+  assert(living.lampLux == 200);
+  living.update(21010, true, 220, 31, 50, true, light, pwm);
+  assert(light); // Lamp reflection must not switch light off.
+  living.update(4UL * 3600000UL, true, 450, 31, 50, true, light, pwm);
+  assert(light); // First bright reading starts a timer, even after hours.
+  living.update(4UL * 3600000UL + 180000, true, 450, 31, 50, true, light, pwm);
+  assert(!light);
+  living.update(4UL * 3600000UL + 181000, true, 20, 31, 50, true, light, pwm);
+  assert(!light); // Daylight lockout.
+  living.update(4UL * 3600000UL + 180000 + 25UL * 60000UL, true, 20, 31, 50, true, light, pwm);
+  living.update(4UL * 3600000UL + 180000 + 25UL * 60000UL + 15000, true, 20, 31, 50, true, light, pwm);
+  assert(light);
+  living.update(4UL * 3600000UL + 180000 + 25UL * 60000UL + 20000, true, 30, 31, 50, true, light, pwm);
+  assert(!living.lampValid); // Weak delta: no daylight shutoff.
+  living.update(4UL * 3600000UL + 180000 + 25UL * 60000UL + 200000, true, 500, 31, 50, true, light, pwm);
+  assert(light);
+  living.update(4UL * 3600000UL + 180000 + 25UL * 60000UL + 321000, false, 20, 31, 50, true, light, pwm);
   assert(!light && pwm == 0);
   light = true; pwm = 100;
-  living.update(240000, false, 200, 20, 50, false, light, pwm);
+  living.onLightChange(100, true, 20);
+  living.update(24000000, false, 200, 20, 50, false, light, pwm);
   assert(light && pwm == 100); // Manual mode wins over local automation.
 }
 ''', encoding='utf-8')
