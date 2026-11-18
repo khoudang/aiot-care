@@ -2,7 +2,7 @@
 import time
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, ANY
 import numpy as np
 from iot_fixture import load_iot
 
@@ -34,7 +34,8 @@ class TrackingWorkerTests(unittest.TestCase):
         if runtime_failure:
             tracker.process.side_effect = RuntimeError('DNN failed')
         iot.PersonTracker = Mock(return_value=tracker, side_effect=failure)
-        iot.update_tracking = Mock(return_value=100.)
+        iot._start_pan_worker = Mock()
+        iot._queue_tracking = Mock()
         iot.uart_send_angle = Mock()
         iot.detect_fall = Mock(return_value=False)
         iot._handle_fall = Mock()
@@ -48,27 +49,27 @@ class TrackingWorkerTests(unittest.TestCase):
 
     def test_bbox_horizontal_center_not_pose_nose_and_fall_retained(self):
         iot, pose = self.worker()
-        iot.update_tracking.assert_called_once_with(240., 320)
-        iot.uart_send_angle.assert_called_once_with(100.)
+        iot._queue_tracking.assert_called_once_with(240., 320, ANY, ANY)
+        iot.uart_send_angle.assert_not_called()
         iot.detect_fall.assert_called_once()
         pose.process.assert_called_once()
         self.assertEqual(iot.AI['tracking_backend'], 'yolov3-tiny')
 
     def test_skip_or_loss_does_not_move(self):
         iot, _ = self.worker(center=None)
-        iot.update_tracking.assert_not_called()
+        iot._queue_tracking.assert_not_called()
         iot.uart_send_angle.assert_not_called()
         iot.detect_fall.assert_called_once()
 
     def test_observation_does_not_update_angle_or_send(self):
         iot, _ = self.worker(observe=True)
-        iot.update_tracking.assert_not_called()
+        iot._queue_tracking.assert_not_called()
         iot.uart_send_angle.assert_not_called()
         iot.detect_fall.assert_called_once()
 
     def test_missing_model_disables_tracking_not_fall(self):
         iot, _ = self.worker(failure=FileNotFoundError('model missing'))
-        iot.update_tracking.assert_not_called()
+        iot._queue_tracking.assert_not_called()
         iot.uart_send_angle.assert_not_called()
         iot.detect_fall.assert_called_once()
         self.assertEqual(iot.AI['tracking_backend'], 'unavailable')
@@ -77,28 +78,28 @@ class TrackingWorkerTests(unittest.TestCase):
     def test_runtime_dnn_failure_keeps_fall_and_disables_tracking(self):
         iot, _ = self.worker(runtime_failure=True)
         iot.detect_fall.assert_called_once()
-        iot.update_tracking.assert_not_called()
+        iot._queue_tracking.assert_not_called()
         iot.uart_send_angle.assert_not_called()
         self.assertEqual(iot.AI['tracking_backend'], 'unavailable')
         self.assertEqual(iot.AI['tracking_error'], 'DNN failed')
 
     def test_stale_capture_does_not_move(self):
         iot, _ = self.worker(stale=True)
-        iot.update_tracking.assert_not_called()
+        iot._queue_tracking.assert_not_called()
         iot.uart_send_angle.assert_not_called()
 
     def test_disabled_tracking_does_not_move(self):
         iot, _ = self.worker(disabled=True)
-        iot.update_tracking.assert_not_called()
+        iot._queue_tracking.assert_not_called()
         iot.uart_send_angle.assert_not_called()
 
     def test_tracking_without_pose_uses_original_frame_width(self):
         iot, pose = self.worker(no_pose=True, width=640, center=480.)
         pose.process.assert_not_called()
-        iot.update_tracking.assert_called_once_with(480., 640)
-        iot.uart_send_angle.assert_called_once_with(100.)
+        iot._queue_tracking.assert_called_once_with(480., 640, ANY, ANY)
+        iot.uart_send_angle.assert_not_called()
 
     def test_session_changed_during_dnn_does_not_move(self):
         iot, _ = self.worker(supersede=True)
-        iot.update_tracking.assert_not_called()
+        iot._queue_tracking.assert_not_called()
         iot.uart_send_angle.assert_not_called()

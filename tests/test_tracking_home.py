@@ -20,6 +20,7 @@ def run_sequence(samples, *, observe=False, disabled=False, stale=False, fail=Fa
     iot.SERVO_KP, iot.SERVO_SMOOTHING = .06, .35
     iot.SERVO_DEADZONE_PX, iot.SERVO_INVERT = 24, False
     iot.AI['angle'] = 120.
+    iot._start_pan_worker = Mock()
     iot._camera_profile = Mock(return_value={'profile': 'active', 'ai_fps': 0})
     clock = [100.]
     index = [0]
@@ -46,7 +47,8 @@ def run_sequence(samples, *, observe=False, disabled=False, stale=False, fail=Fa
             ts=clock[0] - (10 if stale else 0))
     angles = []
     def emit(*args):
-        angles.append(iot.AI['angle'])
+        pan = iot._start_pan_worker.call_args.args[1]
+        angles.append(pan.target)
         index[0] += 1
         if index[0] == len(samples):
             iot.camera_active = False
@@ -65,14 +67,14 @@ def run_sequence(samples, *, observe=False, disabled=False, stale=False, fail=Fa
 def test_home_starts_after_five_seconds_not_before():
     iot, angles = run_sequence([(0, 'not_detected'), (4.99, 'not_detected'),
                                 (5, 'not_detected')])
-    assert angles == [120., 120., 117.]
-    iot.uart_send_angle.assert_called_once_with(117.)
+    assert angles == [None, None, 90.]
+    iot.uart_send_angle.assert_not_called()  # Only independent ticks send UART.
 
 
 def test_reacquisition_resets_absence_timer():
     _, angles = run_sequence([(0, 'not_detected'), (4, 'detected'),
         (5, 'not_detected'), (9.99, 'not_detected'), (10, 'not_detected')])
-    assert angles == [120., 120., 120., 120., 117.]
+    assert angles == [None, None, None, None, 90.]
 
 
 @pytest.mark.parametrize('option', ['observe', 'disabled', 'stale', 'fail', 'supersede'])
@@ -83,20 +85,20 @@ def test_unsafe_or_inactive_worker_never_returns_home(option):
 
 def test_skipped_detection_is_not_evidence_of_an_empty_room():
     iot, angles = run_sequence([(0, 'not_detected'), (5, 'skipped')])
-    assert angles == [120., 120.]
+    assert angles == [None, None]
     iot.uart_send_angle.assert_not_called()
 
 
 def test_other_visible_person_cancels_home_even_when_target_lost():
     iot, angles = run_sequence([(0, 'not_detected'), (5, 'other_person'),
                                 (6, 'not_detected'), (10.99, 'not_detected')])
-    assert angles == [120.] * 4
+    assert angles == [None] * 4
     iot.uart_send_angle.assert_not_called()
 
 
 def test_home_is_bounded_stops_at_center_and_does_not_repeat():
     samples = [(0, 'not_detected')] + [(5 + n * .5, 'not_detected') for n in range(12)]
     iot, angles = run_sequence(samples)
-    assert angles[1:11] == [117., 114., 111., 108., 105., 102., 99., 96., 93., 90.]
-    assert angles[-2:] == [90., 90.]
-    assert iot.uart_send_angle.call_count == 10
+    assert angles == [None] + [90.] * 12
+    assert iot.uart_send_angle.call_count == 0
+    assert iot.AI['angle'] == 120.  # No inference-thread motor writes.

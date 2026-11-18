@@ -23,7 +23,9 @@ import threading
 import time
 from node_protocol import build_command
 from person_tracker import PersonTracker, bounded_pan_step
+from pan_motion import PanMotion
 from camera_cadence import CadencePolicy, FrameMotionProbe
+from camera_text import draw_gesture_label
 from collections import deque
 
 import cv2
@@ -2181,8 +2183,7 @@ def _camera_pub_worker(session_id):
                         for hl in hands_lms:
                             draw.draw_landmarks(img, hl, mp.solutions.hands.HAND_CONNECTIONS)
                 if gesture_res and gesture_res != "—":
-                    cv2.putText(img, gesture_res, (12, 50),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (80, 255, 180), 2)
+                    draw_gesture_label(img, gesture_res)
 
             with state_lock:
                 angle_now = AI["angle"]
@@ -2232,7 +2233,50 @@ def _camera_pub_worker(session_id):
         _CameraLifecycle.handle_pub_worker_exit(session_id)
 
 
+def _queue_tracking(center_x, frame_w, pan, source_ts):
+    # One fresh detection establishes one finite destination, not a rate command.
+    with state_lock:
+        destination = bounded_pan_step(center_x, frame_w, AI['angle'], .5,
+            kp=SERVO_KP, smoothing=SERVO_SMOOTHING, deadzone=SERVO_DEADZONE_PX,
+            minimum=SERVO_MIN, maximum=SERVO_MAX, invert=SERVO_INVERT,
+            max_step=6., max_speed=12.)
+    if destination is None:
+        pan.clear()
+    else:
+        pan.set_target(destination, source_ts=source_ts)
+
+
+def _pan_tick(session_id, pan, now):
+    # Same lock hierarchy as AI dispatch: stop cannot race a queued UART write.
+    with _camera_session_lock:
+        if (not camera_active or session_id != _camera_session_id
+                or camera_mode == 'off' or not tracking_enabled or AI_OBSERVE_ONLY):
+            pan.clear()
+            return
+        with state_lock:
+            angle = pan.step(AI['angle'], now)
+            if angle is not None:
+                AI['angle'] = angle
+        if angle is not None:
+            uart_send_angle(angle)
+
+
+def _start_pan_worker(session_id, pan, stopped):
+    def run():
+        while not stopped.wait(.09):
+            with _camera_session_lock:
+                if stopped.is_set() or not camera_active or session_id != _camera_session_id:
+                    return
+                _pan_tick(session_id, pan, time.perf_counter())
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    return worker
+
+
 def _camera_ai_worker(session_id):
+    pan = PanMotion()  # No startup centering or motion before fresh evidence.
+    pan_stopped = threading.Event()
+    _start_pan_worker(session_id, pan, pan_stopped)
     tracker = None
     tracking_error = None
     no_person_since = None  # Session-local: never carry an old timeout across restart.
@@ -2464,14 +2508,17 @@ def _camera_ai_worker(session_id):
                     if no_person_since is None:
                         no_person_since = source_ts
                 # A skipped YOLO run is neither absence evidence nor a motion command.
-                if fresh_tracking and not AI_OBSERVE_ONLY:
+                if not fresh_tracking or AI_OBSERVE_ONLY:
+                    pan.clear()
+                elif fresh_tracking and not AI_OBSERVE_ONLY:
                     if tracking_cx is not None:
-                        action_angle = update_tracking(tracking_cx, tracking_width)
+                        _queue_tracking(tracking_cx, tracking_width, pan, source_ts)
                     elif (empty_detection and no_person_since is not None
                           and source_ts - no_person_since >= 5.0):
-                        action_angle = update_tracking_home()
-                if action_angle is not None:
-                    uart_send_angle(action_angle)
+                        pan.set_target(max(SERVO_MIN, min(SERVO_MAX, SERVO_CENTER)),
+                                       source_ts=source_ts, speed=6.)
+                    elif tracker.status != 'skipped':
+                        pan.clear()
                 if fall_event is not None:
                     _handle_fall(fall_event)
                 if gesture_key is not None:
@@ -2488,6 +2535,9 @@ def _camera_ai_worker(session_id):
         print("[camera ai] error:", exc)
         _CameraLifecycle.handle_ai_worker_failure(session_id, exc)
     finally:
+        with _camera_session_lock:
+            pan_stopped.set()
+            pan.clear()
         if pose is not None:
             try:
                 pose.close()
