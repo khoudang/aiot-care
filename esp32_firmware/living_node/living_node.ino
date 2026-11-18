@@ -35,6 +35,7 @@ LivingState living;
 
 int fanPwm = 0;
 bool lightOn = false;
+float lastLivingLux = NAN;
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) { deviceConnected = true; }
@@ -58,6 +59,7 @@ bool handleCommand(const String &value) {
           }
           if (commandSwitch(doc, "light", enabled)) {
             applied = true;
+            if (lightOn != enabled) living.onLightChange(millis(), enabled, lastLivingLux);
             lightOn = enabled;
             digitalWrite(PIN_LIGHT_RELAY, lightOn ? HIGH : LOW);
             auto_mode = false;
@@ -143,6 +145,7 @@ void loop() {
     float t = sht31.readTemperature();
     float h = sht31.readHumidity();
     float lux = lightMeter.readLightLevel();
+    lastLivingLux = lux;
     bool motion = digitalRead(PIN_RADAR_OT2) == HIGH; // Semantics: presence, not PIR motion
 
     // Local automation runs even when BLE is disconnected.
