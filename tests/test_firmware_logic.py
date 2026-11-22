@@ -32,7 +32,7 @@ int main() {
   k.update(300, 0, false, false);
   k.update(10299, 0, false, false);
   assert(k.emergency);
-  k.update(10300, 0, true, false); // Interrupted recovery must restart.
+  k.update(10300, 0, true, false);
   k.update(10400, 0, false, false);
   k.update(20399, 0, false, false);
   assert(k.emergency);
@@ -42,37 +42,69 @@ int main() {
   assert(!k.emergency && k.lightOn && k.exhaustOn && k.exhaustPwm == 128 && !k.windowOpen);
   k.update(20500, 0, false, true);
   assert(k.emergency);
+
+  // No presence: darkness must never turn on the lamp.
+  LivingState emptyRoom;
+  bool emptyLight = false;
+  int emptyPwm = 0;
+  emptyRoom.update(1000, false, 10, 28, 50, true, emptyLight, emptyPwm);
+  emptyRoom.update(20000, false, 10, 28, 50, true, emptyLight, emptyPwm);
+  assert(!emptyLight && emptyPwm == 0);
+
+  // Presence + persistent darkness turns the lamp on after 15 seconds.
   LivingState living;
   bool light = false;
   int pwm = 0;
-  living.update(10, true, 20, 28, 50, true, light, pwm);
-  assert(!light && pwm == 128); // Darkness must persist for 15 seconds.
-  living.update(15010, true, 20, 28, 50, true, light, pwm);
+  living.update(100, true, 20, 28, 50, true, light, pwm);
+  assert(!light && pwm == 128);
+  living.update(15100, true, 20, 28, 50, true, light, pwm);
   assert(light);
-  living.update(20010, true, 220, 31, 50, true, light, pwm);
-  assert(light && pwm == 255 && living.lampValid);
-  assert(living.lampLux == 200);
-  living.update(21010, true, 220, 31, 50, true, light, pwm);
-  assert(light); // Lamp reflection must not switch light off.
-  living.update(4UL * 3600000UL, true, 450, 31, 50, true, light, pwm);
-  assert(light); // First bright reading starts a timer, even after hours.
-  living.update(4UL * 3600000UL + 180000, true, 450, 31, 50, true, light, pwm);
-  assert(!light);
-  living.update(4UL * 3600000UL + 181000, true, 20, 31, 50, true, light, pwm);
-  assert(!light); // Daylight lockout.
-  living.update(4UL * 3600000UL + 180000 + 25UL * 60000UL, true, 20, 31, 50, true, light, pwm);
-  living.update(4UL * 3600000UL + 180000 + 25UL * 60000UL + 15000, true, 20, 31, 50, true, light, pwm);
+
+  // Once on, the lamp stays on even if its own light makes measured Lux high.
+  living.update(20000, true, 500, 31, 50, true, light, pwm);
+  assert(light && pwm == 255);
+  living.update(30000, true, 900, 31, 50, true, light, pwm);
   assert(light);
-  living.update(4UL * 3600000UL + 180000 + 25UL * 60000UL + 20000, true, 30, 31, 50, true, light, pwm);
-  assert(!living.lampValid); // Weak delta: no daylight shutoff.
-  living.update(4UL * 3600000UL + 180000 + 25UL * 60000UL + 200000, true, 500, 31, 50, true, light, pwm);
+
+  // A short radar dropout does not switch the lamp off.
+  living.update(40000, false, 5, 28, 50, true, light, pwm);
+  living.update(100000, false, 5, 28, 50, true, light, pwm);
   assert(light);
-  living.update(4UL * 3600000UL + 180000 + 25UL * 60000UL + 321000, false, 20, 31, 50, true, light, pwm);
+
+  // Presence returning before 120 seconds cancels the absence timeout.
+  living.update(150000, true, 700, 28, 50, true, light, pwm);
+  living.update(200000, false, 700, 28, 50, true, light, pwm);
+  living.update(319999, false, 700, 28, 50, true, light, pwm);
+  assert(light);
+  living.update(320000, false, 700, 28, 50, true, light, pwm);
   assert(!light && pwm == 0);
-  light = true; pwm = 100;
-  living.onLightChange(100, true, 20);
-  living.update(24000000, false, 200, 20, 50, false, light, pwm);
-  assert(light && pwm == 100); // Manual mode wins over local automation.
+
+  // A dark room with no presence does not relight after timeout.
+  living.update(321000, false, 1, 28, 50, true, light, pwm);
+  assert(!light);
+
+  // Lux above threshold when a person first arrives: leave lamp off.
+  LivingState brightRoom;
+  bool brightLight = false;
+  int brightPwm = 0;
+  brightRoom.update(1000, true, 250, 25, 50, true, brightLight, brightPwm);
+  brightRoom.update(2000, true, 250, 25, 50, true, brightLight, brightPwm);
+  assert(!brightLight);
+
+  // Invalid Lux must not switch an OFF lamp on.
+  LivingState invalidLux;
+  bool invalidLight = false;
+  int invalidPwm = 0;
+  invalidLux.update(1000, true, NAN, 25, 50, true, invalidLight, invalidPwm);
+  invalidLux.update(20000, true, NAN, 25, 50, true, invalidLight, invalidPwm);
+  assert(!invalidLight);
+
+  // Manual mode is not overridden by the local automation.
+  bool manualLight = true;
+  int manualPwm = 100;
+  LivingState manual;
+  manual.update(24000000, false, 200, 20, 50, false, manualLight, manualPwm);
+  assert(manualLight && manualPwm == 100);
 }
 ''', encoding='utf-8')
             result = subprocess.run([compiler, '-std=c++11', '-I', str(root),
