@@ -74,9 +74,9 @@ int main() {
   // Presence returning before 120 seconds cancels the absence timeout.
   living.update(150000, true, 700, 28, 50, true, light, pwm);
   living.update(200000, false, 700, 28, 50, true, light, pwm);
-  living.update(319999, false, 700, 28, 50, true, light, pwm);
+  living.update(269999, false, 700, 28, 50, true, light, pwm);
   assert(light);
-  living.update(320000, false, 700, 28, 50, true, light, pwm);
+  living.update(270000, false, 700, 28, 50, true, light, pwm);
   assert(!light && pwm == 0);
 
   // A dark room with no presence does not relight after timeout.
