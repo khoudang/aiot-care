@@ -20,7 +20,6 @@ except Exception:
 # ------------------------------------------------------------------ #
 SECRET_KEY = os.getenv("SECRET_KEY", "smart_home_secret_key_2026_change_me")
 DATABASE = os.getenv("DATABASE", "smart_home.db")
-ALLOW_REGISTER = os.getenv("ALLOW_REGISTER", "1") == "1"
 
 INITIAL_USERS = [
     {"username": "admin", "password": "admin123", "role": "admin"},
@@ -30,7 +29,6 @@ INITIAL_USERS = [
 ]
 
 DEFAULT_CONFIGS = {
-    "admin_register_code": os.getenv("ADMIN_REGISTER_CODE", "FAMILY2026"),
     "telegram_bot_token": os.getenv("TELEGRAM_BOT_TOKEN", ""),
     "telegram_chat_id": os.getenv("TELEGRAM_CHAT_ID", ""),
 }

@@ -12,3 +12,12 @@ document.querySelectorAll('.eye').forEach(button => {
     button.setAttribute('aria-pressed', String(show));
   });
 });
+
+
+// Existing cached login pages must expose only administrator-issued accounts.
+document.querySelectorAll('a[href="/register"]').forEach(link=>{
+  const container=link.closest('.bottom');
+  if(container)container.remove();
+  else link.remove();
+});
+if(location.pathname==='/register')location.replace('/login');

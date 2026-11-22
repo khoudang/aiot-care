@@ -2,6 +2,13 @@
 .cam-stat-pill { flex-wrap:wrap; }
 .cam-stat-pill[hidden] { display:none !important; }
 
+body #admin-logs .logs-panel > .kitchen-alert-log {
+  grid-column: 1 / -1;
+  padding: 16px 0 0 !important;
+  border-left: 0;
+  border-top: 1px solid var(--border);
+}
+
 /* fix_ui làm nền công tắc sáng màu; núm phải tương phản rõ cả khi đang tắt. */
 .device-card-modern .sw .tr:before {
   background:#fff;
@@ -12,7 +19,12 @@ body.dark-mode .device-card-modern .sw .tr:before {
   box-shadow:0 1px 2px rgba(0,0,0,.45);
 }
 
-/* Fall confirmation control inside patient room camera card */
+body #patient #video-feed {
+  max-width: none;
+  object-position: center;
+}
+
+/* Fall confirmation control below the patient room light. */
 .patient-safety-confirm {
   display: flex;
   align-items: center;
@@ -20,7 +32,9 @@ body.dark-mode .device-card-modern .sw .tr:before {
   flex-wrap: wrap;
   padding: 12px 18px;
   background: var(--surface);
-  border-top: 1px solid var(--border);
+  grid-column: 1 / -1;
+  border: 1px solid var(--border);
+  border-radius: 10px;
 }
 
 .patient-confirm-btn {
@@ -98,3 +112,786 @@ body.dark-mode #patient-confirm-message {
     flex: 1 1 100%;
   }
 }
+
+.patient-safety-confirm[hidden] { display: none !important; }
+#patient-safety-banner { margin-bottom: 16px; border-left: 4px solid #b7791f; }
+body #patient .video-placeholder-box { width: 100%; height: 100%; box-sizing: border-box; display: flex; align-items: center; justify-content: center; padding: 20px; }
+body #patient .video-placeholder-box h5, body #patient .video-placeholder-box p { width: 100%; text-align: center; margin-left: auto; margin-right: auto; }
+
+body #patient .live-feed-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+body #patient #video-feed {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center;
+  margin: auto;
+}
+body #patient .cam-overlay-stats {
+  position: absolute;
+  inset: auto 10px 10px 10px;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+  background: transparent;
+  pointer-events: none;
+}
+body #patient .cam-overlay-stats .cam-stat-pill {
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: rgba(12, 20, 30, .82);
+  color: #eef4fb;
+  font-size: 12px !important;
+}
+body #patient .video-placeholder-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+
+/* Match the camera card to the full sensor and device column. */
+@media (min-width: 1024px) {
+  body #patient .detail-patient-layout {
+    align-items: stretch;
+  }
+  body #patient .detail-camera {
+    display: flex;
+    min-height: 0;
+  }
+  body #patient .detail-camera .card-camera-preview {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    margin-bottom: 0;
+  }
+  body #patient .cam-header-row {
+    flex: 0 0 auto;
+  }
+  body #patient .live-feed-container {
+    flex: 1 1 0;
+    height: auto;
+    min-height: 260px;
+    aspect-ratio: auto;
+  }
+}
+
+#pt-buzzer-tile, #kt-buzzer-tile { display: none !important; }
+body #patient .devices-card-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+body #patient .devices-card-grid > .device-card-modern { min-width: 0; }
+@media (max-width: 480px) {
+  body #patient .devices-card-grid { grid-template-columns: 1fr; }
+}
+
+.fan-levels { display:flex; gap:6px; flex-wrap:wrap; width:100%; }
+.fan-levels button { flex:1; min-width:48px; padding:8px 6px; border:1px solid var(--border); border-radius:7px; background:var(--surface); color:var(--text); cursor:pointer; }
+.fan-levels button[aria-pressed="true"] { background:#143b72; color:white; border-color:#143b72; }
+.fan-levels button:disabled { opacity:.5; cursor:not-allowed; }
+input[type="range"][hidden] { display:none !important; }
+
+
+/* Keep the two log tables alongside one another on desktop. */
+body #admin-logs .logs-panel > .card:has(#audit-body) { display:none!important; }
+body #admin-logs .logs-panel > .kitchen-alert-log {
+  grid-column: auto;
+  border-top: 0;
+}
+@media (min-width: 1024px) {
+  body #admin-logs > .logs-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 18px !important;
+  }
+  body #admin-logs .logs-panel > .card {
+    min-width: 0;
+    min-height: 0;
+  }
+  body #admin-logs .logs-panel > .card + .card {
+    padding: 0 0 0 18px !important;
+    border-top: 0;
+    border-left: 1px solid var(--border);
+  }
+  body #admin-logs .card-h {
+    min-height: 86px;
+    align-items: flex-start;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+}
+body #admin-logs .kitchen-alert-log .atable :is(th,td):first-child { width: 65%; }
+body #admin-logs .kitchen-alert-log .atable :is(th,td):last-child { width: 35%; }
+@media (max-width: 1023px) {
+  body #admin-logs > .logs-panel {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* A single segmented speed control with a readable label and output level. */
+body .fan-levels {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3px;
+  padding: 4px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2, #f0f4f9);
+  grid-column: 1 / -1;
+  margin-top: 10px;
+}
+body .fan-levels button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: 53px;
+  padding: 7px 3px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  line-height: 1.25;
+}
+body .fan-levels .fan-level-label { font-size: 13px; font-weight: 600; white-space: nowrap; }
+body .fan-levels .fan-level-power { font-size: 11px; opacity: .7; }
+body .fan-levels button[aria-pressed="true"] { background: #143b72; color: #fff; }
+body .fan-levels button:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--surface); }
+body .fan-levels button:focus-visible { outline: 2px solid #3679bc; outline-offset: 1px; }
+body #kt-exhaust-tile .ha-range-control,
+body #pt-fan-tile .device-slider-control,
+body #lv-fan-tile .device-slider-control { display: none !important; }
+
+
+body .fan-levels { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+body #kt-exhaust-tile {
+  padding: 14px 16px !important;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 8px 10px;
+  align-content: center;
+}
+body #kt-exhaust-tile .device-card-top { display: contents; }
+body #kt-exhaust-tile .device-icon-wrapper { grid-column: 1; grid-row: 1; }
+body #kt-exhaust-tile .device-meta-info { grid-column: 2; grid-row: 1; min-width: 0; }
+body #kt-exhaust-tile .sw { grid-column: 3; grid-row: 1; }
+body #kt-exhaust-tile .fan-levels { grid-column: 1 / -1; }
+
+
+/* Match the patient device row to the two sensor columns. */
+@media (min-width: 481px) {
+  body #patient .devices-card-grid {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 14px;
+  }
+}
+
+body .fan-step-controls { display:flex; align-items:center; gap:8px; margin-left:auto; }
+body .fan-step-controls button {
+  width:36px; height:34px; padding:0; border:1px solid var(--border);
+  border-radius:7px; background:var(--surface); color:var(--accent,#143b72);
+  font-family:inherit; font-size:23px; font-weight:600; line-height:1; cursor:pointer;
+}
+body .fan-step-controls button:disabled { opacity:.4; cursor:not-allowed; }
+body .fan-step-controls button:focus-visible { outline:2px solid var(--accent,#143b72); outline-offset:2px; }
+body :is(#pt-fan-tile,#lv-fan-tile,#kt-exhaust-tile) .sw[hidden] { display:none!important; }
+body .fan-levels { gap:0; padding:0; overflow:hidden; border-radius:8px; }
+body .fan-levels button { border-radius:0; min-height:50px; }
+body .fan-levels button+button { border-left:1px solid var(--border); }
+body #kt-exhaust-tile .fan-step-controls { grid-column:3; grid-row:1; }
+
+body .fan-control-card .fan-speed-reading {
+  grid-column:1/-1; display:flex; align-items:center; justify-content:space-between;
+  gap:12px; margin-top:10px; color:var(--accent,#143b72);
+}
+body .fan-speed-reading small { display:block; font-size:10px; color:var(--muted); margin-bottom:5px; }
+body .fan-speed-reading strong { display:block; font-size:16px; font-weight:600; }
+body .fan-speed-reading > span { font-size:23px; font-variant-numeric:tabular-nums; }
+body .fan-control-card .fan-levels {
+  grid-column:1/-1; display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:5px; background:transparent; border:0; padding:0; margin:8px 0 0; overflow:visible;
+}
+body .fan-control-card .fan-levels button {
+  position:relative; min-height:24px; height:24px; padding:0; border:0;
+  border-radius:0; background:transparent!important;
+}
+body .fan-control-card .fan-levels button::after {
+  content:''; position:absolute; left:0; right:0; top:9px; height:6px;
+  border-radius:3px; background:var(--border);
+}
+body .fan-control-card .fan-levels button.filled::after { background:var(--accent,#164c7c); }
+body .fan-control-card .fan-levels button > span { display:none; }
+body .fan-control-card .fan-step-controls {
+  grid-column:1/-1!important; grid-row:auto!important;
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;
+  width:100%; margin:3px 0 0; min-width:0;
+}
+body .fan-control-card .fan-step-controls button {
+  width:100%; height:36px; border-radius:20px; font-size:21px;
+  background:var(--surface); border:1px solid var(--border); box-sizing:border-box;
+}
+
+/* Compact speed controls with a shared pill for decrease/increase. */
+body .fan-control-card .fan-speed-reading {
+  margin-top:6px;
+  gap:8px;
+}
+body .fan-speed-reading small { font-size:10px!important; margin-bottom:3px; }
+body .fan-speed-reading strong { font-size:14px!important; }
+body .fan-speed-reading > span { font-size:18px!important; }
+body .fan-control-card .fan-levels { margin-top:3px; gap:5px; }
+body .fan-control-card .fan-levels button { min-height:18px; height:18px; }
+body .fan-control-card .fan-levels button::after { top:7px; height:5px; }
+body .fan-control-card .fan-step-controls {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:0;
+  width:100%;
+  height:32px;
+  margin-top:2px;
+  border:1px solid var(--border);
+  border-radius:18px;
+  overflow:hidden;
+  background:var(--surface);
+  box-sizing:border-box;
+}
+body .fan-control-card .fan-step-controls button {
+  width:100%;
+  height:30px;
+  min-height:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  font-size:19px;
+}
+body .fan-control-card .fan-step-controls button+button {
+  position:relative;
+}
+body .fan-control-card .fan-step-controls button+button::before {
+  content:'';
+  position:absolute;
+  left:0;
+  top:7px;
+  bottom:7px;
+  width:1px;
+  background:var(--border);
+}
+body .fan-control-card .fan-step-controls button:hover:not(:disabled) {
+  background:var(--surface-2,#f0f4f9);
+}
+
+body .fan-control-card .fan-step-controls {
+  background:#e8f1fc;
+  border-color:#a5bfdc;
+}
+body .fan-control-card .fan-step-controls button {
+  color:#143b72;
+  font-weight:700;
+}
+body .fan-control-card .fan-step-controls button+button::before { background:#a5bfdc; }
+body .fan-control-card .fan-step-controls button:hover:not(:disabled) { background:#d5e5f8; }
+body .fan-control-card .fan-step-controls button:active:not(:disabled) { background:#c0d8f3; }
+body.dark-mode .fan-control-card .fan-step-controls { background:#223c59; border-color:#54779c; }
+body.dark-mode .fan-control-card .fan-step-controls button { color:#d2e6ff; }
+body.dark-mode .fan-control-card .fan-step-controls button+button::before { background:#54779c; }
+body.dark-mode .fan-control-card .fan-step-controls button:hover:not(:disabled) { background:#304f71; }
+
+body .fan-control-card .fan-step-controls,
+body.dark-mode .fan-control-card .fan-step-controls { border:0; }
+body .fan-control-card .fan-step-controls button+button::before { display:none; }
+
+body :is(#pt-light-tile,#lv-light-tile,#kt-light-tile).light-control-card {
+  display:grid;
+  grid-template-columns:24px minmax(0,1fr);
+  gap:8px;
+  padding:14px 16px!important;
+  align-content:start;
+}
+body .light-control-card .device-card-top { display:contents; }
+body .light-control-card .device-icon-wrapper { grid-column:1; grid-row:1; }
+body .light-control-card .device-meta-info { grid-column:2; grid-row:1; min-width:0; }
+body .light-control-card .sw[hidden] { display:none!important; }
+body .light-control-card .light-indicator {
+  grid-column:1/-1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  justify-self:center;
+  width:60px;
+  height:60px;
+  margin:12px 0 4px;
+  border-radius:50%;
+  background:transparent;
+  color:var(--accent,#164c7c);
+  font-size:36px!important;
+  transition:color .2s ease;
+}
+body .light-control-card.light-is-on .light-indicator {
+  color:#d99b00;
+}
+body .light-control-card.light-is-on .light-indicator i { filter:drop-shadow(0 0 4px rgba(255,195,0,.5)); }
+body .light-control-card .light-power-button {
+  grid-column:1/-1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:9px;
+  width:100%;
+  min-height:38px;
+  border:0;
+  border-radius:22px;
+  background:#164c7c;
+  color:white;
+  font-family:inherit;
+  font-size:14px;
+  font-weight:600;
+  cursor:pointer;
+}
+body .light-control-card .light-indicator > i { font-size:inherit!important; }
+body .light-control-card .light-power-button:disabled { opacity:.5; cursor:not-allowed; }
+body .light-control-card .light-power-button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+@media(prefers-reduced-motion:reduce) { body .light-control-card .light-indicator { transition:none; } }
+
+body :is(#pt-light-tile,#lv-light-tile,#kt-light-tile).light-control-card {
+  grid-template-columns: minmax(0,1fr);
+  align-content: center;
+}
+body :is(#pt-light-tile,#lv-light-tile,#kt-light-tile).light-control-card .device-icon-wrapper,
+body :is(#pt-light-tile,#lv-light-tile,#kt-light-tile).light-control-card .device-meta-info { display:none; }
+body :is(#pt-light-tile,#lv-light-tile,#kt-light-tile).light-control-card .light-indicator { margin-top:0; }
+
+
+/* Living room: align the sensor and device cards across two rows. */
+@media (min-width: 1001px) {
+  body #living .detail-columns {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    gap: 14px 18px;
+    align-items: stretch;
+  }
+  body #living .detail-columns > .detail-group {
+    grid-row: 1 / span 2;
+    display: grid;
+    grid-template-rows: subgrid;
+    min-width: 0;
+  }
+  body #living .detail-columns > .detail-group:first-child { grid-column: 1; }
+  body #living .detail-columns > .detail-group:last-child {
+    grid-column: 2;
+    border-inline-start: 1px solid var(--border);
+    padding-inline-start: 18px;
+  }
+  body #living .detail-group > .living-2cards-grid {
+    grid-row: 1 / span 2;
+    grid-template-rows: subgrid;
+    row-gap: inherit;
+  }
+  body #living .living-2cards-grid:has(> .balanced-sensor-card) {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    row-gap: 14px;
+  }
+  body #living .living-2cards-grid:has(> .device-card-modern) {
+    grid-template-columns: minmax(0,1fr);
+    row-gap: 14px;
+  }
+}
+
+
+body .sensor-preview { font-size:0!important; }
+body .sensor-preview::before {
+  content:attr(data-sample);
+  font-size:16px;
+}
+
+
+
+@media (max-width: 760px) {
+  body #living .detail-columns { gap: 16px; }
+  body #living .living-2cards-grid:has(> .balanced-sensor-card) {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 12px 16px;
+  }
+  body #living .balanced-sensor-card :is(.bsc-sub, .sensor-history-placeholder) {
+    display: none;
+  }
+  body #living .living-2cards-grid:has(> .device-card-modern) {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 12px;
+  }
+  body #living .living-2cards-grid > .device-card-modern {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width:760px) {
+  body #living .balanced-sensor-card canvas.spark {
+    height:24px; min-height:24px; max-height:24px; flex-basis:24px; margin:0;
+  }
+}
+
+body .has-sensor-preview .sensor-chart-caption { display: none; }
+
+
+body #living .living-2cards-grid > .balanced-sensor-card {
+  min-height: 0;
+  min-width: 0;
+  padding: 4px 0;
+  gap: 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+body #living .living-2cards-grid > .balanced-sensor-card:nth-child(even) {
+  border-inline-start: 1px solid var(--border);
+  padding-inline-start: 12px;
+}
+
+body #overview .entity-reading .sensor-preview,
+body #overview .entity-reading.sensor-preview { font-size:0!important; }
+body #overview .entity-reading { min-width:0; }
+body #overview .entity-reading .sensor-preview::before,
+body #overview .entity-reading.sensor-preview::before { font-size:14px; }
+@media (max-width:760px) {
+  body #patient .devices-card-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  body #patient .cam-header-row { flex-direction:row; flex-wrap:nowrap; }
+  body #patient .cam-title-group { min-width:0; }
+  body #patient #cam-seg { flex-shrink:0; }
+}
+
+
+body #kitchen .devices-card-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+body #kitchen .devices-card-grid > #kt-window-tile { grid-column: 1 / -1; }
+body #kitchen .devices-card-grid > .device-card-modern { min-width: 0; }
+body #kitchen #kt-exhaust-tile h5 { overflow-wrap: anywhere; }
+body #kitchen #kt-exhaust-status { display: none; }
+
+
+body #overview :is(#ov-kitchen-smoke,#ov-kitchen-flame).sensor-preview {
+  font-size: 0 !important;
+  letter-spacing: 0;
+}
+body #overview :is(#ov-kitchen-smoke,#ov-kitchen-flame).sensor-preview::before {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+
+@media (max-width: 760px) {
+  body :is(#pt-fan-tile,#lv-fan-tile).fan-control-card {
+    display: grid;
+    grid-template-columns: 28px minmax(0,1fr);
+    gap: 8px 10px;
+    align-content: center;
+    padding: 14px 16px !important;
+  }
+  body :is(#pt-fan-tile,#lv-fan-tile) .device-card-top { display: contents; }
+  body :is(#pt-fan-tile,#lv-fan-tile) .device-icon-wrapper { grid-area: 1 / 1; }
+  body :is(#pt-fan-tile,#lv-fan-tile) .device-meta-info {
+    grid-area: 1 / 2;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  body :is(#pt-fan-status,#lv-fan-status) { display: none; }
+  body :is(#pt-light-tile,#lv-light-tile,#kt-light-tile).light-control-card {
+    grid-template-rows: minmax(0,1fr) auto;
+    align-content: stretch;
+  }
+  body .light-control-card .light-indicator { align-self: center; }
+  body .light-control-card .light-power-button { align-self: end; margin-top: 4px; }
+}
+
+
+@media (max-width: 760px) {
+  body #kitchen :is(#kt-smoke-tile,#kt-flame-tile) {
+    padding: 4px 0;
+    min-height: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+@media (max-width: 760px) {
+  body #patient .cam-title-group > p { display: none; }
+}
+
+
+@media (max-width:760px) {
+  body #admin-logs .logs-filter {
+    display:grid!important;
+    grid-template-columns:max-content minmax(0,1fr) auto;
+    gap:8px;
+  }
+  body #admin-logs .logs-filter label::after { content:':'; }
+  body #admin-logs .logs-filter label[for="logs-from"] { grid-area:1 / 1; }
+  body #admin-logs .logs-filter label[for="logs-to"] { grid-area:2 / 1; }
+  body #admin-logs .logs-date-field:has(#logs-from) { grid-area:1 / 2; }
+  body #admin-logs .logs-date-field:has(#logs-to) { grid-area:2 / 2; }
+  body #admin-logs .logs-date-field {
+    position:relative;
+    min-width:0;
+    min-height:44px;
+  }
+  body #admin-logs .logs-date-field input {
+    position:absolute;
+    inset:0;
+    margin:0;
+    height:100%;
+    opacity:0;
+    z-index:1;
+    -webkit-appearance:none;
+    appearance:none;
+  }
+  body #admin-logs .logs-date-display {
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-sizing:border-box;
+    min-height:44px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    background:var(--surface);
+    color:var(--text);
+    font-size:14px;
+    font-variant-numeric:tabular-nums;
+    white-space:nowrap;
+  }
+  body #admin-logs .logs-date-display.is-empty { color:var(--muted); }
+  body #admin-logs .logs-date-field:focus-within .logs-date-display { outline:2px solid var(--accent); }
+  body #admin-logs .logs-filter:not(:has(.logs-date-field)) #logs-from { grid-area:1 / 2; }
+  body #admin-logs .logs-filter:not(:has(.logs-date-field)) #logs-to { grid-area:2 / 2; }
+  body #admin-logs .logs-filter input { width:100%; min-width:0; box-sizing:border-box; }
+  body #admin-logs #logs-apply { grid-column:3; grid-row:1 / span 2; justify-content:center; }
+  body #admin-logs #logs-filter-message { grid-column:1 / -1; text-align:start; }
+}
+
+
+@media (max-width: 760px) {
+  body :is(#patient,#living,#kitchen) > .detail-heading {
+    display: none;
+  }
+}
+
+@media (min-width:761px) { body #admin-logs .logs-date-display { display:none; } }
+
+
+@media (min-width: 761px) {
+  body .detail-room :is(.fan-control-card,.light-control-card) {
+    --device-control-height: 32px;
+    padding-inline: 16px !important;
+    padding-bottom: 14px !important;
+  }
+  body .detail-room :is(#pt-fan-tile,#lv-fan-tile).fan-control-card {
+    display: flex;
+    flex-direction: column;
+  }
+  body .detail-room .fan-control-card .fan-step-controls {
+    margin-top: auto;
+    flex: 0 0 var(--device-control-height);
+    height: var(--device-control-height);
+  }
+  body #kt-exhaust-tile.fan-control-card { align-content: stretch; }
+  body #kt-exhaust-tile .fan-step-controls { align-self: end; }
+  body .detail-room .fan-control-card .fan-step-controls button { height: 100%; }
+  body .detail-room :is(#pt-light-tile,#lv-light-tile,#kt-light-tile).light-control-card {
+    grid-template-rows: minmax(0,1fr) auto;
+    align-content: stretch;
+  }
+  body .detail-room .light-control-card .light-indicator { align-self: center; }
+  body .detail-room .light-control-card .light-power-button {
+    height: var(--device-control-height);
+    min-height: var(--device-control-height);
+    box-sizing: border-box;
+  }
+}
+
+
+body #admin-users > .card {
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0;
+  box-shadow: none;
+}
+body #admin-users > .card > .card-h { display: none; }
+body #admin-users #user-create-form {
+  display: grid !important;
+  grid-template-columns: repeat(2,minmax(0,1fr)) auto;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+body #admin-users #user-create-form label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+body #admin-users #user-create-form input {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+body #admin-users #user-create-form button { min-height: 42px; }
+@media (max-width: 760px) {
+  body #admin-users #user-create-form { grid-template-columns: minmax(0,1fr); }
+}
+
+
+body #admin-users .account-dialog {
+  box-sizing:border-box; width:min(440px,calc(100% - 32px)); max-height:calc(100% - 32px);
+  padding:20px; border:1px solid var(--border); border-radius:14px;
+  background:var(--surface); color:var(--text);
+}
+body #admin-users .account-dialog::backdrop { background:rgba(10,20,34,.58); }
+body #admin-users .account-dialog h3 { margin:0 0 12px; }
+body #admin-users .account-dialog p { margin:0 0 14px; }
+body #admin-users .account-dialog #user-edit-form { display:grid!important; gap:12px!important; margin:0!important; }
+body #admin-users .account-dialog label { display:grid; gap:5px; }
+body #admin-users .account-dialog input {
+  width:100%; box-sizing:border-box; min-height:40px; padding:8px 10px;
+  border:1px solid var(--border); border-radius:8px; color:var(--text); background:var(--surface);
+}
+body #admin-users .account-dialog #user-delete-confirm { background:#a62936; color:#fff; }
+body #admin-users .account-dialog .account-dialog-feedback { margin:12px 0 0; }
+body #admin-users .account-dialog .account-dialog-feedback:empty,
+body #admin-users #users-message:empty { display:none; }
+
+
+@media (max-width:760px) {
+  body #admin-logs .logs-filter {
+    grid-template-columns: max-content minmax(0,1fr) auto;
+    gap: 8px;
+  }
+  body #admin-logs .logs-filter label { font-size: 11px !important; white-space: nowrap; }
+  body #admin-logs .logs-filter label::after { content: ":"; }
+  body #admin-logs .logs-filter label[for="logs-to"] { grid-area: 2 / 1; }
+  body #admin-logs .logs-date-field:has(#logs-to),
+  body #admin-logs .logs-filter:not(:has(.logs-date-field)) #logs-to { grid-area: 2 / 2; }
+  body #admin-logs .logs-date-field,
+  body #admin-logs .logs-date-display { min-height: 38px; }
+  body #admin-logs .logs-date-display {
+    justify-content: space-between;
+    gap: 3px;
+    padding-inline: 10px;
+    font-size: 14px;
+  }
+  body #admin-logs .logs-date-display::after {
+    content: "\f133";
+    font-family: "Font Awesome 6 Free";
+    font-weight: 400;
+    font-size: 10px;
+  }
+  body #admin-logs #logs-apply {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    padding-inline: 10px;
+    gap: 4px;
+    font-size: 11px !important;
+  }
+}
+
+
+body #living #lv-fan-tile.fan-control-card {
+  display: grid;
+  grid-template-columns: 24px minmax(0,1fr);
+  grid-template-rows: auto 1fr auto auto;
+  gap: 8px 10px;
+  align-items: start;
+  justify-items: stretch;
+  text-align: start;
+  padding: 14px 16px !important;
+}
+body #living #lv-fan-tile .device-card-top { display: contents; }
+body #living #lv-fan-tile .device-icon-wrapper { grid-area: 1 / 1; margin: 0; }
+body #living #lv-fan-tile .device-meta-info { grid-area: 1 / 2; min-width: 0; }
+body #living #lv-fan-tile .fan-speed-reading { grid-row: 2; align-self: end; margin: 0; }
+body #living #lv-fan-tile .fan-levels { grid-row: 3; margin: 0; }
+body #living #lv-fan-tile .fan-step-controls { grid-row: 4 !important; margin: 0; }
+
+
+@media (max-width:760px) {
+  body #admin-users > .card, body #admin-users .table-wrap { min-width:0; }
+  body #admin-users > .detail-heading { padding-block:10px 14px; }
+  body #admin-users > .detail-heading h1 { font-size:22px!important; }
+  body #admin-users #user-create-form { gap:10px; }
+  body #admin-users #user-create-form button { width:100%; }
+  body #admin-users #users-message:not(:empty),
+  body #admin-users .account-dialog-feedback:not(:empty) {
+    padding:10px 12px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    background:var(--surface-2,var(--surface));
+    color:var(--text);
+    line-height:1.45;
+    overflow-wrap:anywhere;
+  }
+  body #admin-users #users-message:not(:empty) { margin:0 0 12px; }
+  body #admin-users .card > .table-wrap { border:0; background:transparent; }
+  body #admin-users .atable { display:block; width:100%; min-width:0; }
+  body #admin-users .atable thead { position:absolute; clip-path:inset(50%); }
+  body #admin-users #users-body { display:grid; gap:10px; }
+  body #admin-users #users-body tr {
+    display:grid; grid-template-columns:minmax(0,1fr) auto;
+    align-items:center; gap:8px 10px; padding:12px;
+    border:1px solid var(--border); border-radius:10px;
+    background:var(--surface);
+  }
+  body #admin-users #users-body td {
+    padding:0; border:0; min-width:0;
+    white-space:normal; overflow-wrap:anywhere; background:transparent;
+  }
+  body #admin-users #users-body td:nth-child(1):not([colspan]) { display:none; }
+  body #admin-users #users-body td:nth-child(2) { font-weight:700; }
+  body #admin-users #users-body td:is([colspan],:nth-child(5),:nth-child(6)) { grid-column:1/-1; }
+  body #admin-users #users-body td:nth-child(5) { color:var(--muted); }
+  body #admin-users #users-body .act-group {
+    display:grid; grid-template-columns:44px minmax(0,1fr) 44px; gap:8px;
+    padding-top:8px; border-top:1px solid var(--border);
+  }
+  body #admin-users #users-body .act-group button { min-height:40px; }
+}
+
+
+@media (min-width: 761px) {
+  body #kitchen .devices-card-grid {
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    align-items: stretch;
+  }
+  body #kitchen .devices-card-grid > #kt-window-tile { grid-column: auto; }
+}
+body #kitchen #kt-gas.sensor-preview { font-size: 0 !important; }

@@ -35,7 +35,6 @@ body.keyboard-navigation .iw input:focus-visible{outline:2px solid var(--accent)
  .login-page .iw input{background:#ffffffdb}
 }
 @media(min-width:761px) and (max-height:650px){
- .login-page .shell{background-size:100% auto}
  .login-page .right{padding-top:18vw;padding-bottom:32px}
 }
 /* Mobile login artwork; the form sits beneath the logo already in the image. */
@@ -48,12 +47,10 @@ body.keyboard-navigation .iw input:focus-visible{outline:2px solid var(--accent)
  .login-page .iw input{background:#ffffffdf}
 }
 @media(max-width:760px) and (max-height:600px){
- .login-page .shell{background-size:100% auto}
  .login-page .right{padding-top:50vw;padding-bottom:32px}
 }
-/* Preserve the complete laptop artwork inside the browser viewport. */
+/* Keep the desktop form below the logo in the background artwork. */
 @media(min-width:761px){
- .login-page .shell{min-height:100svh;background-image:url('../images/login-desktop-background.png?v=20261101_17');background-size:contain;background-position:center top;background-color:#e8f2ff}
  .login-page .right{padding-top:clamp(190px,24svh,280px);padding-bottom:48px}
 }
 @media(min-width:761px) and (max-height:600px){.login-page .right{padding-top:170px;padding-bottom:24px}}

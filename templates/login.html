@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="{{ url_for('static', filename='js/auth-theme.js') }}?v=ui-integrated-20261104"></script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}?v=ui-integrated-20261104">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}?v=20261120-login-cover">
 </head>
 <body class="auth-page login-page">
   <main class="shell">
@@ -46,11 +46,9 @@
         </form>
 
         <div class="bottom">
-          {% if allow_register %}
-            Chưa có tài khoản? <a href="{{ url_for('register') }}">Tạo tài khoản mới</a>
-          {% else %}
+
             Liên hệ quản trị để được cấp tài khoản truy cập.
-          {% endif %}
+
         </div>
       </div>
     </div>

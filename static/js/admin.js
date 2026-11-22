@@ -1,3 +1,8 @@
+// Remove fields retained in templates cached by a running server.
+const registrationCodeField=document.getElementById('cfg-code');
+if(registrationCodeField)registrationCodeField.closest('.fld').remove();
+const configDescription=document.querySelector('#config-form')?.previousElementSibling?.querySelector('p');
+if(configDescription)configDescription.textContent='Telegram Bot';
 /* ================= ADMIN ================= */
   (function(){
     const $=id=>document.getElementById(id);
@@ -20,6 +25,24 @@
       apply.innerHTML='<i class="fas fa-filter" aria-hidden="true"></i> Lọc';
       logsFilter.insertBefore(apply,$('logs-filter-message'));
       apply.addEventListener('click',()=>loadLogs().catch(()=>{}));
+    }
+    for(const id of ['logs-from','logs-to']){
+      const input=$(id);
+      if(!input)continue;
+      const field=document.createElement('div');
+      field.className='logs-date-field';
+      input.before(field);
+      const display=document.createElement('span');
+      display.className='logs-date-display';
+      display.setAttribute('aria-hidden','true');
+      field.append(input,display);
+      function syncDate(){
+        display.textContent=input.value?input.value.split('-').reverse().join('/'):'dd/mm/yyyy';
+        display.classList.toggle('is-empty',!input.value);
+      }
+      input.addEventListener('input',syncDate);
+      input.addEventListener('change',syncDate);
+      syncDate();
     }
     const usersBody=$('users-body'),loginBody=$('login-body'),auditBody=$('audit-body');
     let loginAll=[],auditAll=[];let logRequest=0;
@@ -46,7 +69,7 @@
     function renderLogin(ls){loginAll=ls||[];paintLogin();}
     function isWarn(a){const t=String(a||'').toLowerCase();return t.includes('cảnh báo')||t.includes('gas')||t.includes('cháy')||t.includes('té ngã')||t.includes('khẩn')||t.includes('sức khỏe');}
     const auditRow=l=>{const w=isWarn(l.action);const a=w?`<span class="warn-txt"><i class="fas fa-triangle-exclamation"></i> ${l.action}</span>`:l.action;return `<tr class="${w?'warn-row':''}"><td>${l.username||(l.user_id?('user #'+l.user_id):'hệ thống')}</td><td>${a}</td><td>${fmtSql(l.timestamp)}</td></tr>`;};
-    function paintAudit(){auditBody.innerHTML=auditAll.length?auditAll.map(auditRow).join(''):'<tr><td colspan="3"><div class="empty">Chưa có dữ liệu.</div></td></tr>';}
+    function paintAudit(){if(!auditBody)return;auditBody.innerHTML=auditAll.length?auditAll.map(auditRow).join(''):'<tr><td colspan="3"><div class="empty">Chưa có dữ liệu.</div></td></tr>';}
     function renderAudit(ls){auditAll=ls||[];paintAudit();}
     async function loadUsers(){usersBody.innerHTML='<tr><td colspan="6"><div class="empty">Đang tải…</div></td></tr>';renderUsers((await fj('/api/admin/users')).users||[]);}
     async function loadLogs(){
@@ -64,7 +87,11 @@
       }catch(error){if(token===logRequest&&message)message.textContent=error.message;throw error;}
     }
     ['logs-from','logs-to'].forEach(id=>$(id)?.addEventListener('change',()=>loadLogs().catch(()=>{})));
-    async function loadConfig(){const c=(await fj('/api/admin/configs')).configs||{};$('cfg-code').value=c.admin_register_code||'';$('cfg-token').value=c.telegram_bot_token||'';$('cfg-chat').value=c.telegram_chat_id||'';}
+    const sampleField=document.createElement('div');
+    sampleField.className='fld';
+    sampleField.innerHTML='<label for="cfg-sample-interval">Kho&#7843;ng l&#7845;y m&#7851;u bi&#7875;u &#273;&#7891; (gi&#226;y)</label><input id="cfg-sample-interval" type="number" min="5" max="3600" value="60" required>';
+    $('config-form').querySelector('.settings-actions').before(sampleField);
+    async function loadConfig(){const c=(await fj('/api/admin/configs')).configs||{};$('cfg-token').value=c.telegram_bot_token||'';$('cfg-chat').value=c.telegram_chat_id||'';$('cfg-sample-interval').value=c.sensor_sample_interval||60;}
     const bleNames={patient:'Phòng người bệnh',living:'Phòng khách',kitchen:'Phòng bếp'};
     const bleStatus=state=>{
       if(state==='ready'||state===true)return 'Sẵn sàng';
@@ -102,7 +129,33 @@
     if(typeof socket!=='undefined'&&socket)socket.on('node_state',states=>{document.querySelectorAll('.ble-row').forEach(row=>{row.querySelector('.ble-state').textContent=bleStatus(states[row.dataset.room]);});});
     let accountBusy=false,editId=null,deleteId=null;
     const usersMessage=$('users-message');
-    const accountMessage=text=>{usersMessage.textContent=text;};
+    const accountDialogs=new Map();
+    for(const id of ['user-edit-panel','user-delete-panel']){
+      const panel=$(id);
+      const dialog=document.createElement('dialog');
+      dialog.className='account-dialog';
+      dialog.setAttribute('aria-labelledby',panel.getAttribute('aria-labelledby'));
+      const feedback=document.createElement('p');
+      feedback.className='account-dialog-feedback';
+      feedback.setAttribute('role','status');
+      panel.before(dialog);
+      dialog.append(panel,feedback);
+      panel.hidden=false;
+      dialog.addEventListener('cancel',event=>{
+        event.preventDefault();
+        if(!accountBusy)$(id.replace('-panel','-cancel')).click();
+      });
+      accountDialogs.set(id,{dialog,feedback});
+    }
+    function showAccountDialog(id,open){
+      const {dialog,feedback}=accountDialogs.get(id);
+      if(open){usersMessage.textContent='';feedback.textContent='';dialog.showModal();}
+      else if(dialog.open)dialog.close();
+    }
+    function accountMessage(text){
+      const active=Array.from(accountDialogs.values()).find(({dialog})=>dialog.open);
+      (active?.feedback||usersMessage).textContent=text;
+    }
     async function mutateAccount(url,options,onSuccess){
       if(accountBusy)return;
       accountBusy=true;accountMessage('Đang xử lý…');
@@ -128,31 +181,28 @@
       if(button.dataset.userAction==='suspend'){
         mutateAccount(`/api/admin/users/${id}/suspend`,{method:'POST'});
       }else if(button.dataset.userAction==='edit'){
-        editId=id;$('user-delete-panel').hidden=true;deleteId=null;
+        editId=id;showAccountDialog('user-delete-panel',false);deleteId=null;
         $('edit-username').value=user.username;$('edit-password').value='';
-        $('user-edit-panel').hidden=false;$('edit-username').focus();
+        showAccountDialog('user-edit-panel',true);$('edit-username').focus();
       }else if(button.dataset.userAction==='delete'){
-        deleteId=id;$('user-edit-panel').hidden=true;editId=null;$('edit-password').value='';
+        deleteId=id;showAccountDialog('user-edit-panel',false);editId=null;$('edit-password').value='';
         $('user-delete-description').textContent=`Xóa vĩnh viễn tài khoản "${user.username}" và nhật ký của tài khoản? Không thể hoàn tác.`;
-        $('user-delete-panel').hidden=false;$('user-delete-cancel').focus();
+        showAccountDialog('user-delete-panel',true);$('user-delete-cancel').focus();
       }
     });
-    $('user-edit-cancel').addEventListener('click',()=>{$('user-edit-panel').hidden=true;editId=null;$('edit-password').value='';});
-    $('user-delete-cancel').addEventListener('click',()=>{$('user-delete-panel').hidden=true;deleteId=null;});
+    $('user-edit-cancel').addEventListener('click',()=>{showAccountDialog('user-edit-panel',false);editId=null;$('edit-password').value='';});
+    $('user-delete-cancel').addEventListener('click',()=>{showAccountDialog('user-delete-panel',false);deleteId=null;});
     $('user-edit-form').addEventListener('submit',event=>{
       event.preventDefault();if(editId===null)return;
-      mutateAccount(`/api/admin/users/${editId}/edit`,{method:'POST',body:JSON.stringify({username:$('edit-username').value.trim(),password:$('edit-password').value.trim()})},()=>{$('user-edit-panel').hidden=true;editId=null;$('edit-password').value='';});
+      mutateAccount(`/api/admin/users/${editId}/edit`,{method:'POST',body:JSON.stringify({username:$('edit-username').value.trim(),password:$('edit-password').value.trim()})},()=>{showAccountDialog('user-edit-panel',false);editId=null;$('edit-password').value='';});
     });
     $('user-delete-confirm').addEventListener('click',()=>{
       if(deleteId===null)return;
-      mutateAccount(`/api/admin/users/${deleteId}`,{method:'DELETE'},()=>{$('user-delete-panel').hidden=true;deleteId=null;});
+      mutateAccount(`/api/admin/users/${deleteId}`,{method:'DELETE'},()=>{showAccountDialog('user-delete-panel',false);deleteId=null;});
     });
-    $('reload-users').addEventListener('click',()=>loadUsers().catch(e=>accountMessage(e.message)));
     $('reload-logs').addEventListener('click',()=>loadLogs().catch(e=>alert(e.message)));
-    $('reload-audit').addEventListener('click',()=>loadLogs().catch(e=>alert(e.message)));
     $('clear-login').addEventListener('click',async()=>{if(!confirm('Xóa toàn bộ lịch sử đăng nhập?'))return;try{const d=await fj('/api/admin/logs',{method:'DELETE',body:JSON.stringify({target:'login'})});await loadLogs();}catch(e){alert(e.message);}});
-    $('clear-audit').addEventListener('click',async()=>{if(!confirm('Xóa toàn bộ lịch sử hoạt động & cảnh báo?'))return;try{const d=await fj('/api/admin/logs',{method:'DELETE',body:JSON.stringify({target:'audit'})});await loadLogs();}catch(e){alert(e.message);}});
-    $('config-form').addEventListener('submit',async e=>{e.preventDefault();try{const d=await fj('/api/admin/configs',{method:'POST',body:JSON.stringify({admin_register_code:$('cfg-code').value.trim(),telegram_bot_token:$('cfg-token').value.trim(),telegram_chat_id:$('cfg-chat').value.trim()})});alert(d.message||'Đã lưu.');loadLogs();}catch(err){alert(err.message);}});
+    $('config-form').addEventListener('submit',async e=>{e.preventDefault();try{const d=await fj('/api/admin/configs',{method:'POST',body:JSON.stringify({telegram_bot_token:$('cfg-token').value.trim(),telegram_chat_id:$('cfg-chat').value.trim(),sensor_sample_interval:Number($('cfg-sample-interval').value)})});alert(d.message||'Đã lưu.');loadLogs();}catch(err){alert(err.message);}});
     const weatherForm=$('weather-config-form'),weatherSelect=$('cfg-weather-city'),weatherMessage=$('weather-config-message');
     if(weatherForm){
       const weatherSave=$('weather-save');

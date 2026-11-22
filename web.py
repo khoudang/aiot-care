@@ -16,7 +16,6 @@ from flask import (
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import iot
-from config import ALLOW_REGISTER
 from database import (
     admin_required,
     create_user,
@@ -111,13 +110,13 @@ def register_web(app, socketio):
 
             if not username or not password:
                 flash("Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.", "error")
-                return render_template("login.html", allow_register=ALLOW_REGISTER)
+                return render_template("login.html")
 
             user = get_user_by_username(username)
 
             if user and int(user["is_suspended"]) == 1:
                 flash("Tài khoản của bạn đang bị khóa. Vui lòng liên hệ admin.", "error")
-                return render_template("login.html", allow_register=ALLOW_REGISTER)
+                return render_template("login.html")
 
             if user and check_password_hash(user["password_hash"], password):
                 session["user_id"] = user["id"]
@@ -132,54 +131,11 @@ def register_web(app, socketio):
 
             flash("Sai tên đăng nhập hoặc mật khẩu.", "error")
 
-        return render_template("login.html", allow_register=ALLOW_REGISTER)
+        return render_template("login.html")
 
     @app.route("/register", methods=["GET", "POST"])
     def register():
-        if not ALLOW_REGISTER:
-            flash("Chức năng tạo tài khoản hiện đang tắt.", "error")
-            return redirect(url_for("login"))
-
-        if request.method == "POST":
-            username = request.form.get("username", "").strip()
-            password = request.form.get("password", "").strip()
-            confirm_password = request.form.get("confirm_password", "").strip()
-            register_code = request.form.get("register_code", "").strip()
-            admin_register_code = get_config_value("admin_register_code", "FAMILY2026")
-
-            if not username or not password or not confirm_password or not register_code:
-                flash("Vui lòng nhập đầy đủ thông tin.", "error")
-                return render_template("register.html")
-
-            if len(username) < 3:
-                flash("Tên đăng nhập phải từ 3 ký tự trở lên.", "error")
-                return render_template("register.html")
-
-            if len(password) < 6:
-                flash("Mật khẩu phải từ 6 ký tự trở lên.", "error")
-                return render_template("register.html")
-
-            if password != confirm_password:
-                flash("Mật khẩu xác nhận không khớp.", "error")
-                return render_template("register.html")
-
-            if register_code != admin_register_code:
-                flash("Mã nội bộ không đúng.", "error")
-                return render_template("register.html")
-
-            if get_user_by_username(username):
-                flash("Tên đăng nhập đã tồn tại.", "error")
-                return render_template("register.html")
-
-            try:
-                create_user(username, password, role="member")
-                log_audit(f"Tạo tài khoản mới: {username}", user_id=None)
-                flash("Tạo tài khoản thành công. Hãy đăng nhập để sử dụng hệ thống.", "success")
-                return redirect(url_for("login"))
-            except Exception as exc:
-                flash(f"Lỗi tạo tài khoản: {exc}", "error")
-
-        return render_template("register.html")
+        return redirect(url_for("login"))
 
     @app.route("/logout")
     def logout():
@@ -430,21 +386,26 @@ def register_web(app, socketio):
             return jsonify({
                 "ok": True,
                 "configs": {
-                    "admin_register_code": get_config_value("admin_register_code", ""),
                     "telegram_bot_token": get_config_value("telegram_bot_token", ""),
                     "telegram_chat_id": get_config_value("telegram_chat_id", ""),
+                    "sensor_sample_interval": get_config_value("sensor_sample_interval", "60"),
                 },
             })
 
         payload = request.get_json(silent=True) or {}
-        admin_register_code = (payload.get("admin_register_code") or "").strip()
         telegram_bot_token = (payload.get("telegram_bot_token") or "").strip()
         telegram_chat_id = (payload.get("telegram_chat_id") or "").strip()
 
-        if not admin_register_code:
-            return jsonify({"ok": False, "message": "Mã đăng ký admin không được để trống."}), 400
+        interval = payload.get("sensor_sample_interval")
+        if interval is not None:
+            try:
+                interval = int(interval)
+                if not 5 <= interval <= 3600:
+                    raise ValueError
+            except (TypeError, ValueError, OverflowError):
+                return jsonify({"ok": False, "message": "Khoang lay mau: 5-3600 giay."}), 400
+            set_config_value("sensor_sample_interval", str(interval))
 
-        set_config_value("admin_register_code", admin_register_code)
         set_config_value("telegram_bot_token", telegram_bot_token)
         set_config_value("telegram_chat_id", telegram_chat_id)
 
@@ -453,7 +414,6 @@ def register_web(app, socketio):
             "ok": True,
             "message": "Cập nhật cấu hình thành công.",
             "configs": {
-                "admin_register_code": admin_register_code,
                 "telegram_bot_token": telegram_bot_token,
                 "telegram_chat_id": telegram_chat_id,
             },

@@ -82,7 +82,6 @@ from config import (
     GAS_WARN_THRESHOLD,
     GESTURE_COOLDOWN_SEC,
     JPEG_QUALITY,
-    MAX_HISTORY,
     NODES,
     PROCESS_EVERY_N_FRAMES,
     SERVO_CENTER,
@@ -241,11 +240,11 @@ services_started = False
 
 # Lịch sử cho biểu đồ (mỗi phòng giữ các trường số cần vẽ)
 histories = {
-    "patient": {"labels": deque(maxlen=MAX_HISTORY), "temp": deque(maxlen=MAX_HISTORY),
-                "hum": deque(maxlen=MAX_HISTORY)},
-    "living": {"labels": deque(maxlen=MAX_HISTORY), "temp": deque(maxlen=MAX_HISTORY),
-               "hum": deque(maxlen=MAX_HISTORY), "lux": deque(maxlen=MAX_HISTORY)},
-    "kitchen": {"labels": deque(maxlen=MAX_HISTORY), "gas": deque(maxlen=MAX_HISTORY)},
+    "patient": {"labels": deque(maxlen=60), "temp": deque(maxlen=60),
+                "hum": deque(maxlen=60)},
+    "living": {"labels": deque(maxlen=60), "temp": deque(maxlen=60),
+               "hum": deque(maxlen=60), "lux": deque(maxlen=60), "motion": deque(maxlen=60)},
+    "kitchen": {"labels": deque(maxlen=60), "gas": deque(maxlen=60), "smoke": deque(maxlen=60), "flame": deque(maxlen=60)},
 }
 
 # Hàng đợi lệnh BLE theo từng phòng
@@ -552,7 +551,20 @@ def snapshot_all():
             "fall_confirmation": fall_confirmation_status()}
 
 
+_history_sample_times = {}
+_history_interval = 60
+_history_interval_checked = None
+
 def push_history(room):
+    global _history_interval, _history_interval_checked
+    now = time.monotonic()
+    if _history_interval_checked is None or now - _history_interval_checked >= 5:
+        _history_interval_checked = now
+        _history_interval = int(get_config_value("sensor_sample_interval", "60") or "60")
+    previous = _history_sample_times.get(room)
+    if previous is not None and now - previous < _history_interval:
+        return
+    _history_sample_times[room] = now
     label = time.strftime("%H:%M:%S")
     r = ROOMS[room]
     h = histories[room]
@@ -560,7 +572,8 @@ def push_history(room):
     for key in h:
         if key == "labels":
             continue
-        h[key].append(r.get(key))
+        value = r.get(key)
+        h[key].append(int(value) if isinstance(value, bool) else value)
 
 
 # ================================================================== #
@@ -2099,10 +2112,6 @@ def _camera_pub_worker(session_id):
     pub_fps_times = deque(maxlen=20)
     last_publication = None
     motion_probe = FrameMotionProbe()
-    draw = None
-    if mp is not None and hasattr(mp, "solutions") and hasattr(mp.solutions, "drawing_utils"):
-        draw = mp.solutions.drawing_utils
-
     try:
         while True:
             with _camera_session_lock:
@@ -2165,8 +2174,6 @@ def _camera_pub_worker(session_id):
             # Read latest AI results under lock
             now = time.perf_counter()
             with _ai_results_lock:
-                pose_lms = _latest_ai_results.get("pose_landmarks")
-                hands_lms = _latest_ai_results.get("multi_hand_landmarks")
                 gesture_res = _latest_ai_results.get("gesture", "—")
                 res_source_ts = _latest_ai_results.get("source_ts", 0.0)
                 res_session = _latest_ai_results.get("session_id", 0)
@@ -2175,15 +2182,8 @@ def _camera_pub_worker(session_id):
             max_age = globals().get("OVERLAY_MAX_AGE_SEC", 0.8)
             is_fresh = (res_session == session_id) and ((now - res_source_ts) <= max_age)
 
-            if is_fresh:
-                if draw is not None:
-                    if pose_lms is not None and mp is not None and hasattr(mp.solutions, "pose"):
-                        draw.draw_landmarks(img, pose_lms, mp.solutions.pose.POSE_CONNECTIONS)
-                    if hands_lms is not None and mp is not None and hasattr(mp.solutions, "hands"):
-                        for hl in hands_lms:
-                            draw.draw_landmarks(img, hl, mp.solutions.hands.HAND_CONNECTIONS)
-                if gesture_res and gesture_res != "—":
-                    draw_gesture_label(img, gesture_res)
+            if is_fresh and gesture_res and gesture_res != "—":
+                draw_gesture_label(img, gesture_res)
 
             with state_lock:
                 angle_now = AI["angle"]
