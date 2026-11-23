@@ -12,7 +12,7 @@ app.config["SECRET_KEY"] = SECRET_KEY
 
 socketio = SocketIO(
     app,
-    cors_allowed_origins="*",
+    cors_allowed_origins=None,  # Same-origin dashboard only; configure trusted origins if needed.
     async_mode="threading",
     manage_session=False,
 )

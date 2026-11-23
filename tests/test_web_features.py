@@ -84,6 +84,25 @@ class WebFeaturesTests(unittest.TestCase):
         socket.emit('confirm_fall_safe', {})
         self.iot.confirm_fall_safe.assert_called_with(user_id=1)
 
+    def test_registration_refuses_to_run_without_a_configured_code(self):
+        import web
+        from database import get_user_by_username, set_config_value
+        web.ALLOW_REGISTER = True
+        set_config_value('admin_register_code', '')
+        response = self.client.post('/register', data={
+            'username': 'blocked-user', 'password': 'long-password',
+            'confirm_password': 'long-password', 'register_code': 'anything',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Admin chưa cấu hình mã đăng ký', response.get_data(as_text=True))
+        self.assertIsNone(get_user_by_username('blocked-user'))
+
+    def test_legacy_public_registration_code_is_rotated_on_db_init(self):
+        from database import get_config_value, init_db, set_config_value
+        set_config_value('admin_register_code', 'FAMILY2026')
+        init_db()
+        self.assertEqual(get_config_value('admin_register_code', ''), '')
+
     def test_login_is_still_required(self):
         self.assertEqual(self.client.get('/dashboard').status_code, 302)
         socket = self.socketio.test_client(self.app, flask_test_client=self.client)

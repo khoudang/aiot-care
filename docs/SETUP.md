@@ -29,24 +29,29 @@ không đưa key, mật khẩu hoặc token thật lên Git.
 
 | Biến | Ý nghĩa |
 | --- | --- |
-| `SECRET_KEY` | Khóa phiên riêng của máy triển khai; giữ ổn định giữa các lần chạy |
+| `SECRET_KEY` | Khóa phiên riêng; tạo bằng `python -c "import secrets; print(secrets.token_urlsafe(32))"` và giữ ổn định |
 | `DATABASE` | Đường dẫn SQLite, mặc định `smart_home.db` |
 | `BLE_MAC_PATIENT`, `BLE_MAC_LIVING`, `BLE_MAC_KITCHEN` | MAC đọc từ từng node thật |
 | `UART_ENABLE` | `1` bật UART servo, `0` tắt |
 | `UART_PORT`, `UART_BAUD` | Cổng serial thực tế và baud; mặc định `/dev/ttyUSB0`, `115200` |
 | `CAMERA_MODE_DEFAULT` | `auto`, `on` hoặc `off` |
 | `VIDEO_SOURCE` | Chỉ số camera OpenCV, mặc định `0` |
-| `ALLOW_REGISTER` | `1` cho đăng ký, `0` tắt đăng ký |
-| `ADMIN_REGISTER_CODE` | Mã đăng ký khởi tạo khi cấu hình DB chưa tồn tại |
+| `ALLOW_REGISTER` | `1` cho đăng ký, mặc định `0` (tắt) |
+| `BOOTSTRAP_ADMIN_USERNAME`, `BOOTSTRAP_ADMIN_PASSWORD` | Tạo admin đầu tiên khi DB chưa có tài khoản; đặt cả hai, mật khẩu tối thiểu 12 ký tự |
+| `ADMIN_REGISTER_CODE` | Mã đăng ký khởi tạo khi cấu hình DB chưa tồn tại; không có mã mặc định |
 
 Các UUID và lựa chọn nâng cao nằm trong [config.py](../config.py).
 Admin có thể đổi MAC trong **Cấu hình hệ thống → Node BLE**. Giá trị lưu trong SQLite
 ghi đè MAC mặc định từ `.env`; sau khi lưu, gateway ngắt và kết nối lại riêng node đó.
 Nút **Quét thiết bị** hiển thị các thiết bị BLE đang quảng bá gần Pi. Chọn địa chỉ BLE
 của đúng ESP, không dùng địa chỉ Wi-Fi. Node đã kết nối có thể không xuất hiện khi quét.
-Ứng dụng seed tài khoản mẫu từ `INITIAL_USERS` khi tài khoản tương ứng chưa tồn tại.
-Đăng nhập tài khoản quản trị đã cấu hình; thay mật khẩu mẫu và mã đăng ký trước khi
-chia sẻ link Internet. Cấu hình đăng ký/Telegram đã lưu trong DB được quản lý qua
+Trên cài đặt mới, repo không còn tạo các tài khoản/mật khẩu mẫu đã công khai. Đặt
+`BOOTSTRAP_ADMIN_USERNAME` và `BOOTSTRAP_ADMIN_PASSWORD` trong `.env` trước lần chạy
+đầu để tạo admin; nếu DB đã có tài khoản, hai biến này không thay đổi tài khoản cũ.
+Đăng ký bị tắt mặc định. Chỉ bật `ALLOW_REGISTER=1` sau khi admin đã cấu hình mã riêng.
+Mã mặc định cũ `FAMILY2026` sẽ được xóa khỏi DB khi nâng cấp. DB hiện hữu vẫn giữ các
+tài khoản đã tạo ở bản cũ: đổi ngay mật khẩu `admin`, `khoi`, `dien`, `khang` nếu chúng
+vẫn dùng mật khẩu mẫu. Cấu hình đăng ký/Telegram đã lưu trong DB được quản lý qua
 trang quản trị, không mặc nhiên bị ghi đè khi thay `.env`.
 
 ## Thử bếp trên Windows

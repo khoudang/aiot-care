@@ -7,6 +7,7 @@ KHÔNG dùng MQTT.
 """
 
 import os
+import secrets
 
 try:
     from dotenv import load_dotenv
@@ -18,19 +19,28 @@ except Exception:
 # ------------------------------------------------------------------ #
 #  Ứng dụng / phiên / cơ sở dữ liệu
 # ------------------------------------------------------------------ #
-SECRET_KEY = os.getenv("SECRET_KEY", "smart_home_secret_key_2026_change_me")
+# Never ship a known signing key. Set SECRET_KEY in .env to keep sessions across restarts.
+SECRET_KEY = os.getenv("SECRET_KEY") or secrets.token_urlsafe(32)
 DATABASE = os.getenv("DATABASE", "smart_home.db")
-ALLOW_REGISTER = os.getenv("ALLOW_REGISTER", "1") == "1"
+ALLOW_REGISTER = os.getenv("ALLOW_REGISTER", "0") == "1"
 
-INITIAL_USERS = [
-    {"username": "admin", "password": "admin123", "role": "admin"},
-    {"username": "khoi", "password": "khoi1234", "role": "member"},
-    {"username": "dien", "password": "dien1234", "role": "member"},
-    {"username": "khang", "password": "khang1234", "role": "member"},
-]
+BOOTSTRAP_ADMIN_USERNAME = os.getenv("BOOTSTRAP_ADMIN_USERNAME", "").strip()
+BOOTSTRAP_ADMIN_PASSWORD = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "")
+if bool(BOOTSTRAP_ADMIN_USERNAME) != bool(BOOTSTRAP_ADMIN_PASSWORD):
+    raise ValueError("Set both BOOTSTRAP_ADMIN_USERNAME and BOOTSTRAP_ADMIN_PASSWORD.")
+if BOOTSTRAP_ADMIN_PASSWORD and len(BOOTSTRAP_ADMIN_PASSWORD) < 12:
+    raise ValueError("BOOTSTRAP_ADMIN_PASSWORD must contain at least 12 characters.")
+
+# A new installation gets an admin only when the operator explicitly supplies credentials.
+# Existing database accounts are left untouched.
+INITIAL_USERS = ([{
+    "username": BOOTSTRAP_ADMIN_USERNAME,
+    "password": BOOTSTRAP_ADMIN_PASSWORD,
+    "role": "admin",
+}] if BOOTSTRAP_ADMIN_USERNAME else [])
 
 DEFAULT_CONFIGS = {
-    "admin_register_code": os.getenv("ADMIN_REGISTER_CODE", "FAMILY2026"),
+    "admin_register_code": os.getenv("ADMIN_REGISTER_CODE", "").strip(),
     "telegram_bot_token": os.getenv("TELEGRAM_BOT_TOKEN", ""),
     "telegram_chat_id": os.getenv("TELEGRAM_CHAT_ID", ""),
     "history_sample_interval_sec": os.getenv("HISTORY_SAMPLE_INTERVAL_SEC", "60"),

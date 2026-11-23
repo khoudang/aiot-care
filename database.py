@@ -126,6 +126,12 @@ def init_db():
             (key, value),
         )
 
+    # Rotate the publicly known registration default from older releases.
+    cur.execute(
+        "update system_configs set value = '' where key = ? and value = ?",
+        ("admin_register_code", "FAMILY2026"),
+    )
+
     conn.commit()
     conn.close()
 

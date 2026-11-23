@@ -145,7 +145,10 @@ def register_web(app, socketio):
             password = request.form.get("password", "").strip()
             confirm_password = request.form.get("confirm_password", "").strip()
             register_code = request.form.get("register_code", "").strip()
-            admin_register_code = get_config_value("admin_register_code", "FAMILY2026")
+            admin_register_code = get_config_value("admin_register_code", "")
+            if not admin_register_code:
+                flash("Admin chưa cấu hình mã đăng ký. Hãy liên hệ quản trị viên.", "error")
+                return render_template("register.html")
 
             if not username or not password or not confirm_password or not register_code:
                 flash("Vui lòng nhập đầy đủ thông tin.", "error")
