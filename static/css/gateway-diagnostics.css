@@ -895,3 +895,27 @@ body #living #lv-fan-tile .fan-step-controls { grid-row: 4 !important; margin: 0
   body #kitchen .devices-card-grid > #kt-window-tile { grid-column: auto; }
 }
 body #kitchen #kt-gas.sensor-preview { font-size: 0 !important; }
+
+/* Hide the legacy overview button in cached dashboard templates. */
+body #overview #confirm-btn { display: none !important; }
+body #cfg-confirm-kitchen:disabled { opacity: .45; cursor: not-allowed; }
+
+
+body #admin-settings .kitchen-safety-panel {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px 16px;
+  padding:14px 16px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:var(--surface);
+}
+body #admin-settings .kitchen-safety-panel h3 { margin:0; }
+body #admin-settings .kitchen-safety-panel .chip { justify-self:end; }
+body #admin-settings .kitchen-safety-panel p { margin:0; color:var(--muted); }
+body #admin-settings .kitchen-safety-panel button { justify-self:end; }
+@media(max-width:600px) {
+  body #admin-settings .kitchen-safety-panel :is(p,button) { grid-column:1/-1; }
+  body #admin-settings .kitchen-safety-panel button { justify-self:stretch; }
+}

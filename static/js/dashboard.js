@@ -243,8 +243,8 @@
   if(autoLight&&settings)settings.append(autoLight);
   ['kt-gas','ov-kitchen-gas'].forEach(id=>{
     const value=document.getElementById(id);
-    const unit=value&&value.parentElement.querySelector('small');
-    if(unit)unit.textContent='ppm';
+    const unit=value&&value.parentElement&&value.parentElement.querySelector('small');
+    if(unit)unit.textContent='ADC';
   });
   const cameraStats=document.querySelector('.cam-overlay-stats');
   if(cameraStats&&videoFeed)videoFeed.parentElement.append(cameraStats);
@@ -501,7 +501,7 @@
   function applyKitchen(d){
     d=confirmedData('kitchen',d);
     const kitchenConnected=!!(nodeState&&nodeState.kitchen);
-    if(d.gas!=null&&(kitchenConnected||d.gas>=1500)){const ppm=d.calibration_status==='calibrated'&&Number.isFinite(d.ppm_c3h8)?d.ppm_c3h8:null;const g=ppm===null?'--':Math.round(ppm);document.getElementById('kt-gas').textContent=g;document.getElementById('ov-kitchen-gas').textContent=g;setGauge(d.gas);
+    if(d.gas!=null&&(kitchenConnected||d.gas>=1500)){const isCalibrated=d.calibration_status==='calibrated'&&Number.isFinite(d.ppm_c3h8);const g=Math.round(isCalibrated?d.ppm_c3h8:d.gas);const unitLabel=isCalibrated?'ppm':'ADC';['kt-gas','ov-kitchen-gas'].forEach(id=>{const el=document.getElementById(id);if(el){el.textContent=g;const u=el.parentElement&&el.parentElement.querySelector('small');if(u)u.textContent=unitLabel;}});setGauge(d.gas);
       const st=document.getElementById('kt-gas-state'),card=document.getElementById('kt-gas-card');
       if(d.gas>=2500){st.className='badge bad';st.innerHTML='<i class="fas fa-triangle-exclamation"></i> Nguy hiểm';card.classList.add('alarm');}
       else if(d.gas>=1500){st.className='badge warn';st.innerHTML='<i class="fas fa-circle-exclamation"></i> Tăng cao';card.classList.remove('alarm');}
@@ -626,6 +626,16 @@
       else text='Cảnh báo té ngã đang chờ xác nhận. Chỉ bấm sau khi đã kiểm tra người bệnh an toàn.';
     }
     message.textContent=text;
+    const cfgBtn=document.getElementById('cfg-confirm-patient');
+    const cfgMsg=document.getElementById('cfg-patient-safety-msg');
+    const cfgChip=document.getElementById('cfg-patient-safety-chip');
+    if(cfgBtn)cfgBtn.disabled=button.disabled;
+    if(cfgMsg)cfgMsg.textContent=text;
+    if(cfgChip){
+      const req=!!(status&&status.required);
+      cfgChip.className='chip '+(req?'bad':'ok');
+      cfgChip.textContent=req?(status.pending?'Đang chờ node':(status.active?'Cảnh báo':'Chờ xác nhận')):'An toàn';
+    }
   }
   function applyFallConfirmation(status){fallConfirmation=status||null;renderFallConfirmation();}
   const patientConfirmButton=document.getElementById('patient-confirm-safe');
@@ -636,6 +646,14 @@
     document.getElementById('patient-safety-banner').hidden=true;
     socket.emit('confirm_fall_safe',{},()=>renderFallConfirmation());
   });
+  const cfgPatientConfirm=document.getElementById('cfg-confirm-patient');
+  if(cfgPatientConfirm)cfgPatientConfirm.addEventListener('click',()=>{
+    if(cfgPatientConfirm.disabled||!socket||!socket.connected)return;
+    cfgPatientConfirm.disabled=true;
+    const cfgMsg=document.getElementById('cfg-patient-safety-msg');
+    if(cfgMsg)cfgMsg.textContent='Đang gửi xác nhận an toàn…';
+    socket.emit('confirm_fall_safe',{},()=>renderFallConfirmation());
+  });
   renderFallConfirmation();
 
   /* ---- alert state machine ---- */
@@ -643,7 +661,6 @@
   function setAlert(level,msg){
 
     const idx=STEPS.indexOf(level);if(idx<0)return;
-    document.getElementById('confirm-btn').disabled=false;
     const chip=document.getElementById('state-chip'),desc=document.getElementById('state-desc');
     const allRoomsConnected=Object.values(nodeState).every(Boolean);
     const displayLevel=level==='normal'&&!allRoomsConnected?'unknown':level;
@@ -656,11 +673,35 @@
     document.getElementById('emg-desc').textContent=msg||map[level][2];
     syncOverviewWarning();
     document.getElementById('silence-btn').classList.toggle('show',level==='light'||level==='emergency'||level==='awaiting');
-    document.getElementById('confirm-btn').classList.toggle('show',level==='awaiting');
+    const cfgKitchenChip=document.getElementById('cfg-kitchen-safety-chip');
+    const cfgKitchenMsg=document.getElementById('cfg-kitchen-safety-msg');
+    const cfgSilenceBtn=document.getElementById('cfg-silence-btn');
+    const cfgConfirmKitchen=document.getElementById('cfg-confirm-kitchen');
+    if(cfgKitchenChip){cfgKitchenChip.className='chip '+(displayLevel==='normal'?'ok':(displayLevel==='unknown'?'warn':'bad'));cfgKitchenChip.textContent=m[1];}
+    if(cfgKitchenMsg){
+      const explanation=level==='emergency'
+        ?' Ch\u1edd t\u00edn hi\u1ec7u b\u1ebfp b\u00ecnh th\u01b0\u1eddng li\u00ean t\u1ee5c \u00edt nh\u1ea5t 10 gi\u00e2y \u0111\u1ec3 x\u00e1c nh\u1eadn.'
+        :'';
+      cfgKitchenMsg.textContent=(msg||m[2])+explanation;
+    }
+    if(cfgSilenceBtn)cfgSilenceBtn.disabled=!(level==='light'||level==='emergency'||level==='awaiting');
+    if(cfgConfirmKitchen)cfgConfirmKitchen.disabled=level!=='awaiting'||!socket?.connected;
     // The persistent overview line displays safety alerts without a duplicate banner.
   }
-  document.getElementById('confirm-btn').addEventListener('click',()=>{if(socket)socket.emit('confirm_safe',{});});
   document.getElementById('silence-btn').addEventListener('click',()=>{if(socket)socket.emit('silence_alert',{});});
+  const kitchenSettings=document.getElementById('admin-settings');
+  if(kitchenSettings&&!document.getElementById('cfg-confirm-kitchen')){
+    const section=document.createElement('section');
+    section.className='settings-section kitchen-safety-panel';
+    section.innerHTML='<h3>An to&#224;n ph&#242;ng b&#7871;p</h3><span class="chip" id="cfg-kitchen-safety-chip">Ch&#432;a c&#243; d&#7919; li&#7879;u</span><p id="cfg-kitchen-safety-msg" role="status"></p><button type="button" class="btn accent sm" id="cfg-confirm-kitchen" disabled>X&#225;c nh&#7853;n an to&#224;n b&#7871;p</button>';
+    const settingsScroll=kitchenSettings.querySelector('.settings-scroll');
+    if(settingsScroll)settingsScroll.prepend(section);
+    else kitchenSettings.querySelector('.detail-heading').after(section);
+  }
+  const cfgConfirmKitchenBtn=document.getElementById('cfg-confirm-kitchen');
+  if(cfgConfirmKitchenBtn)cfgConfirmKitchenBtn.addEventListener('click',()=>{if(!cfgConfirmKitchenBtn.disabled&&socket?.connected)socket.emit('confirm_safe',{});});
+  const cfgSilenceBtnEl=document.getElementById('cfg-silence-btn');
+  if(cfgSilenceBtnEl)cfgSilenceBtnEl.addEventListener('click',()=>{if(!cfgSilenceBtnEl.disabled&&socket)socket.emit('silence_alert',{});});
   document.getElementById('sysbar-x').addEventListener('click',()=>document.getElementById('sysbar').classList.remove('show'));
   function showSys(msg,lvl){const box=document.getElementById('sysbar');document.getElementById('sysbar-text').textContent=msg;box.className='sysbar show'+(lvl==='light'?' light':'');clearTimeout(showSys._t);showSys._t=setTimeout(()=>box.classList.remove('show'),9000);}
 
@@ -790,7 +831,7 @@
       if(target&&target.request_id===result.request_id&&result.status==='applied')target.acknowledged=true;
     });
     socket.on('connect',()=>{setConn(true);socket.emit('request_initial_state');loadKitchenAlerts();});
-    socket.on('disconnect',()=>{clearPendingControls();setConn(false);document.getElementById('state-chip').textContent='Mất kết nối realtime';document.getElementById('state-chip').className='chip';document.getElementById('state-desc').textContent='Trạng thái node được cập nhật qua API khi realtime gián đoạn.';document.getElementById('confirm-btn').disabled=true;});
+    socket.on('disconnect',()=>{clearPendingControls();setConn(false);document.getElementById('state-chip').textContent='Mất kết nối realtime';document.getElementById('state-chip').className='chip';document.getElementById('state-desc').textContent='Trạng thái node được cập nhật qua API khi realtime gián đoạn.';const confirmKitchen=document.getElementById('cfg-confirm-kitchen');if(confirmKitchen)confirmKitchen.disabled=true;});
     socket.on('command_error',e=>{clearPendingControls();showSys(e.message||'Không gửi được lệnh.','light');socket.emit('request_initial_state');});
     socket.on('sensor_chart_update',renderSensorHistories);
     socket.on('bootstrap',s=>{

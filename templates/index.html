@@ -120,7 +120,7 @@
 
         <!-- Overview: live monitoring followed by project context. -->
         <section id="overview" class="room active">
-          <div class="overview-alert-line" id="emg" role="status" aria-live="polite"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i><span id="emg-desc">Có cảnh báo cần kiểm tra.</span><button class="silence-btn" id="silence-btn" type="button">Tắt âm cảnh báo</button><button class="confirm-btn" id="confirm-btn" type="button">Xác nhận an toàn</button></div>
+          <div class="overview-alert-line" id="emg" role="status" aria-live="polite"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i><span id="emg-desc">Có cảnh báo cần kiểm tra.</span><button class="silence-btn" id="silence-btn" type="button">Tắt âm cảnh báo</button></div>
           <section class="overview-weather" aria-label="Thời tiết và trạng thái hệ thống">
             <header class="overview-heading"><div><h1 id="dynamic-greeting">Xin chào, {{ username }}.</h1><p id="overview-date"></p></div><div class="overview-badges"><span class="chip nodes" id="node-chip">0/3 phòng</span></div></header>
             <div id="weather-data" hidden>
@@ -567,6 +567,41 @@
              ADMIN: SETTINGS
              ================================================================= -->
         <section id="admin-settings" class="room"><header class="detail-heading"><h1>Cấu hình hệ thống</h1></header><section class="settings-section"><div class="device-card-modern" id="lv-auto-tile"><div class="device-card-top"><div class="device-icon-wrapper"><i class="fas fa-wand-magic-sparkles"></i></div><label class="sw"><input type="checkbox" id="lv-auto-toggle" aria-label="Tự động bật đèn phòng khách" checked><span class="tr"></span></label></div><div class="device-meta-info"><h5>Tự động bật đèn</h5><p id="lv-auto-status">Bật đèn khi có người buổi tối</p></div></div></section>
+          <section class="settings-section safety-settings" id="cfg-safety-section" aria-labelledby="safety-settings-title">
+            <div class="card-h" style="border:none;padding:0 0 12px">
+              <div>
+                <h3 id="safety-settings-title">Xác nhận an toàn</h3>
+                <p>Khôi phục trạng thái bình thường sau khi đã kiểm tra cảnh báo</p>
+              </div>
+            </div>
+            <div style="display:grid;gap:14px">
+              <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:12px">
+                <div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                    <strong>Phòng bếp (Khí gas / Khói / Lửa)</strong>
+                    <span class="chip ok" id="cfg-kitchen-safety-chip">An toàn</span>
+                  </div>
+                  <p id="cfg-kitchen-safety-msg" style="margin:0;font-size:.9rem">Không có cảnh báo cần xác nhận.</p>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button type="button" class="btn sm" id="cfg-silence-btn" disabled><i class="fas fa-volume-xmark"></i> Tắt âm cảnh báo</button>
+                  <button type="button" class="btn accent sm" id="cfg-confirm-kitchen" disabled><i class="fas fa-shield-check"></i> Xác nhận an toàn bếp</button>
+                </div>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:12px">
+                <div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                    <strong>Phòng bệnh (Cảnh báo té ngã)</strong>
+                    <span class="chip ok" id="cfg-patient-safety-chip">An toàn</span>
+                  </div>
+                  <p id="cfg-patient-safety-msg" style="margin:0;font-size:.9rem">Không có cảnh báo té ngã cần xác nhận.</p>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button type="button" class="btn accent sm" id="cfg-confirm-patient" disabled><i class="fas fa-shield-check"></i> Xác nhận an toàn phòng bệnh</button>
+                </div>
+              </div>
+            </div>
+          </section>
           <div class="settings-section">
             <div class="card-h" style="border:none;padding:0 0 16px">
               <div>
@@ -643,7 +678,7 @@
     <button type="button" data-room="personal" data-personal-tab aria-controls="personal"><i class="fas fa-user" aria-hidden="true"></i><span>Cá nhân</span></button>
   </nav>
 
-  <script src="{{ url_for('static', filename='js/dashboard.js') }}?v=20261122-light-toggle"></script>
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}?v=20261122-kitchen-confirm-settings"></script>
   <script src="{{ url_for('static', filename='js/overview-weather.js') }}?v=ui-integrated-20261104" defer></script>
   {% if role == 'admin' %}
   <script src="{{ url_for('static', filename='js/admin.js') }}?v=20261122-account-dialogs"></script>

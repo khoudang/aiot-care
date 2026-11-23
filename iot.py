@@ -1253,7 +1253,7 @@ def _danger_warn():
     gas_k = _gas_avg("kitchen") or 0
     danger = bool(k["flame"] or k["smoke"] or gas_k >= GAS_HIGH_THRESHOLD
                   or (as_number(k.get("gas")) or 0) >= GAS_HIGH_THRESHOLD
-                  or _kitchen_emergency)
+                  or (_kitchen_emergency and k.get("phase") != "wait_confirm"))
     warn = bool(gas_k >= GAS_WARN_THRESHOLD)
     return danger, warn
 
