@@ -41,7 +41,8 @@ def load_iot() -> Any:
     with patch.dict(sys.modules, dependencies):
         exec(compile(source, str(path), 'exec'), module.__dict__)
     module._real_set_camera_mode = module.set_camera_mode
+    module._real_push_history = module.push_history
     for name in ('_emit', 'log_audit', 'send_telegram_alert_async',
-                 'set_camera_mode', 'push_history'):
+                 'set_camera_mode'):
         setattr(module, name, Mock())
     return module

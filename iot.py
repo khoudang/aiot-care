@@ -592,24 +592,27 @@ def reload_history_sample_interval():
 
 
 def push_history(room):
+    """Append one room snapshot at the configured cadence; return whether it changed."""
     if room not in histories:
-        return
+        return False
     now = time.monotonic()
-    interval = _history_interval
-    previous = _history_sample_times.get(room)
-    if previous is not None and now - previous < interval:
-        return
-    _history_sample_times[room] = now
+    with state_lock:
+        interval = _history_interval
+        previous = _history_sample_times.get(room)
+        if previous is not None and now - previous < interval:
+            return False
+        _history_sample_times[room] = now
 
-    label = time.strftime("%H:%M:%S")
-    r = ROOMS[room]
-    h = histories[room]
-    h["labels"].append(label)
-    for key in h:
-        if key == "labels":
-            continue
-        value = r.get(key)
-        h[key].append(int(value) if isinstance(value, bool) else value)
+        label = time.strftime("%H:%M:%S")
+        r = ROOMS[room]
+        h = histories[room]
+        h["labels"].append(label)
+        for key in h:
+            if key == "labels":
+                continue
+            value = r.get(key)
+            h[key].append(int(value) if isinstance(value, bool) else value)
+    return True
 
 
 # ================================================================== #
@@ -673,11 +676,15 @@ def apply_node_payload(room, payload):
                 r["event_id"] = payload["event_id"]
         r["updated_at"] = now_ts()
 
-    # trung bình trượt cho gas (giảm báo giả)
-    if room in gas_window and ROOMS[room].get("gas") is not None:
-        gas_window[room].append(as_number(ROOMS[room]["gas"]) or 0)
+    # Chỉ mẫu ADC mới hợp lệ mới được đưa vào cửa sổ lọc; frame trạng thái/ACK
+    # không được nhân bản giá trị gas cũ thành một phép đo mới.
+    gas_sample = payload.get("gas")
+    if (room == "kitchen" and type(gas_sample) in (int, float)
+            and math.isfinite(gas_sample) and 0 <= gas_sample <= 4095):
+        with state_lock:
+            gas_window["kitchen"].append(float(gas_sample))
 
-    push_history(room)
+    history_updated = push_history(room)
 
     # PIR phòng bệnh -> bật camera theo chế độ auto
     if room == "patient" and ROOMS["patient"]["motion"]:
@@ -693,15 +700,17 @@ def apply_node_payload(room, payload):
 
     _emit("room_update", {"room": room, "data": dict(ROOMS[room])})
     _emit("telemetry_update", telemetry_status())
-    if room == "patient":
+    if history_updated:
         _emit("sensor_chart_update", snapshot_histories())
 
 
 def _gas_avg(room):
-    w = gas_window.get(room)
-    if w and len(w) > 0:
+    with state_lock:
+        w = list(gas_window.get(room, ()))
+        fallback = ROOMS[room].get("gas")
+    if w:
         return sum(w) / len(w)
-    return as_number(ROOMS[room].get("gas"))
+    return as_number(fallback)
 
 
 # ================================================================== #

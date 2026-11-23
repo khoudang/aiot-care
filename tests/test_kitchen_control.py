@@ -92,6 +92,15 @@ class KitchenControlTests(unittest.TestCase):
                             and command.get('event_id') == 1
                             for command in commands))
 
+    def test_gas_smoothing_ignores_status_only_and_invalid_frames(self):
+        iot = self.iot
+        iot.apply_node_payload('kitchen', {'gas': 1800})
+        self.assertEqual(list(iot.gas_window['kitchen']), [1800.0])
+        iot.apply_node_payload('kitchen', {'phase': 'normal', 'event_id': 4})
+        iot.apply_node_payload('kitchen', {'gas': 4096})
+        iot.apply_node_payload('kitchen', {'gas': float('nan')})
+        self.assertEqual(list(iot.gas_window['kitchen']), [1800.0])
+
     def test_kitchen_gas_accepts_raw_adc_but_not_ppm_alias_or_out_of_range_values(self):
         iot = self.iot
         iot.ROOMS['kitchen']['gas'] = 700
