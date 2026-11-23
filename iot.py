@@ -178,7 +178,7 @@ NODE_ONLINE = {"patient": False, "living": False, "kitchen": False}
 NODE_STATES = {"patient": "disconnected", "living": "disconnected", "kitchen": "disconnected"}
 _SENSOR_FIELDS = {"patient": ("temp", "hum", "motion"),
                   "living": ("temp", "hum", "lux", "motion"),
-                  "kitchen": ("gas", "flame")}
+                  "kitchen": ("gas", "mp2_do_alarm", "flame")}
 _sensor_seen_at = {room: dict.fromkeys(fields) for room, fields in _SENSOR_FIELDS.items()}
 
 _CAMERA_OFF_METRICS = {'camera_profile': 'off', 'camera_profile_reason': 'offline',
@@ -519,10 +519,11 @@ def _record_sensor_sample(room, payload):
     now = time.monotonic()
     with state_lock:
         for source, value in payload.items():
-            key = _NUMERIC_ALIASES.get(source, source)
+            key = ("mp2_do_alarm" if source == "smoke"
+                   else _NUMERIC_ALIASES.get(source, source))
             if key not in _sensor_seen_at[room]:
                 continue
-            valid = (type(value) is bool if key in ("motion", "flame") else
+            valid = (type(value) is bool if key in ("motion", "flame", "mp2_do_alarm") else
                      type(value) in (int, float) and math.isfinite(value))
             if key == "gas":
                 valid = valid and 0 <= value <= 4095
@@ -691,6 +692,7 @@ def apply_node_payload(room, payload):
     _observe_fall_restoration(room, payload)
 
     _emit("room_update", {"room": room, "data": dict(ROOMS[room])})
+    _emit("telemetry_update", telemetry_status())
     if room == "patient":
         _emit("sensor_chart_update", snapshot_histories())
 
@@ -706,18 +708,34 @@ def _gas_avg(room):
 #  Node online / offline
 # ================================================================== #
 def set_node_online(room, online, state=None):
+    global _kitchen_safe_since, _kitchen_sample_at
+    global _kitchen_confirm_pending_event_id, _kitchen_confirm_ack_event_id
     if room not in ROOMS:
         return
     resolved_state = state or ("ready" if online else "disconnected")
     is_ready = (resolved_state == "ready")
-    NODE_STATES[room] = resolved_state
+    with state_lock:
+        previous_state = NODE_STATES.get(room)
+        changed = NODE_ONLINE.get(room) != is_ready
+        NODE_STATES[room] = resolved_state
+        NODE_ONLINE[room] = is_ready
+        if not is_ready:
+            for key in _sensor_seen_at[room]:
+                _sensor_seen_at[room][key] = None
+            if room == "kitchen":
+                ROOMS["kitchen"]["phase"] = "unknown"
+                ROOMS["kitchen"]["event_id"] = None
     _restoration_seen.pop(room, None)
     if room == "kitchen" and not is_ready:
+        # A new BLE session must earn a complete fresh safe window again.
+        _kitchen_safe_since = None
+        _kitchen_sample_at = None
+        gas_window["kitchen"].clear()
+        _kitchen_confirm_pending_event_id = None
+        _kitchen_confirm_ack_event_id = None
         _cancel_commands("kitchen")
-        ROOMS["kitchen"]["phase"] = "unknown"
-        ROOMS["kitchen"]["event_id"] = None
-    changed = NODE_ONLINE.get(room) != is_ready
-    NODE_ONLINE[room] = is_ready
+        if _restoration_started is not None:
+            _fail_restoration("kitchen")
     if changed:
         _emit("node_status", dict(NODE_ONLINE))
         _emit("node_state", dict(NODE_STATES))
@@ -727,6 +745,8 @@ def set_node_online(room, online, state=None):
                         f"Node {room_name(room)} mất kết nối.", "node")
     else:
         _emit("node_state", dict(NODE_STATES))
+    if changed or previous_state != resolved_state:
+        _emit("telemetry_update", telemetry_status())
 
 
 def room_name(room):

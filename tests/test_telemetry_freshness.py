@@ -39,6 +39,29 @@ class TelemetryFreshnessTests(unittest.TestCase):
         iot.apply_node_payload('kitchen', {'phase': 'normal', 'event_id': 10})
         self.assertTrue(all(v is None for v in iot._sensor_seen_at['kitchen'].values()))
 
+    def test_reconnect_invalidates_old_sensor_samples_and_requires_mp2_do(self):
+        iot = load_iot()
+        iot.set_node_online('kitchen', True)
+        with patch.object(iot.time, 'monotonic', return_value=1.0):
+            iot.apply_node_payload('kitchen', {
+                'gas': 500, 'smoke': False, 'mp2_do_alarm': False, 'flame': False,
+            })
+        self.assertEqual(iot.telemetry_status()['kitchen']['status'], 'fresh')
+
+        iot.set_node_online('kitchen', False)
+        iot.set_node_online('kitchen', True)
+        status = iot.telemetry_status()['kitchen']
+        self.assertEqual(status['status'], 'awaiting')
+        self.assertEqual(status['fields']['gas']['status'], 'missing')
+        self.assertEqual(status['fields']['mp2_do_alarm']['status'], 'missing')
+        self.assertEqual(status['fields']['flame']['status'], 'missing')
+
+        with patch.object(iot.time, 'monotonic', return_value=2.0):
+            iot.apply_node_payload('kitchen', {
+                'gas': 500, 'smoke': False, 'mp2_do_alarm': False, 'flame': False,
+            })
+        self.assertEqual(iot.telemetry_status()['kitchen']['status'], 'fresh')
+
     def test_partial_fields_and_invalid_samples_remain_visible(self):
         iot = load_iot()
         iot.set_node_online('patient', True)

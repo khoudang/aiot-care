@@ -54,7 +54,7 @@ loadActual('  function badge(', '  function setToggle(');
 loadActual('  function confirmedData(', '  function clearPendingControls(');
 loadActual('  function applyKitchen(', '  function applyAI(');
 loadActual('  function setNode(', '  function setConn(');
-for(const event of ['node_status','room_update']){
+for(const event of ['node_status','room_update','telemetry_update']){
   const line=source.split('\n').find(l=>l.includes(`socket.on('${event}',`));assert.ok(line);vm.runInContext(line,eventCtx);
 }
 const cases=[
@@ -81,6 +81,12 @@ const cases=[
    callbacks.node_status({patient:false});
    assert.ok(eventElements['node-patient'].classList.contains('off'));
    assert.doesNotMatch(eventElements['node-patient'].sub.textContent,/Đang nhận dữ liệu/);
+ }],
+ ['backend freshness event replaces cached state',()=>{
+   eventCtx.nodeState.patient=true;
+   callbacks.telemetry_update({patient:{status:'awaiting',transport_connected:true,fields:{temp:{status:'missing'}}}});
+   assert.match(eventElements['node-patient'].sub.textContent,/chờ dữ liệu/);
+   assert.match(eventElements['data-quality-patient'].textContent,/chờ dữ liệu/);
  }],
  ['cached offline versus reconnect',()=>{
    eventCtx.nodeState.patient=false;
