@@ -38,10 +38,28 @@ int main() {
   assert(k.emergency);
   k.update(20400, 0, false, false);
   assert(k.phase == KitchenState::WAIT_CONFIRM && k.emergency);
-  assert(k.confirm(k.eventId, 0, false));
+  assert(k.confirm(k.eventId, 0, false, false));
   assert(!k.emergency && k.lightOn && k.exhaustOn && k.exhaustPwm == 128 && !k.windowOpen);
   k.update(20500, 0, false, true);
   assert(k.emergency);
+
+  // Optional MP-2 DO comparator alarm triggers emergency, prevents confirmation,
+  // and requires ten continuous seconds of clear readings.
+  KitchenState mp2;
+  mp2.seedEvent(123);
+  mp2.update(0, 0, true, false);
+  assert(mp2.phase == KitchenState::EMERGENCY);
+  assert(mp2.windowOpen && mp2.exhaustOn && !mp2.lightOn);
+  mp2.update(100, 0, false, false);
+  mp2.update(10100, 0, false, false);
+  assert(mp2.phase == KitchenState::WAIT_CONFIRM);
+  const uint32_t mp2Event = mp2.eventId;
+  assert(!mp2.confirm(mp2Event, 0, true, false));
+  assert(!mp2.confirm(mp2Event + 1, 0, false, false));
+  assert(mp2.confirm(mp2Event, 0, false, false));
+  assert(mp2.phase == KitchenState::NORMAL);
+  mp2.update(10200, 0, true, false);
+  assert(mp2.phase == KitchenState::EMERGENCY);
 
   // No presence: darkness must never turn on the lamp.
   LivingState emptyRoom;

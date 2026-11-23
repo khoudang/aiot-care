@@ -17,8 +17,17 @@ bool deviceConnected = false;
 
 // Pinout node bếp cập nhật; BLE MAC dự kiến: E8:3D:C1:9D:A5:16.
 // MP-2: 5V module; AO -> R1 1k -> GPIO0, R2 1.5k GPIO0 -> GND (0.6 x AO).
-// DO GPIO1 is physically wired but intentionally NEVER read: may output 5V. Disconnect/level-shift it.
+// DO GPIO1 is optional and must first be level-shifted to ESP32-safe 3.3V.
+// Do NOT connect module 5V DO directly, even when disabled in firmware.
+// Validate active-LOW polarity on real hardware before enabling.
+#ifndef MP2_DO_SAFE_WIRING_VERIFIED
+#define MP2_DO_SAFE_WIRING_VERIFIED 0
+#endif
+#if MP2_DO_SAFE_WIRING_VERIFIED != 0 && MP2_DO_SAFE_WIRING_VERIFIED != 1
+#error "MP2_DO_SAFE_WIRING_VERIFIED must be 0 or 1"
+#endif
 const int PIN_MP2_AO = 0;
+const int PIN_MP2_DO = 1;
 const int PIN_FLAME_AO = 3;  // 3.3V flame module, optional diagnostic ADC
 const int PIN_FLAME_DO = 6; // Active LOW, flame detected
 const int PIN_WINDOW_SERVO = 4;
@@ -37,6 +46,7 @@ bool &buzzerOn = kitchen.buzzerOn;
 bool &emergency = kitchen.emergency;
 bool &warningGas = kitchen.warningGas;
 int latestGas = 0;
+bool latestMp2DoAlarm = false;
 bool latestFlame = false;
 
 void applyOutputs() {
@@ -65,7 +75,8 @@ bool handleCommand(const String &value) {
           const char *cmdName = doc["cmd"] | "";
           if (strcmp(cmdName, "confirm_safe") == 0) {
             if (!doc["event_id"].is<uint32_t>()) return false;
-            return kitchen.confirm(doc["event_id"].as<uint32_t>(), latestGas, latestFlame);
+            return kitchen.confirm(doc["event_id"].as<uint32_t>(), latestGas,
+                                   latestMp2DoAlarm, latestFlame);
           }
           // Safety output overrides manual commands during warning/emergency.
           if (kitchen.phase != KitchenState::NORMAL) {
@@ -123,6 +134,9 @@ void setup() {
   kitchen.seedEvent(esp_random());
   Serial.println("[1] Init Pins...");
   pinMode(PIN_MP2_AO, INPUT);
+#if MP2_DO_SAFE_WIRING_VERIFIED
+  pinMode(PIN_MP2_DO, INPUT);
+#endif
   pinMode(PIN_FLAME_AO, INPUT);
   pinMode(PIN_FLAME_DO, INPUT);
   pinMode(PIN_LIGHT_RELAY, OUTPUT);
@@ -162,13 +176,17 @@ void setup() {
   Serial.println("[4] BLE Started! Waiting for Pi...");
 }
 
-void notifyOutputState(BLECharacteristic *characteristic, int gas, bool flame) {
+void notifyOutputState(BLECharacteristic *characteristic, int gas,
+                       bool mp2DoAlarm, bool flame) {
   if (!deviceConnected) return;
   char payload[256];
   snprintf(payload, sizeof(payload),
     "{\"room\":\"kitchen\",\"gas\":%d,\"smoke\":%s,\"flame\":%s,"
+    "\"mp2_do_enabled\":%s,\"mp2_do_alarm\":%s,"
     "\"window\":%s,\"exhaust\":%s,\"exhaust_speed\":%d,\"light\":%s,\"buzzer\":%s,\"emergency\":%s}",
-    gas, "false", flame ? "true" : "false",
+    gas, mp2DoAlarm ? "true" : "false", flame ? "true" : "false",
+    MP2_DO_SAFE_WIRING_VERIFIED ? "true" : "false",
+    mp2DoAlarm ? "true" : "false",
     windowOpen ? "true" : "false", exhaustOn ? "true" : "false",
     (exhaustOn ? (exhaustPwm * 100 + 127) / 255 : 0),
     lightOn ? "true" : "false", (kitchen.alarmMuted ? "false" : ((buzzerOn || warningGas) ? "true" : "false")),
@@ -193,26 +211,31 @@ void loop() {
   static unsigned long lastSample = 0;
   static unsigned long lastSend = 0;
   static int gas = 0;
+  static bool mp2DoAlarm = false;
   static bool flame = false;
   unsigned long now = millis();
   if (now - lastSample >= 100) {
     lastSample = now;
     gas = analogRead(PIN_MP2_AO); // Raw ADC after divider, NOT ppm. Recalibrate 1500/2500 thresholds.
     flame = digitalRead(PIN_FLAME_DO) == LOW;
-    // MP-2 DO does not participate. Flame AO is connected but not used for alarm decisions.
-    latestGas = gas; latestFlame = flame;
-    kitchen.update(now, gas, false, flame);
+#if MP2_DO_SAFE_WIRING_VERIFIED
+    mp2DoAlarm = digitalRead(PIN_MP2_DO) == LOW;
+#else
+    mp2DoAlarm = false;
+#endif
+    latestGas = gas; latestMp2DoAlarm = mp2DoAlarm; latestFlame = flame;
+    kitchen.update(now, gas, mp2DoAlarm, flame);
   }
   if (drainCommands(handleCommand, pNotifyChar)) {
     applyOutputs();
-    notifyOutputState(pNotifyChar, latestGas, latestFlame);
+    notifyOutputState(pNotifyChar, latestGas, latestMp2DoAlarm, latestFlame);
     notifySafetyState(pNotifyChar);
   } else {
     applyOutputs();
   }
   if (deviceConnected && now - lastSend >= 1000) {
     lastSend = now;
-    notifyOutputState(pNotifyChar, gas, flame);
+    notifyOutputState(pNotifyChar, gas, mp2DoAlarm, flame);
     notifySafetyState(pNotifyChar);
   }
 }

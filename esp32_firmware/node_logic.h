@@ -25,8 +25,9 @@ struct KitchenState {
     if (phase == WAIT_CONFIRM && next != WAIT_CONFIRM) safeCounting = false;
     phase = next;
   }
-  void update(uint32_t now, int gas, bool /*unusedSmoke*/, bool flame) {
-    const bool high = gas >= 2500 || flame;
+  void update(uint32_t now, int gas, bool mp2DoAlarm, bool flame) {
+    // MP-2 DO is a gas-comparator alarm, NOT an independent smoke detector.
+    const bool high = gas >= 2500 || mp2DoAlarm || flame;
     const bool warn = gas >= 1500;
     warningGas = warn;
     if (high) { enter(EMERGENCY); safeCounting = false; }
@@ -54,9 +55,9 @@ struct KitchenState {
       lightOn = false;
     }
   }
-  bool confirm(uint32_t id, int gas, bool flame) {
-    if (phase != WAIT_CONFIRM || id != eventId || gas >= 1500 || flame) {
-      if (phase == NORMAL && id == eventId && gas < 1500 && !flame) return true;
+  bool confirm(uint32_t id, int gas, bool mp2DoAlarm, bool flame) {
+    if (phase != WAIT_CONFIRM || id != eventId || gas >= 1500 || mp2DoAlarm || flame) {
+      if (phase == NORMAL && id == eventId && gas < 1500 && !mp2DoAlarm && !flame) return true;
       return false;
     }
     phase = NORMAL; emergency = false; warningGas = false;
