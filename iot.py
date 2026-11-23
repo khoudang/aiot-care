@@ -569,7 +569,7 @@ def push_history(room):
 _NUMERIC_ALIASES = {
     "temp": "temp", "temperature": "temp",
     "hum": "hum", "humi": "hum", "humidity": "hum",
-    "gas": "gas", "ppm": "gas",
+    "gas": "gas",
     "lux": "lux", "light_level": "light_level", "brightness": "light_level",
     "fan_speed": "fan_speed", "speed": "fan_speed",
     "exhaust_speed": "exhaust_speed",
@@ -609,6 +609,8 @@ def apply_node_payload(room, payload):
             if src in payload and dst in r and payload[src] is not None:
                 num = as_number(payload[src])
                 if num is not None:
+                    if dst == "gas" and (not math.isfinite(num) or not 0 <= num <= 4095):
+                        continue
                     r[dst] = round(num, 2) if dst in ("temp", "hum") else num
         for key in _BOOL_KEYS:
             if key in payload and key in r:

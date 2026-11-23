@@ -68,6 +68,19 @@ class KitchenControlTests(unittest.TestCase):
                             and command.get('event_id') == 1
                             for command in commands))
 
+    def test_kitchen_gas_accepts_raw_adc_but_not_ppm_alias_or_out_of_range_values(self):
+        iot = self.iot
+        iot.ROOMS['kitchen']['gas'] = 700
+        iot.apply_node_payload('kitchen', {'ppm': 3500})
+        self.assertEqual(iot.ROOMS['kitchen']['gas'], 700)
+
+        iot.apply_node_payload('kitchen', {'gas': 4096})
+        self.assertEqual(iot.ROOMS['kitchen']['gas'], 700)
+
+        iot.apply_node_payload('kitchen', {'gas': 1850})
+        self.assertEqual(iot.ROOMS['kitchen']['gas'], 1850)
+        self.assertEqual(iot.ROOMS['kitchen']['gas_unit'], 'raw_adc')
+
     def test_fall_during_restoration_preserves_fan_command(self):
         iot = self.iot
         with patch.object(iot.time, 'monotonic', return_value=113):

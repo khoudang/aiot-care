@@ -159,7 +159,7 @@ GESTURE_COOLDOWN_SEC = float(os.getenv("GESTURE_COOLDOWN_SEC", "1.2"))
 MAX_HISTORY = int(os.getenv("MAX_HISTORY", "30"))
 ALERT_COOLDOWN_SEC = float(os.getenv("ALERT_COOLDOWN_SEC", "60"))
 
-# Ngưỡng khí gas (đơn vị ADC/ppm tùy cảm biến). Lọc bằng trung bình trượt trong iot.py.
+# Ngưỡng khí gas theo ADC thô (0-4095). Lọc bằng trung bình trượt trong iot.py.
 GAS_WARN_THRESHOLD = float(os.getenv("GAS_WARN_THRESHOLD", "1500"))
 GAS_HIGH_THRESHOLD = float(os.getenv("GAS_HIGH_THRESHOLD", "2500"))
 GAS_SMOOTH_WINDOW = int(os.getenv("GAS_SMOOTH_WINDOW", "5"))
