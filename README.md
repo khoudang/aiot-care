@@ -13,7 +13,7 @@ cập nhật dashboard theo thời gian thực. Laptop Windows có thể dùng �
 | --- | --- | --- |
 | Phòng người bệnh | Nhiệt độ, độ ẩm, chuyển động; camera, cử chỉ và phát hiện té ngã | Quạt, còi, servo quay camera |
 | Phòng khách | Nhiệt độ, độ ẩm, ánh sáng, chuyển động | Đèn, quạt, chế độ tự động |
-| Phòng bếp | Giá trị gas ADC, khói, lửa | Cửa sổ, quạt hút, đèn, còi |
+| Phòng bếp | Giá trị gas ADC, ngõ comparator DO của MP-2, tín hiệu lửa | Cửa sổ, quạt hút, đèn, còi |
 
 Dashboard có tổng quan ba phòng, trạng thái kết nối, cảnh báo, lịch sử cảm biến,
 và trang quản trị tài khoản. Dự án **không sử dụng vòng đeo tay**.

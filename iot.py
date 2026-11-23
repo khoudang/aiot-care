@@ -1300,7 +1300,7 @@ def build_alert_message(reason):
     return (
         "canh bao AIoT Care Station\n"
         f"- su kien: {reason}\n"
-        f"- gas bep: {k.get('gas')}  khoi: {k.get('smoke')}  lua: {k.get('flame')}\n"
+        f"- gas bep (raw ADC): {k.get('gas')}  MP-2 DO: {k.get('mp2_do_alarm')} (enabled={k.get('mp2_do_enabled')})  flame: {k.get('flame')}\n"
         f"- phong benh: nhiet do {p.get('temp')} do am {p.get('hum')} te nga {AI.get('fall')}\n"
         f"- thoi gian: {vn_now_sql()} (gmt+7)"
     )
@@ -1327,7 +1327,7 @@ def send_telegram_alert_async(reason):
 
 
 def _danger_warn():
-    """Trả về (danger, warn) dựa trên gas/khói/lửa (đã lọc trung bình trượt)."""
+    """Trả về (danger, warn) dựa trên ADC gas, comparator DO MP-2 và cảm biến lửa."""
     with state_lock:
         k = dict(ROOMS["kitchen"])
     gas_k = _gas_avg("kitchen") or 0
@@ -1445,7 +1445,7 @@ def _enter_emergency():
             _emergency_snapshot = {room: dict(ROOMS[room]) for room in ("patient", "living")}
             if _fall_buzzer_saved is not None:
                 _emergency_snapshot["patient"]["buzzer"] = _fall_buzzer_saved
-    log_audit("Cảnh báo khẩn cấp: khói/lửa/gas cao", user_id=None)
+    log_audit("Cảnh báo khẩn cấp: MP-2 DO/lửa/gas cao", user_id=None)
     send_telegram_alert_async("khan cap chay/gas")
     set_device("living", "auto", state=False, source="auto", silent=True)
     set_device("living", "light", state=False, source="auto", silent=True)
@@ -1651,7 +1651,7 @@ def evaluate_alerts():
     if danger:
         if alert_level != "emergency":
             _enter_emergency()
-        _set_alert("emergency", "Phát hiện khói/lửa hoặc khí gas rất cao!")
+        _set_alert("emergency", "Phát hiện tín hiệu MP-2 DO/lửa hoặc khí gas rất cao!")
     else:
         if alert_level == "emergency":
             _set_alert("awaiting", "Điều kiện đã an toàn — cần xác nhận để khôi phục.")

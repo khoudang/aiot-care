@@ -66,7 +66,7 @@ class KitchenControlTests(unittest.TestCase):
         self.assertEqual(json.loads(record['text'])['cmd'], 'confirm_safe')
 
         handler = iot._make_notify_handler('kitchen')
-        handler(None, json.dumps({'ack': command_id, 'status': 'applied'}).encode() + b'\\n')
+        handler(None, json.dumps({'ack': command_id, 'status': 'applied'}).encode() + b'\n')
         self.assertEqual(iot.alert_level, 'awaiting', 'ACK alone must not clear the latch')
 
         with patch.object(iot.time, 'monotonic', return_value=114):
@@ -91,6 +91,15 @@ class KitchenControlTests(unittest.TestCase):
         self.assertTrue(any(command.get('cmd') == 'confirm_safe'
                             and command.get('event_id') == 1
                             for command in commands))
+
+    def test_alert_message_names_mp2_do_instead_of_smoke_detector(self):
+        iot = self.iot
+        iot.ROOMS['kitchen'].update(gas=700, mp2_do_enabled=True,
+                                    mp2_do_alarm=True, flame=False)
+        with patch.object(iot, 'vn_now_sql', return_value='2026-11-23 20:00:00'):
+            message = iot.build_alert_message('test')
+        self.assertIn('MP-2 DO', message)
+        self.assertNotIn('khoi:', message)
 
     def test_gas_smoothing_ignores_status_only_and_invalid_frames(self):
         iot = self.iot
