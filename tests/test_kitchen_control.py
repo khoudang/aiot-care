@@ -54,6 +54,30 @@ class KitchenControlTests(unittest.TestCase):
                 iot._kitchen_emergency = True
                 self.assertEqual(iot._danger_warn(), expected)
 
+    def test_gateway_only_confirmation_waits_for_ack_and_fresh_normal_phase(self):
+        iot = self.iot
+        with patch.object(iot.time, 'monotonic', return_value=113):
+            self.safe_kitchen()
+            iot.ROOMS['kitchen'].update(gas=500, smoke=False, flame=False,
+                                        phase='wait_confirm', event_id=7)
+            iot.confirm_safe()
+        self.assertEqual(iot.alert_level, 'awaiting')
+        command_id, record = next(iter(iot._pending_commands['kitchen'].items()))
+        self.assertEqual(json.loads(record['text'])['cmd'], 'confirm_safe')
+
+        handler = iot._make_notify_handler('kitchen')
+        handler(None, json.dumps({'ack': command_id, 'status': 'applied'}).encode() + b'\\n')
+        self.assertEqual(iot.alert_level, 'awaiting', 'ACK alone must not clear the latch')
+
+        with patch.object(iot.time, 'monotonic', return_value=114):
+            iot.apply_node_payload('kitchen', {
+                'gas': 500, 'smoke': False, 'mp2_do_enabled': False,
+                'mp2_do_alarm': False, 'flame': False, 'emergency': False,
+                'phase': 'normal', 'event_id': 7,
+            })
+        self.assertEqual(iot.alert_level, 'normal')
+        self.assertIsNone(iot._kitchen_confirm_pending_event_id)
+
     def test_confirm_safe_accepts_wait_confirm_after_stale_emergency_latch(self):
         iot = self.iot
         with patch.object(iot.time, 'monotonic', return_value=113):

@@ -229,6 +229,8 @@ _restoration_seen = {}
 _kitchen_safe_since = None
 _kitchen_sample_at = None
 _kitchen_emergency = False
+_kitchen_confirm_pending_event_id = None
+_kitchen_confirm_ack_event_id = None
 _alarm_silenced = False
 _fall_buzzer_saved = None
 _fall_restore_target = None
@@ -683,6 +685,8 @@ def apply_node_payload(room, payload):
         _maybe_auto_camera_on()
 
     evaluate_alerts()
+    if room == "kitchen":
+        _observe_kitchen_confirmation()
     _observe_restoration(room, payload)
     _observe_fall_restoration(room, payload)
 
@@ -737,6 +741,7 @@ def _make_notify_handler(room):
     buffer = bytearray()
 
     def apply_frame(frame):
+        global _kitchen_confirm_pending_event_id, _kitchen_confirm_ack_event_id
         payload = json.loads(frame.decode("utf-8"))
         if isinstance(payload, dict):
             target = payload.get("room", room)
@@ -751,6 +756,15 @@ def _make_notify_handler(room):
                             del _pending_commands[room][payload["ack"]]
                             timing_tracer.record_ack(room, payload["ack"], payload["status"])
                             command = json.loads(pending["text"])
+                            if room == "kitchen" and command.get("cmd") == "confirm_safe":
+                                if (payload["status"] == "applied" and
+                                        command.get("event_id") == _kitchen_confirm_pending_event_id):
+                                    _kitchen_confirm_ack_event_id = command["event_id"]
+                                    _observe_kitchen_confirmation()
+                                elif (payload["status"] == "rejected" and
+                                      command.get("event_id") == _kitchen_confirm_pending_event_id):
+                                    _kitchen_confirm_pending_event_id = None
+                                    _kitchen_confirm_ack_event_id = None
                             if command.get("request_id"):
                                 _emit("command_result", {
                                     "room": room, "device": command["cmd"],
@@ -1447,7 +1461,7 @@ def confirm_fall_safe(user_id=None):
 def confirm_safe(user_id=None):
     """Người dùng xác nhận an toàn -> khôi phục thiết bị."""
     global alert_level, _emergency_snapshot, _restoration_started
-    global _fall_restore_target
+    global _fall_restore_target, _kitchen_confirm_pending_event_id, _kitchen_confirm_ack_event_id
     if _emergency_snapshot is None and _fall_buzzer_saved is not None:
         if AI.get("fall"):
             return
@@ -1477,8 +1491,14 @@ def confirm_safe(user_id=None):
         _fail_restoration("patient")
     # The gateway never replays a stale confirmation on reconnect.
     _cancel_commands("kitchen")
+    if _emergency_snapshot is None:
+        _kitchen_confirm_pending_event_id = kitchen["event_id"]
+        _kitchen_confirm_ack_event_id = None
     if not enqueue_command("kitchen", json.dumps(
             {"cmd": "confirm_safe", "event_id": kitchen["event_id"]})):
+        if _emergency_snapshot is None:
+            _kitchen_confirm_pending_event_id = None
+            _kitchen_confirm_ack_event_id = None
         _emit("command_error", {"room": "kitchen", "message": "Không gửi được xác nhận."})
         return
     if _emergency_snapshot is not None:
@@ -1503,10 +1523,45 @@ def confirm_safe(user_id=None):
         _emit("alert_state", {"level": alert_level,
                               "message": "Đang chờ node xác nhận khôi phục."})
         return
-    log_audit("Xác nhận an toàn, khôi phục thiết bị", user_id=user_id)
-    alert_level = "normal"
-    _emit("alert_state", {"level": "normal", "message": "Đã khôi phục về trạng thái bình thường."})
-    evaluate_alerts()   # nếu vẫn còn nguy hiểm sẽ tự quay lại emergency
+    log_audit("Xác nhận an toàn; đang chờ node bếp xác nhận", user_id=user_id)
+    _set_alert("awaiting", "Đang chờ node bếp xác nhận khôi phục.")
+
+
+def _observe_kitchen_confirmation():
+    """Clear a gateway-only kitchen latch only after ACK and fresh NORMAL telemetry."""
+    global _kitchen_confirm_pending_event_id, _kitchen_confirm_ack_event_id
+    expected = _kitchen_confirm_pending_event_id
+    if expected is None or _kitchen_confirm_ack_event_id != expected:
+        return
+    if _emergency_snapshot is not None or not NODE_ONLINE.get("kitchen"):
+        return
+    kitchen = ROOMS["kitchen"]
+    if kitchen.get("event_id") != expected:
+        if kitchen.get("phase") in ("emergency", "wait_confirm"):
+            _kitchen_confirm_pending_event_id = None
+            _kitchen_confirm_ack_event_id = None
+        return
+    if kitchen.get("phase") != "normal":
+        return
+    now = time.monotonic()
+    if (_kitchen_safe_since is None or _kitchen_sample_at is None or
+            now - _kitchen_sample_at > KITCHEN_SAMPLE_TIMEOUT_SEC):
+        return
+    danger, warn = _danger_warn()
+    if danger or warn:
+        return
+    with _delivery_lock:
+        confirm_pending = any(
+            json.loads(pending["text"]).get("cmd") == "confirm_safe"
+            for pending in _pending_commands["kitchen"].values()
+        )
+    if confirm_pending:
+        return
+    _kitchen_confirm_pending_event_id = None
+    _kitchen_confirm_ack_event_id = None
+    log_audit("Node bếp đã xác nhận trạng thái NORMAL sau cảnh báo", user_id=None)
+    _set_alert("normal", "Node bếp đã xác nhận khôi phục về trạng thái bình thường.")
+    evaluate_alerts()
 
 
 def _observe_restoration(room, payload):
