@@ -84,7 +84,7 @@ console.log(`SOCKET_REGRESSIONS=${cases.length} FAILURES=${failures}`);process.e
 
 
 async function testKitchenAlertRendererUsesTextNodes() {
-  const start = source.indexOf('  async function loadKitchenAlerts(){');
+  const start = source.indexOf('  let _lastKitchenFetch = 0;');
   const end = source.indexOf('  const ktReload', start);
   assert.ok(start >= 0 && end > start, 'Actual production kitchen alert renderer must exist');
 
