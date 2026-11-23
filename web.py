@@ -433,10 +433,15 @@ def register_web(app, socketio):
                     "admin_register_code": get_config_value("admin_register_code", ""),
                     "telegram_bot_token": get_config_value("telegram_bot_token", ""),
                     "telegram_chat_id": get_config_value("telegram_chat_id", ""),
+                    "history_sample_interval_sec": get_config_value(
+                        "history_sample_interval_sec", "60"),
                 },
             })
 
-        payload = request.get_json(silent=True) or {}
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"ok": False, "message": "Thông tin cấu hình không hợp lệ."}), 400
+
         admin_register_code = (payload.get("admin_register_code") or "").strip()
         telegram_bot_token = (payload.get("telegram_bot_token") or "").strip()
         telegram_chat_id = (payload.get("telegram_chat_id") or "").strip()
@@ -444,9 +449,30 @@ def register_web(app, socketio):
         if not admin_register_code:
             return jsonify({"ok": False, "message": "Mã đăng ký admin không được để trống."}), 400
 
+        history_interval = None
+        if "history_sample_interval_sec" in payload:
+            raw_interval = payload["history_sample_interval_sec"]
+            try:
+                if isinstance(raw_interval, bool):
+                    raise ValueError
+                if isinstance(raw_interval, float) and not raw_interval.is_integer():
+                    raise ValueError
+                if not isinstance(raw_interval, (int, float, str)):
+                    raise ValueError
+                history_interval = int(str(raw_interval).strip())
+                if not 5 <= history_interval <= 3600:
+                    raise ValueError
+            except (TypeError, ValueError, OverflowError):
+                return jsonify({
+                    "ok": False,
+                    "message": "Khoảng lưu mẫu biểu đồ phải từ 5 đến 3600 giây.",
+                }), 400
+
         set_config_value("admin_register_code", admin_register_code)
         set_config_value("telegram_bot_token", telegram_bot_token)
         set_config_value("telegram_chat_id", telegram_chat_id)
+        if history_interval is not None:
+            set_config_value("history_sample_interval_sec", str(history_interval))
 
         log_audit("Cập nhật cấu hình hệ thống", user_id=session.get("user_id"))
         return jsonify({
@@ -456,6 +482,8 @@ def register_web(app, socketio):
                 "admin_register_code": admin_register_code,
                 "telegram_bot_token": telegram_bot_token,
                 "telegram_chat_id": telegram_chat_id,
+                "history_sample_interval_sec": get_config_value(
+                    "history_sample_interval_sec", "60"),
             },
         })
 

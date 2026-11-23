@@ -33,6 +33,7 @@ DEFAULT_CONFIGS = {
     "admin_register_code": os.getenv("ADMIN_REGISTER_CODE", "FAMILY2026"),
     "telegram_bot_token": os.getenv("TELEGRAM_BOT_TOKEN", ""),
     "telegram_chat_id": os.getenv("TELEGRAM_CHAT_ID", ""),
+    "history_sample_interval_sec": os.getenv("HISTORY_SAMPLE_INTERVAL_SEC", "60"),
 }
 
 

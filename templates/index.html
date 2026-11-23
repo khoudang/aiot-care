@@ -609,6 +609,11 @@
                 <label for="cfg-chat">Telegram Chat ID</label>
                 <input type="text" id="cfg-chat" placeholder="Chat ID nhận thông báo">
               </div>
+              <div class="fld">
+                <label for="cfg-history-interval">Khoảng lưu mẫu biểu đồ (giây)</label>
+                <input type="number" id="cfg-history-interval" min="5" max="3600" step="1" value="60" required>
+                <small>Chỉ thay đổi tần suất lưu lịch sử biểu đồ; không thay đổi tốc độ đọc cảm biến hoặc xử lý cảnh báo.</small>
+              </div>
               <div class="settings-actions">
                 <button type="submit" class="btn accent"><i class="fas fa-floppy-disk"></i> Lưu cấu hình</button>
               </div>

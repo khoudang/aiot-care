@@ -64,7 +64,7 @@
       }catch(error){if(token===logRequest&&message)message.textContent=error.message;throw error;}
     }
     ['logs-from','logs-to'].forEach(id=>$(id)?.addEventListener('change',()=>loadLogs().catch(()=>{})));
-    async function loadConfig(){const c=(await fj('/api/admin/configs')).configs||{};$('cfg-code').value=c.admin_register_code||'';$('cfg-token').value=c.telegram_bot_token||'';$('cfg-chat').value=c.telegram_chat_id||'';}
+    async function loadConfig(){const c=(await fj('/api/admin/configs')).configs||{};$('cfg-code').value=c.admin_register_code||'';$('cfg-token').value=c.telegram_bot_token||'';$('cfg-chat').value=c.telegram_chat_id||'';$('cfg-history-interval').value=c.history_sample_interval_sec||60;}
     const bleNames={patient:'Phòng người bệnh',living:'Phòng khách',kitchen:'Phòng bếp'};
     const bleStatus=state=>{
       if(state==='ready'||state===true)return 'Sẵn sàng';
@@ -152,7 +152,7 @@
     $('reload-audit').addEventListener('click',()=>loadLogs().catch(e=>alert(e.message)));
     $('clear-login').addEventListener('click',async()=>{if(!confirm('Xóa toàn bộ lịch sử đăng nhập?'))return;try{const d=await fj('/api/admin/logs',{method:'DELETE',body:JSON.stringify({target:'login'})});await loadLogs();}catch(e){alert(e.message);}});
     $('clear-audit').addEventListener('click',async()=>{if(!confirm('Xóa toàn bộ lịch sử hoạt động & cảnh báo?'))return;try{const d=await fj('/api/admin/logs',{method:'DELETE',body:JSON.stringify({target:'audit'})});await loadLogs();}catch(e){alert(e.message);}});
-    $('config-form').addEventListener('submit',async e=>{e.preventDefault();try{const d=await fj('/api/admin/configs',{method:'POST',body:JSON.stringify({admin_register_code:$('cfg-code').value.trim(),telegram_bot_token:$('cfg-token').value.trim(),telegram_chat_id:$('cfg-chat').value.trim()})});alert(d.message||'Đã lưu.');loadLogs();}catch(err){alert(err.message);}});
+    $('config-form').addEventListener('submit',async e=>{e.preventDefault();try{const d=await fj('/api/admin/configs',{method:'POST',body:JSON.stringify({admin_register_code:$('cfg-code').value.trim(),telegram_bot_token:$('cfg-token').value.trim(),telegram_chat_id:$('cfg-chat').value.trim(),history_sample_interval_sec:Number($('cfg-history-interval').value)})});$('cfg-history-interval').value=d.configs?.history_sample_interval_sec||$('cfg-history-interval').value;alert(d.message||'Đã lưu.');loadLogs();}catch(err){alert(err.message);}});
     const weatherForm=$('weather-config-form'),weatherSelect=$('cfg-weather-city'),weatherMessage=$('weather-config-message');
     if(weatherForm){
       const weatherSave=$('weather-save');

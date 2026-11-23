@@ -131,3 +131,30 @@ class WebFeaturesTests(unittest.TestCase):
         response = self.client.get('/api/admin/ble-scan')
         self.assertEqual(response.status_code, 503)
         self.assertNotIn('Bluetooth adapter unavailable', response.get_data(as_text=True))
+
+    def test_chart_history_interval_is_admin_only_bounded_and_persisted(self):
+        self.assertEqual(self.client.get('/api/admin/configs').status_code, 401)
+        self.login()
+
+        initial = self.client.get('/api/admin/configs')
+        self.assertEqual(initial.status_code, 200)
+        self.assertEqual(initial.json['configs']['history_sample_interval_sec'], '60')
+
+        payload = {
+            'admin_register_code': 'TESTCODE',
+            'telegram_bot_token': '',
+            'telegram_chat_id': '',
+            'history_sample_interval_sec': 5,
+        }
+        saved = self.client.post('/api/admin/configs', json=payload)
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json['configs']['history_sample_interval_sec'], '5')
+
+        for invalid in (4, 3601, 'not-a-number', True, 5.5):
+            with self.subTest(invalid=invalid):
+                payload['history_sample_interval_sec'] = invalid
+                response = self.client.post('/api/admin/configs', json=payload)
+                self.assertEqual(response.status_code, 400)
+                current = self.client.get('/api/admin/configs')
+                self.assertEqual(current.json['configs']['history_sample_interval_sec'], '5')
+

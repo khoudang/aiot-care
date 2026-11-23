@@ -552,7 +552,46 @@ def snapshot_all():
             "fall_confirmation": fall_confirmation_status()}
 
 
+_HISTORY_SAMPLE_INTERVAL_KEY = "history_sample_interval_sec"
+_HISTORY_SAMPLE_INTERVAL_DEFAULT = 60
+_HISTORY_SAMPLE_INTERVAL_MIN = 5
+_HISTORY_SAMPLE_INTERVAL_MAX = 3600
+_history_sample_times = {}
+_history_interval = _HISTORY_SAMPLE_INTERVAL_DEFAULT
+_history_interval_checked_at = None
+
+
+def _history_interval_seconds():
+    """Read the chart-only history cadence; invalid settings fall back safely."""
+    global _history_interval, _history_interval_checked_at
+    now = time.monotonic()
+    if (_history_interval_checked_at is None
+            or now - _history_interval_checked_at >= 5.0):
+        try:
+            raw = get_config_value(
+                _HISTORY_SAMPLE_INTERVAL_KEY,
+                str(_HISTORY_SAMPLE_INTERVAL_DEFAULT),
+            )
+            interval = int(str(raw).strip())
+            if not (_HISTORY_SAMPLE_INTERVAL_MIN <= interval <= _HISTORY_SAMPLE_INTERVAL_MAX):
+                raise ValueError("history interval outside supported range")
+        except Exception:
+            interval = _HISTORY_SAMPLE_INTERVAL_DEFAULT
+        _history_interval = interval
+        _history_interval_checked_at = now
+    return _history_interval
+
+
 def push_history(room):
+    if room not in histories:
+        return
+    now = time.monotonic()
+    interval = _history_interval_seconds()
+    previous = _history_sample_times.get(room)
+    if previous is not None and now - previous < interval:
+        return
+    _history_sample_times[room] = now
+
     label = time.strftime("%H:%M:%S")
     r = ROOMS[room]
     h = histories[room]
@@ -560,7 +599,8 @@ def push_history(room):
     for key in h:
         if key == "labels":
             continue
-        h[key].append(r.get(key))
+        value = r.get(key)
+        h[key].append(int(value) if isinstance(value, bool) else value)
 
 
 # ================================================================== #
