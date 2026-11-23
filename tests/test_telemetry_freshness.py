@@ -39,6 +39,20 @@ class TelemetryFreshnessTests(unittest.TestCase):
         iot.apply_node_payload('kitchen', {'phase': 'normal', 'event_id': 10})
         self.assertTrue(all(v is None for v in iot._sensor_seen_at['kitchen'].values()))
 
+    def test_stale_transition_is_published_without_another_ble_packet(self):
+        iot = load_iot()
+        iot.TELEMETRY_STALE_SEC = 10.0
+        iot.set_node_online('patient', True)
+        with patch.object(iot.time, 'monotonic', return_value=0.0):
+            iot.apply_node_payload('patient', {'temp': 25.0, 'hum': 60.0, 'motion': False})
+        iot._emit.reset_mock()
+        with patch.object(iot.time, 'monotonic', return_value=11.0):
+            self.assertTrue(iot.emit_telemetry_status())
+            self.assertFalse(iot.emit_telemetry_status())
+        self.assertTrue(any(call.args[0] == 'telemetry_update'
+                            and call.args[1]['patient']['status'] == 'stale'
+                            for call in iot._emit.call_args_list))
+
     def test_reconnect_invalidates_old_sensor_samples_and_requires_mp2_do(self):
         iot = load_iot()
         iot.set_node_online('kitchen', True)

@@ -533,7 +533,7 @@
     nodeState[room]=online;updateNodeChip();
   }
   function applyTelemetry(quality){
-    const names={temp:'nhiệt độ',hum:'độ ẩm',motion:'hiện diện',lux:'ánh sáng',gas:'ADC khí',flame:'tín hiệu lửa'};
+    const names={temp:'nhiệt độ',hum:'độ ẩm',motion:'hiện diện',lux:'ánh sáng',gas:'ADC khí',mp2_do_alarm:'ngõ DO MP-2',flame:'tín hiệu lửa'};
     Object.entries(quality||{}).forEach(([room,q])=>{
       if(!['patient','living','kitchen'].includes(room)||!q)return;
       telemetryCache[room]=q;

@@ -451,6 +451,17 @@ class KitchenControlTests(unittest.TestCase):
                     iot.apply_node_payload('living', {'auto': True})
                     self.assertIsNone(iot._emergency_snapshot)
 
+    def test_kitchen_disconnect_aborts_inflight_restoration(self):
+        iot = self.iot
+        with patch.object(iot.time, 'monotonic', return_value=113):
+            self.begin_restoration()
+            self.assertIsNotNone(iot._restoration_started)
+            iot.set_node_online('kitchen', False)
+        self.assertIsNone(iot._restoration_started)
+        self.assertIsNotNone(iot._emergency_snapshot)
+        self.assertFalse(iot._pending_commands['patient'])
+        self.assertFalse(iot._pending_commands['living'])
+
     def test_restoration_confirmation_expires_or_disconnects(self):
         for disconnect in (False, True):
             self.iot = load_iot()

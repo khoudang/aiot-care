@@ -180,6 +180,8 @@ _SENSOR_FIELDS = {"patient": ("temp", "hum", "motion"),
                   "living": ("temp", "hum", "lux", "motion"),
                   "kitchen": ("gas", "mp2_do_alarm", "flame")}
 _sensor_seen_at = {room: dict.fromkeys(fields) for room, fields in _SENSOR_FIELDS.items()}
+_telemetry_emit_lock = threading.Lock()
+_telemetry_last_signature = None
 
 _CAMERA_OFF_METRICS = {'camera_profile': 'off', 'camera_profile_reason': 'offline',
                        'target_video_fps': 0.0, 'target_ai_fps': 0.0}
@@ -515,6 +517,31 @@ def telemetry_status():
     return result
 
 
+def emit_telemetry_status(force=False):
+    """Publish only freshness/state transitions; ages still update in the snapshot."""
+    global _telemetry_last_signature
+    quality = telemetry_status()
+    signature = tuple(
+        (room, item["status"], item["transport_state"],
+         tuple((key, field["status"]) for key, field in sorted(item["fields"].items())))
+        for room, item in sorted(quality.items())
+    )
+    with _telemetry_emit_lock:
+        if not force and signature == _telemetry_last_signature:
+            return False
+        _telemetry_last_signature = signature
+    _emit("telemetry_update", quality)
+    return True
+
+
+def _telemetry_watchdog():
+    """Detect stale sensors even when a BLE link remains connected but stops notifying."""
+    interval = min(1.0, max(0.25, TELEMETRY_STALE_SEC / 2.0))
+    while True:
+        time.sleep(interval)
+        emit_telemetry_status()
+
+
 def _record_sensor_sample(room, payload):
     now = time.monotonic()
     with state_lock:
@@ -699,7 +726,7 @@ def apply_node_payload(room, payload):
     _observe_fall_restoration(room, payload)
 
     _emit("room_update", {"room": room, "data": dict(ROOMS[room])})
-    _emit("telemetry_update", telemetry_status())
+    emit_telemetry_status()
     if history_updated:
         _emit("sensor_chart_update", snapshot_histories())
 
@@ -737,11 +764,12 @@ def set_node_online(room, online, state=None):
     _restoration_seen.pop(room, None)
     if room == "kitchen" and not is_ready:
         # A new BLE session must earn a complete fresh safe window again.
-        _kitchen_safe_since = None
-        _kitchen_sample_at = None
-        gas_window["kitchen"].clear()
-        _kitchen_confirm_pending_event_id = None
-        _kitchen_confirm_ack_event_id = None
+        with state_lock:
+            _kitchen_safe_since = None
+            _kitchen_sample_at = None
+            gas_window["kitchen"].clear()
+            _kitchen_confirm_pending_event_id = None
+            _kitchen_confirm_ack_event_id = None
         _cancel_commands("kitchen")
         if _restoration_started is not None:
             _fail_restoration("kitchen")
@@ -755,7 +783,7 @@ def set_node_online(room, online, state=None):
     else:
         _emit("node_state", dict(NODE_STATES))
     if changed or previous_state != resolved_state:
-        _emit("telemetry_update", telemetry_status())
+        emit_telemetry_status()
 
 
 def room_name(room):
@@ -1350,7 +1378,7 @@ def _set_alert(level, message=None):
 def _fail_restoration(room):
     """Keep the snapshot/lock, but allow explicit confirmation to start again."""
     global _restoration_started
-    if _restoration_started is None or room not in ("patient", "living"):
+    if _restoration_started is None or room not in ("patient", "living", "kitchen"):
         return
     _restoration_started = None
     _restoration_seen.clear()
@@ -2703,6 +2731,7 @@ def start_background_services():
 
     load_gesture_map()
     init_uart()
+    threading.Thread(target=_telemetry_watchdog, daemon=True, name="telemetry-watchdog").start()
     threading.Thread(target=_ble_thread, daemon=True).start()
     if camera_mode in ("on", "auto"):
         _start_camera()
