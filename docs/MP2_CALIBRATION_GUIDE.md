@@ -29,7 +29,7 @@
      * `calibration_status: "uncalibrated"`
      * `ppm_c3h8: null` (hoặc `unavailable`)
 2. **Không đồng nhất `smoke: false` với cảm biến khói chuyên dụng:**
-   * Node bếp không có đầu báo khói quang học độc lập. Trường `smoke: false` trong payload chỉ giữ lại để tương thích ngược với schema cũ. Giao diện người dùng và tài liệu phải ghi rõ chỉ có cảm biến khí MP-2 và cảm biến lửa.
+   * Node bếp không có đầu báo khói quang học độc lập. Trường `smoke` chỉ là alias tương thích với schema cũ: khi `mp2_do_enabled=true` thì đồng nghĩa tín hiệu DO MP-2; khi chưa kích hoạt DO, `smoke=false` **không có nghĩa là không có khói**. Dùng `mp2_do_enabled` và `mp2_do_alarm` để dashboard thể hiện đúng khả năng thực tế.
 3. **Giữ nguyên logic an toàn bảo vệ fail-closed:**
    * Ngưỡng cảnh báo nhẹ (`GAS_WARN_THRESHOLD = 1500`) và khẩn cấp (`GAS_HIGH_THRESHOLD = 2500`) là các ngưỡng ADC thô trên mạch thực nghiệm.
    * Giữ nguyên thời gian tích lũy an toàn liên tục $10\text{ giây}$ trước khi cho phép vào trạng thái chờ xác nhận (`WAIT_CONFIRM`).

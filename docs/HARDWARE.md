@@ -13,7 +13,7 @@ Tên BLE: `AIoT_Kitchen_Node`. MAC thực tế cần kiểm tra qua Serial Monit
 | Thiết bị | Tín hiệu | ESP32-C3 | Ghi chú |
 | --- | --- | --- | --- |
 | MP-2 (nguồn 5 V) | AO | GPIO0 | Qua R1=1 kΩ từ AO đến GPIO0, R2=1,5 kΩ từ GPIO0 xuống GND: V_GPIO0 ≈ 0,6×V_AO; ADC thô, không phải ppm |
-| MP-2 | DO | GPIO1 | Có dây theo sơ đồ thực tế, **firmware không đọc**; phải ngắt dây hoặc hạ mức nếu DO có thể lên 5 V |
+| MP-2 | DO (so ngưỡng khí) | GPIO1 | Đã có hỗ trợ firmware nhưng **tắt mặc định** (`MP2_DO_SAFE_WIRING_VERIFIED=0`). Không nối trực tiếp DO 5 V với GPIO: phải ngắt dây hoặc dùng chuyển mức 3,3 V và kiểm tra điện áp cực đại trước khi bật. |
 | Cảm biến lửa (nguồn 3,3 V) | AO | GPIO3 | Dây đã xác nhận; hiện chưa dùng để kích hoạt báo động |
 | Cảm biến lửa (nguồn 3,3 V) | DO | GPIO6 | LOW = phát hiện lửa (phải kiểm thử mức logic thực tế) |
 | Servo cửa sổ | Signal | GPIO4 | 0° đóng, 90° mở |
@@ -22,7 +22,7 @@ Tên BLE: `AIoT_Kitchen_Node`. MAC thực tế cần kiểm tra qua Serial Monit
 | Driver quạt hút | IN2 | GPIO8 | LOW |
 | Relay đèn | IN | GPIO20 | HIGH bật theo firmware |
 
-**Logic khí:** chỉ MP-2 AO tham gia xét mức (ADC 1500/2500 hiện là ngưỡng thử nghiệm *sau chia áp*, cần hiệu chuẩn lại). Cảm biến lửa kích hoạt theo DO. Các GPIO chỉ ghi kết nối thực tế; firmware chưa được nạp/kiểm chứng trên board. **Không dùng mô hình quạt thông thường làm giải pháp an toàn trong môi trường rò gas thật.**
+**Logic khí:** MP-2 AO là nguồn đo ADC thô, ngưỡng thử nghiệm 1500/2500 sau chia áp cần hiệu chuẩn lại. MP-2 DO là **ngõ cảnh báo mức khí của cùng module**, không phải đầu báo khói độc lập. Firmware chỉ đọc GPIO1 khi `MP2_DO_SAFE_WIRING_VERIFIED=1` (phải xác nhận chuyển mức 3,3 V và cực tính DO active LOW trên board thật). Khi bật, DO có thể kích hoạt `EMERGENCY` và chặn xác nhận an toàn. Cảm biến lửa có chân DO riêng. Firmware chưa được nạp/kiểm chứng trên board. **Không dùng mô hình quạt thông thường làm giải pháp an toàn trong môi trường rò gas thật.**
 
 ## Phòng người bệnh — `patient` (đã xác nhận)
 

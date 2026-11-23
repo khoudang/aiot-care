@@ -18,7 +18,7 @@ living,PIN_LIGHT_RELAY,GPIO7,
 living,PIN_FAN_IN1,GPIO5,
 living,PIN_FAN_IN2,GPIO6,
 kitchen,PIN_MP2_AO,GPIO0,R1 1k R2 1.5k voltage divider
-kitchen,MP2_DO_UNUSED,GPIO1,physically connected but unsafe unless level shifted
+kitchen,PIN_MP2_DO,GPIO1,disabled by default; safe 3.3V level shift required before enable
 kitchen,PIN_FLAME_AO,GPIO3,flame module powered at 3.3V
 kitchen,PIN_FLAME_DO,GPIO6,active LOW to be verified
 kitchen,PIN_WINDOW_SERVO,GPIO4,

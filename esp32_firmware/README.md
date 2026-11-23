@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | `patient_node/patient_node.ino` | `AIoT_Patient_Node` | SHT, PIR, đèn, quạt, buzzer, servo qua UART |
 | `living_node/living_node.ino` | `AIoT_Living_Node` | SHT, BH1750, PIR, đèn, quạt tự động |
-| `kitchen_node/kitchen_node.ino` | `AIoT_Kitchen_Node` | Gas, khói, lửa, cửa sổ, quạt hút, đèn, buzzer |
+| `kitchen_node/kitchen_node.ino` | `AIoT_Kitchen_Node` | MP-2 ADC, DO so ngưỡng khí (tùy chọn), lửa, cửa sổ, quạt hút, đèn, buzzer |
 
 Hai header dùng chung: `command_contract.h` xử lý lệnh/ACK, `node_logic.h` chứa
 logic tự động bếp và phòng khách. Giữ nguyên cấu trúc thư mục khi mở/biên dịch sketch
@@ -48,16 +48,24 @@ Quạt nhận PWM 0–255 trên đường BLE; backend đổi phần trăm 0–1
 `KitchenState` đọc cảm biến mỗi khoảng 100 ms, kể cả lúc mất BLE:
 
 - Gas ADC ≥ 1500: còi cảnh báo nhịp 300 ms mỗi 2 giây.
-- Gas ADC ≥ 2500, có khói hoặc có lửa: mở cửa, bật quạt hút và còi, **tắt đèn**.
+- Gas ADC ≥ 2500, DO MP-2 báo vượt ngưỡng (nếu đã bật), hoặc có lửa: mở cửa, bật quạt hút và còi, **tắt đèn**.
 - Quạt hút bếp nhận PWM 0–255; web điều chỉnh 0–100%. Cảnh báo khẩn cấp luôn chạy quạt 100%.
 - Trong trạng thái khẩn cấp, node từ chối lệnh điều khiển thủ công.
-- Khi hết cả nguy hiểm và cảnh báo liên tục 10 giây, node khôi phục trạng thái
-  các đầu ra đã lưu trước khẩn cấp.
+- Khi hết điều kiện nguy hiểm và cảnh báo liên tục 10 giây, node vào `WAIT_CONFIRM`;
+  chỉ khôi phục các đầu ra đã lưu sau khi xác nhận `event_id` hợp lệ.
 
 Ngưỡng này nằm trong `node_logic.h`; đổi biến môi trường ngưỡng gas trên gateway
 không tự đổi ngưỡng đã biên dịch trong node. Backend còn có quy trình cảnh báo và
 xác nhận khôi phục các phòng khác; không đồng nhất việc node bếp hết cảnh báo với
 việc toàn bộ hệ thống đã hoàn tất xác nhận.
+
+**Chân DO của MP-2:** GPIO1 chỉ được đọc khi đặt macro
+`MP2_DO_SAFE_WIRING_VERIFIED=1` lúc biên dịch. Mặc định là `0` (tắt).
+**Tắt đọc bằng phần mềm không ngăn được hư hỏng chân GPIO nếu đầu DO 5 V vẫn nối trực tiếp.**
+Ngắt dây hoặc chuyển mức logic xuống 3,3 V trước khi cấp nguồn và xác nhận
+cực tính active LOW bằng đo kiểm. BLE gửi `mp2_do_enabled`, `mp2_do_alarm`;
+trường `smoke` chỉ là tên tương thích cũ, **không** khẳng định có đầu báo khói riêng.
+Xem [checklist kiểm tra MP-2 DO](../docs/verification/mp2_do_checklist.md).
 
 ### Phòng khách
 
