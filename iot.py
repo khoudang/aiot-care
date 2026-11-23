@@ -1328,7 +1328,7 @@ def build_alert_message(reason):
     return (
         "canh bao AIoT Care Station\n"
         f"- su kien: {reason}\n"
-        f"- gas bep (raw ADC): {k.get('gas')}  MP-2 DO: {k.get('mp2_do_alarm')} (enabled={k.get('mp2_do_enabled')})  flame: {k.get('flame')}\n"
+        f"- gas bep (raw ADC): {k.get('gas')}  MP-2 DO: {bool(k.get('mp2_do_alarm') or k.get('smoke'))} (enabled={k.get('mp2_do_enabled')})  flame: {k.get('flame')}\n"
         f"- phong benh: nhiet do {p.get('temp')} do am {p.get('hum')} te nga {AI.get('fall')}\n"
         f"- thoi gian: {vn_now_sql()} (gmt+7)"
     )
@@ -1463,6 +1463,9 @@ def _observe_fall_restoration(room, payload):
 def _enter_emergency():
     """Kitchen owns local outputs; gateway quiets other rooms and saves state."""
     global _emergency_snapshot, _restoration_started, _alarm_silenced
+    global _kitchen_confirm_pending_event_id, _kitchen_confirm_ack_event_id
+    _kitchen_confirm_pending_event_id = None
+    _kitchen_confirm_ack_event_id = None
     _alarm_silenced = False
     _restoration_started = None
     _restoration_seen.clear()

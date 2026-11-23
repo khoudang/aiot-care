@@ -92,6 +92,15 @@ class KitchenControlTests(unittest.TestCase):
                             and command.get('event_id') == 1
                             for command in commands))
 
+    def test_new_emergency_invalidates_pending_kitchen_confirmation(self):
+        iot = self.iot
+        iot._kitchen_confirm_pending_event_id = 12
+        iot._kitchen_confirm_ack_event_id = 12
+        with patch.object(iot, 'set_device'), patch.object(iot, '_maybe_auto_camera_on'):
+            iot._enter_emergency()
+        self.assertIsNone(iot._kitchen_confirm_pending_event_id)
+        self.assertIsNone(iot._kitchen_confirm_ack_event_id)
+
     def test_alert_message_names_mp2_do_instead_of_smoke_detector(self):
         iot = self.iot
         iot.ROOMS['kitchen'].update(gas=700, mp2_do_enabled=True,
