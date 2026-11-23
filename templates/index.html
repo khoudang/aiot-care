@@ -167,8 +167,8 @@
               </header>
               <div class="ha-area-state"><span id="attn-kitchen" class="area-attention" hidden><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> Cần kiểm tra</span></div>
               <div class="ha-entity-grid">
-                <div class="ha-entity"><span class="entity-symbol"><i class="fas fa-wind" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Nồng độ gas</span><div class="entity-reading"><span id="ov-kitchen-gas">--</span><small>ADC</small></div></div></div>
-                <div class="ha-entity"><span class="entity-symbol"><i class="fas fa-smog" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Phát hiện khói</span><div class="entity-reading"><span id="ov-kitchen-smoke">Chưa có dữ liệu</span></div></div></div>
+                <div class="ha-entity"><span class="entity-symbol"><i class="fas fa-wind" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Khí MP-2</span><div class="entity-reading"><span id="ov-kitchen-gas">--</span><small>ADC</small></div></div></div>
+                <div class="ha-entity"><span class="entity-symbol"><i class="fas fa-smog" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">MP-2 DO</span><div class="entity-reading"><span id="ov-kitchen-smoke">Chưa có dữ liệu</span></div></div></div>
                 <div class="ha-entity entity-wide"><span class="entity-symbol"><i class="fas fa-fire-flame-curved" aria-hidden="true"></i></span><div class="entity-copy"><span class="entity-label">Phát hiện lửa</span><div class="entity-reading"><span id="ov-kitchen-flame">Chưa có dữ liệu</span></div></div></div>
               </div>
             </section>
@@ -346,10 +346,10 @@
             <div class="balanced-sensor-card" id="kt-gas-card">
               <div class="bsc-header">
                 <div>
-                  <div class="bsc-name">Nồng độ Gas (MQ-2)</div>
-                  <div class="bsc-sub">Cảm biến rò rỉ khí gas</div>
+                  <div class="bsc-name">Cảm biến khí MP-2</div>
+                  <div class="bsc-sub">Giá trị khí ADC thô (sau chia áp)</div>
                 </div>
-                <span class="chip ok" id="kt-gas-state">An toàn</span>
+                <span class="chip" id="kt-gas-state">Chưa có dữ liệu</span>
               </div>
               <div class="bsc-val"><span id="kt-gas">--</span><small>ADC</small></div>
               <div id="kt-gauge" style="display:none"></div>
@@ -358,11 +358,11 @@
             <div class="balanced-sensor-card" id="kt-smoke-tile">
               <div class="bsc-header">
                 <div>
-                  <div class="bsc-name">Cảm biến Khói MP-2</div>
-                  <div class="bsc-sub">Phát hiện khói dày đặc</div>
+                  <div class="bsc-name">Ngõ cảnh báo DO (MP-2)</div>
+                  <div class="bsc-sub">Ngưỡng comparator của cùng cảm biến khí, không phải đầu báo khói riêng</div>
                 </div>
               </div>
-              <div class="bsc-val" style="font-size:1.2rem;margin-top:6px"><span id="kt-smoke-status">Bình thường</span></div>
+              <div class="bsc-val" style="font-size:1.2rem;margin-top:6px"><span id="kt-smoke-status">Chưa có dữ liệu</span></div>
             </div>
 
             <div class="balanced-sensor-card" id="kt-flame-tile">
@@ -372,7 +372,7 @@
                   <div class="bsc-sub">Phát hiện nguồn nhiệt lửa</div>
                 </div>
               </div>
-              <div class="bsc-val" style="font-size:1.2rem;margin-top:6px"><span id="kt-flame-status">Bình thường</span></div>
+              <div class="bsc-val" style="font-size:1.2rem;margin-top:6px"><span id="kt-flame-status">Chưa có dữ liệu</span></div>
             </div>
           </div></section><section class="detail-group"><h2>Thiết bị xử lý</h2><div class="devices-card-grid">
             <!-- Cửa sổ thoát khí -->
@@ -439,7 +439,7 @@
             <div class="card-h" style="border:none;padding:0 0 16px">
               <div>
                 <h3>Lịch sử cảnh báo an toàn phòng bếp</h3>
-                <p>Nhật ký ghi nhận nồng độ gas tăng cao, phát hiện khói hoặc lửa</p>
+                <p>Nhật ký ghi nhận khí gas ADC tăng cao, cảnh báo ngõ DO MP-2 hoặc lửa</p>
               </div>
               <button class="btn sm" id="kt-alerts-reload"><i class="fas fa-rotate"></i> Tải lại</button>
             </div>

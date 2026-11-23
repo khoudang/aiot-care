@@ -58,6 +58,24 @@ for(const event of ['node_status','room_update']){
   const line=source.split('\n').find(l=>l.includes(`socket.on('${event}',`));assert.ok(line);vm.runInContext(line,eventCtx);
 }
 const cases=[
+ ['MP-2 DO disabled is not labelled safe',()=>{
+   eventCtx.nodeState.kitchen=true;
+   eventCtx.applyKitchen({gas:500,smoke:false,mp2_do_enabled:false,mp2_do_alarm:false,flame:false});
+   assert.match(eventElements['kt-smoke-status'].textContent,/Chưa kích hoạt/);
+   assert.equal(eventElements['ov-kitchen-smoke'].textContent,'Chưa kích hoạt');
+ }],
+ ['MP-2 DO active displays comparator alarm',()=>{
+   eventCtx.nodeState.kitchen=true;
+   eventCtx.applyKitchen({gas:500,smoke:true,mp2_do_enabled:true,mp2_do_alarm:true,flame:false});
+   assert.match(eventElements['kt-smoke-status'].textContent,/CẢNH BÁO NGƯỠNG/);
+   assert.equal(eventElements['ov-kitchen-smoke'].textContent,'Cảnh báo');
+ }],
+ ['MP-2 DO cleared shows normal only when enabled',()=>{
+   eventCtx.nodeState.kitchen=true;
+   eventCtx.applyKitchen({gas:500,smoke:false,mp2_do_enabled:true,mp2_do_alarm:false,flame:false});
+   assert.equal(eventElements['ov-kitchen-smoke'].textContent,'Bình thường');
+ }],
+
  ['cached fresh versus disconnect',()=>{
    eventCtx.applyTelemetry({patient:{status:'fresh',transport_connected:true}});
    callbacks.node_status({patient:false});
@@ -133,3 +151,9 @@ testKitchenAlertRendererUsesTextNodes().catch(error => {
   console.error('FAIL: kitchen alert renderer', error);
   process.exitCode = 1;
 });
+
+const templateSource = fs.readFileSync(path.join(__dirname, '..', 'templates/index.html'), 'utf8');
+assert.match(templateSource, /Cảm biến khí MP-2/);
+assert.match(templateSource, /Ngõ cảnh báo DO \(MP-2\)/);
+assert.doesNotMatch(templateSource, /Gas \(MQ-2\)/);
+console.log('PASS: MP-2 dashboard terminology');

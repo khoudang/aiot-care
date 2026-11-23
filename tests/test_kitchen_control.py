@@ -81,6 +81,34 @@ class KitchenControlTests(unittest.TestCase):
         self.assertEqual(iot.ROOMS['kitchen']['gas'], 1850)
         self.assertEqual(iot.ROOMS['kitchen']['gas_unit'], 'raw_adc')
 
+    def test_mp2_do_telemetry_is_exposed_and_triggers_alarm(self):
+        iot = self.iot
+        iot.set_node_online('kitchen', True)
+        iot.apply_node_payload('kitchen', {
+            'gas': 500, 'smoke': True, 'mp2_do_enabled': True,
+            'mp2_do_alarm': True, 'flame': False,
+        })
+        room = iot.ROOMS['kitchen']
+        self.assertEqual(room['gas'], 500)
+        self.assertTrue(room['mp2_do_enabled'])
+        self.assertTrue(room['mp2_do_alarm'])
+        self.assertEqual(iot.alert_level, 'emergency')
+
+    def test_mp2_do_alarm_blocks_gateway_safe_confirmation(self):
+        iot = self.iot
+        iot.ROOMS['kitchen'].update(
+            gas=500, smoke=False, flame=False,
+            mp2_do_enabled=True, mp2_do_alarm=True,
+            phase='wait_confirm', event_id=9)
+        iot._kitchen_emergency = True
+        self.assertEqual(iot._danger_warn(), (True, False))
+        with patch.object(iot.time, 'monotonic', return_value=113):
+            iot.set_node_online('kitchen', True)
+            iot._kitchen_safe_since = 100
+            iot._kitchen_sample_at = 113
+            iot.confirm_safe()
+        self.assertFalse(iot._pending_commands['kitchen'])
+
     def test_fall_during_restoration_preserves_fan_command(self):
         iot = self.iot
         with patch.object(iot.time, 'monotonic', return_value=113):

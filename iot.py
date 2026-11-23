@@ -162,6 +162,7 @@ ROOMS = {
     },
     "kitchen": {
         "gas": None, "smoke": False, "flame": False,
+        "mp2_do_enabled": False, "mp2_do_alarm": False,
         "window": False, "exhaust": False, "exhaust_speed": None,
         "light": False, "buzzer": False, "phase": "unknown", "event_id": None,
         "gas_unit": "raw_adc", "calibration_status": "uncalibrated", "ppm_c3h8": None,
@@ -619,7 +620,8 @@ _NUMERIC_ALIASES = {
     "fan_speed": "fan_speed", "speed": "fan_speed",
     "exhaust_speed": "exhaust_speed",
 }
-_BOOL_KEYS = ["motion", "light", "fan", "buzzer", "smoke", "flame", "window", "exhaust", "auto"]
+_BOOL_KEYS = ["motion", "light", "fan", "buzzer", "smoke", "flame",
+              "mp2_do_enabled", "mp2_do_alarm", "window", "exhaust", "auto"]
 
 
 def apply_node_payload(room, payload):
@@ -639,7 +641,8 @@ def apply_node_payload(room, payload):
                  and type(payload.get("flame")) is bool)
         continuous = (_kitchen_sample_at is not None and
                       sample_time - _kitchen_sample_at <= KITCHEN_SAMPLE_TIMEOUT_SEC)
-        safe = valid and gas < GAS_WARN_THRESHOLD and not payload["smoke"] and not payload["flame"]
+        safe = (valid and gas < GAS_WARN_THRESHOLD and not payload["smoke"]
+                and not payload["flame"] and payload.get("mp2_do_alarm") is not True)
         if not safe:
             _kitchen_safe_since = None
         elif _kitchen_safe_since is None or not continuous:
@@ -1285,7 +1288,8 @@ def _danger_warn():
     with state_lock:
         k = dict(ROOMS["kitchen"])
     gas_k = _gas_avg("kitchen") or 0
-    danger = bool(k["flame"] or k["smoke"] or gas_k >= GAS_HIGH_THRESHOLD
+    danger = bool(k["flame"] or k["smoke"] or k["mp2_do_alarm"]
+                  or gas_k >= GAS_HIGH_THRESHOLD
                   or (as_number(k.get("gas")) or 0) >= GAS_HIGH_THRESHOLD
                   or (_kitchen_emergency and k.get("phase") != "wait_confirm"))
     warn = bool(gas_k >= GAS_WARN_THRESHOLD)

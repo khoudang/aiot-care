@@ -84,7 +84,7 @@
     overview:['Tổng quan','Theo dõi và điều khiển ba phòng.'],
     patient:['Phòng người bệnh','Camera bám người, cảm biến và thiết bị chăm sóc'],
     living:['Phòng khách','Cảm biến hiện diện, ánh sáng và thiết bị'],
-    kitchen:['Phòng bếp','Giám sát gas – khói – lửa và thông gió khẩn cấp'],
+    kitchen:['Phòng bếp','Giám sát khí MP-2 ADC – DO – lửa và thông gió khẩn cấp'],
     gestures:['Tùy chỉnh cử chỉ','Ánh xạ cử chỉ để điều khiển thiết bị'],
     'admin-users':['Quản lý tài khoản','Tài khoản truy cập hệ thống'],
     'admin-logs':['Nhật ký & cảnh báo','Lịch sử đăng nhập, hoạt động và cảnh báo'],
@@ -340,14 +340,25 @@
       else if(d.gas>=1500){st.className='badge warn';st.innerHTML='<i class="fas fa-circle-exclamation"></i> Tăng cao';card.classList.remove('alarm');}
       else{st.className='badge ok';st.innerHTML='<i class="fas fa-circle-check"></i> An toàn';card.classList.remove('alarm');}
     }
-    if(d.smoke!=null&&(kitchenConnected||d.smoke)){document.getElementById('kt-smoke-status').textContent=d.smoke?'PHÁT HIỆN KHÓI':'Không phát hiện';document.getElementById('kt-smoke-tile').classList.toggle('alarm',!!d.smoke);document.getElementById('ov-kitchen-smoke').textContent=d.smoke?'Có':'Không';}
+    // "smoke" is a backwards-compatible alias for the MP-2 DO comparator,
+    // never an independent smoke detector. No DO wiring confirmation = not monitored.
+    const mp2DoEnabled=d.mp2_do_enabled===true;
+    const mp2DoActive=d.smoke===true||(mp2DoEnabled&&d.mp2_do_alarm===true);
+    const mp2DoStatus=mp2DoActive?'CẢNH BÁO NGƯỠNG'
+      :!kitchenConnected?'Chưa có dữ liệu'
+      :mp2DoEnabled?'Không kích hoạt cảnh báo':'Chưa kích hoạt đo DO';
+    document.getElementById('kt-smoke-status').textContent=mp2DoStatus;
+    document.getElementById('kt-smoke-tile').classList.toggle('alarm',mp2DoActive);
+    document.getElementById('ov-kitchen-smoke').textContent=mp2DoActive?'Cảnh báo'
+      :!kitchenConnected?'Chưa có dữ liệu'
+      :mp2DoEnabled?'Bình thường':'Chưa kích hoạt';
     if(d.flame!=null&&(kitchenConnected||d.flame)){document.getElementById('kt-flame-status').textContent=d.flame?'PHÁT HIỆN LỬA':'Không phát hiện';document.getElementById('kt-flame-tile').classList.toggle('alarm',!!d.flame);document.getElementById('ov-kitchen-flame').textContent=d.flame?'Có':'Không';}
     if(d.window!=null)setToggle('kt-window-toggle','kt-window-tile',d.window,'Đang mở','Đang đóng');
     if(d.exhaust_speed!=null){const r=document.getElementById('kt-exhaust-range'),v=document.getElementById('kt-exhaust-val');if(r.dataset.userEditing&&Math.abs(+d.exhaust_speed-(+r.dataset.desiredValue))<=1){clearTimeout(r._userEditTimeout);delete r.dataset.userEditing;delete r.dataset.desiredValue;}if(!r.dataset.userEditing){r.value=d.exhaust_speed;v.textContent=d.exhaust_speed;}}
     if(d.exhaust!=null)setToggle('kt-exhaust-toggle','kt-exhaust-tile',d.exhaust,'Đang hút','Đang tắt');
     if(d.light!=null)setToggle('kt-light-toggle','kt-light-tile',d.light,'Đang bật','Đang tắt');
     if(d.buzzer!=null)setToggle('kt-buzzer-toggle','kt-buzzer-tile',d.buzzer,'Đang kêu','Im lặng');
-    const danger=d.flame||d.smoke||(d.gas!=null&&d.gas>=2500),warn=(d.gas!=null&&d.gas>=1500);
+    const danger=d.flame||mp2DoActive||(d.gas!=null&&d.gas>=2500),warn=(d.gas!=null&&d.gas>=1500);
     badge(document.getElementById('ov-kitchen-badge'),danger?'bad':(warn?'warn':(kitchenConnected?'ok':'')),danger?'Nguy hiểm':(warn?'Cảnh báo':(kitchenConnected?'An toàn':'Chưa kết nối')));
     if(danger||warn||kitchenConnected)markRoomAttention('kitchen',danger?'Cần kiểm tra phòng bếp':warn?'Kiểm tra khí gas':'',danger?'danger':'warn');
     touch();
@@ -490,7 +501,7 @@
     const chip=document.getElementById('state-chip'),desc=document.getElementById('state-desc');
     const allRoomsConnected=Object.values(nodeState).every(Boolean);
     const displayLevel=level==='normal'&&!allRoomsConnected?'unknown':level;
-    const map={normal:['ok','Chưa có cảnh báo','Chưa có cảnh báo nào được ghi nhận.'],unknown:['warn','Chưa đủ dữ liệu','Không thể xác nhận tình trạng an toàn khi một hoặc nhiều phòng chưa kết nối.'],light:['bad','Cảnh báo nhẹ','Khí gas tăng cao hơn mức bình thường'],emergency:['bad','Khẩn cấp','Phát hiện khói/lửa hoặc gas rất cao — đang xử lý'],awaiting:['bad','Chờ xác nhận','Điều kiện đã an toàn — cần xác nhận để khôi phục']};
+    const map={normal:['ok','Chưa có cảnh báo','Chưa có cảnh báo nào được ghi nhận.'],unknown:['warn','Chưa đủ dữ liệu','Không thể xác nhận tình trạng an toàn khi một hoặc nhiều phòng chưa kết nối.'],light:['bad','Cảnh báo nhẹ','Khí gas tăng cao hơn mức bình thường'],emergency:['bad','Khẩn cấp','Cảnh báo ngõ DO MP-2, lửa hoặc ADC gas rất cao — đang xử lý'],awaiting:['bad','Chờ xác nhận','Điều kiện đã an toàn — cần xác nhận để khôi phục']};
     document.getElementById('state-card').dataset.level=displayLevel;
     if(level==='normal'){if(nodeState.kitchen)markRoomAttention('kitchen','','');}
     else markRoomAttention('kitchen',level==='light'?'Kiểm tra khí gas':'Cảnh báo an toàn',level==='light'?'warn':'danger');
