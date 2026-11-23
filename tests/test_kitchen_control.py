@@ -33,6 +33,41 @@ class KitchenControlTests(unittest.TestCase):
         iot._kitchen_emergency = False
         iot.alert_level = 'awaiting'
 
+    def test_wait_confirm_ignores_latched_emergency_when_sensors_are_safe(self):
+        iot = self.iot
+        iot.ROOMS['kitchen'].update(
+            gas=500, smoke=False, flame=False, phase='wait_confirm')
+        iot._kitchen_emergency = True
+        self.assertEqual(iot._danger_warn(), (False, False))
+
+    def test_wait_confirm_still_detects_live_sensor_danger(self):
+        cases = (
+            ({'gas': 2600, 'smoke': False, 'flame': False}, (True, True)),
+            ({'gas': 500, 'smoke': True, 'flame': False}, (True, False)),
+            ({'gas': 500, 'smoke': False, 'flame': True}, (True, False)),
+            ({'gas': 1600, 'smoke': False, 'flame': False}, (False, True)),
+        )
+        for payload, expected in cases:
+            with self.subTest(payload=payload):
+                iot = load_iot()
+                iot.ROOMS['kitchen'].update(payload, phase='wait_confirm')
+                iot._kitchen_emergency = True
+                self.assertEqual(iot._danger_warn(), expected)
+
+    def test_confirm_safe_accepts_wait_confirm_after_stale_emergency_latch(self):
+        iot = self.iot
+        with patch.object(iot.time, 'monotonic', return_value=113):
+            self.safe_kitchen()
+            iot.ROOMS['kitchen'].update(
+                gas=500, smoke=False, flame=False, phase='wait_confirm')
+            iot._kitchen_emergency = True
+            iot.confirm_safe()
+        commands = [json.loads(item['text'])
+                    for item in iot._pending_commands['kitchen'].values()]
+        self.assertTrue(any(command.get('cmd') == 'confirm_safe'
+                            and command.get('event_id') == 1
+                            for command in commands))
+
     def test_fall_during_restoration_preserves_fan_command(self):
         iot = self.iot
         with patch.object(iot.time, 'monotonic', return_value=113):
