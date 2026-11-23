@@ -21,6 +21,7 @@ iot.init_iot(socketio)
 register_web(app, socketio)
 
 init_db()
+iot.reload_history_sample_interval()
 seed_initial_users()
 
 # Khởi động các dịch vụ IoT

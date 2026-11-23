@@ -9,24 +9,24 @@ class HistorySamplingTests(unittest.TestCase):
     def setUp(self):
         self.iot = load_iot()
 
-    def test_configured_interval_is_cached_for_five_seconds_then_reloaded(self):
+    def test_interval_setting_is_bounded_and_updates_runtime_cache(self):
         iot = self.iot
-        iot._history_interval_checked_at = None
-        with patch.object(iot, "get_config_value", side_effect=["30", "10"]) as get_value:
-            with patch.object(iot.time, "monotonic", side_effect=[100.0, 104.9, 105.0]):
-                self.assertEqual(iot._history_interval_seconds(), 30)
-                self.assertEqual(iot._history_interval_seconds(), 30)
-                self.assertEqual(iot._history_interval_seconds(), 10)
-        self.assertEqual(get_value.call_count, 2)
+        self.assertEqual(iot.set_history_sample_interval(5), 5)
+        self.assertEqual(iot.set_history_sample_interval("3600"), 3600)
+        for invalid in (True, 4, 3601, "bad", None):
+            with self.subTest(invalid=invalid):
+                self.assertEqual(iot.set_history_sample_interval(invalid), 60)
 
-    def test_invalid_interval_falls_back_to_sixty_seconds(self):
-        for value in ("bad", "4", "3601", None):
-            with self.subTest(value=value):
-                iot = load_iot()
-                iot._history_interval_checked_at = None
-                with patch.object(iot, "get_config_value", return_value=value):
-                    with patch.object(iot.time, "monotonic", return_value=100.0):
-                        self.assertEqual(iot._history_interval_seconds(), 60)
+    def test_startup_reload_falls_back_when_database_is_unavailable(self):
+        iot = self.iot
+        with patch.object(iot, "get_config_value", side_effect=RuntimeError("db unavailable")):
+            self.assertEqual(iot.reload_history_sample_interval(), 60)
+
+    def test_startup_reload_uses_persisted_value(self):
+        iot = self.iot
+        with patch.object(iot, "get_config_value", return_value="15") as get_value:
+            self.assertEqual(iot.reload_history_sample_interval(), 15)
+        get_value.assert_called_once_with("history_sample_interval_sec", "60")
 
 
 if __name__ == "__main__":

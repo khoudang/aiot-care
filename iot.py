@@ -558,35 +558,40 @@ _HISTORY_SAMPLE_INTERVAL_MIN = 5
 _HISTORY_SAMPLE_INTERVAL_MAX = 3600
 _history_sample_times = {}
 _history_interval = _HISTORY_SAMPLE_INTERVAL_DEFAULT
-_history_interval_checked_at = None
 
 
-def _history_interval_seconds():
-    """Read the chart-only history cadence; invalid settings fall back safely."""
-    global _history_interval, _history_interval_checked_at
-    now = time.monotonic()
-    if (_history_interval_checked_at is None
-            or now - _history_interval_checked_at >= 5.0):
-        try:
-            raw = get_config_value(
-                _HISTORY_SAMPLE_INTERVAL_KEY,
-                str(_HISTORY_SAMPLE_INTERVAL_DEFAULT),
-            )
-            interval = int(str(raw).strip())
-            if not (_HISTORY_SAMPLE_INTERVAL_MIN <= interval <= _HISTORY_SAMPLE_INTERVAL_MAX):
-                raise ValueError("history interval outside supported range")
-        except Exception:
-            interval = _HISTORY_SAMPLE_INTERVAL_DEFAULT
-        _history_interval = interval
-        _history_interval_checked_at = now
+def set_history_sample_interval(value):
+    """Update the in-memory chart cadence without doing I/O in the BLE callback."""
+    global _history_interval
+    try:
+        if isinstance(value, bool):
+            raise ValueError("boolean is not an interval")
+        interval = int(str(value).strip())
+        if not (_HISTORY_SAMPLE_INTERVAL_MIN <= interval <= _HISTORY_SAMPLE_INTERVAL_MAX):
+            raise ValueError("history interval outside supported range")
+    except (TypeError, ValueError, OverflowError):
+        interval = _HISTORY_SAMPLE_INTERVAL_DEFAULT
+    _history_interval = interval
     return _history_interval
+
+
+def reload_history_sample_interval():
+    """Load the persisted chart cadence once after the database is initialized."""
+    try:
+        value = get_config_value(
+            _HISTORY_SAMPLE_INTERVAL_KEY,
+            str(_HISTORY_SAMPLE_INTERVAL_DEFAULT),
+        )
+    except Exception:
+        value = _HISTORY_SAMPLE_INTERVAL_DEFAULT
+    return set_history_sample_interval(value)
 
 
 def push_history(room):
     if room not in histories:
         return
     now = time.monotonic()
-    interval = _history_interval_seconds()
+    interval = _history_interval
     previous = _history_sample_times.get(room)
     if previous is not None and now - previous < interval:
         return

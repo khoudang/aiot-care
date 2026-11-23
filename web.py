@@ -473,6 +473,7 @@ def register_web(app, socketio):
         set_config_value("telegram_chat_id", telegram_chat_id)
         if history_interval is not None:
             set_config_value("history_sample_interval_sec", str(history_interval))
+            iot.set_history_sample_interval(history_interval)
 
         log_audit("Cập nhật cấu hình hệ thống", user_id=session.get("user_id"))
         return jsonify({
