@@ -419,9 +419,34 @@
     if(now - _lastKitchenFetch < 1000)return;
     _lastKitchenFetch = now;
     try{
-      const r=await fetch('/api/kitchen_alerts');const d=await r.json();const a=(d&&d.alerts)||[];
-      if(!a.length){list.innerHTML='<div class="empty">Chưa có cảnh báo nào.</div>';return;}
-      list.innerHTML=a.map(x=>`<div class="alert-item"><i class="fas fa-triangle-exclamation ai-ic"></i><div class="ai-body"><div class="ai-act">${x.action}</div><div class="ai-time">${fmtT(x.timestamp)}</div></div></div>`).join('');
+      const r=await fetch('/api/kitchen_alerts');const d=await r.json();
+      const alerts=Array.isArray(d&&d.alerts)?d.alerts:[];
+      if(!alerts.length){
+        const empty=document.createElement('div');
+        empty.className='empty';
+        empty.textContent='Chưa có cảnh báo nào.';
+        list.replaceChildren(empty);
+        return;
+      }
+      const items=alerts.map(alert=>{
+        const item=document.createElement('div');
+        item.className='alert-item';
+        const icon=document.createElement('i');
+        icon.className='fas fa-triangle-exclamation ai-ic';
+        icon.setAttribute('aria-hidden','true');
+        const body=document.createElement('div');
+        body.className='ai-body';
+        const action=document.createElement('div');
+        action.className='ai-act';
+        action.textContent=alert&&alert.action!=null?String(alert.action):'--';
+        const timestamp=document.createElement('div');
+        timestamp.className='ai-time';
+        timestamp.textContent=fmtT(alert&&alert.timestamp);
+        body.append(action,timestamp);
+        item.append(icon,body);
+        return item;
+      });
+      list.replaceChildren(...items);
     }catch(e){}
   }
   const ktReload=document.getElementById('kt-alerts-reload');

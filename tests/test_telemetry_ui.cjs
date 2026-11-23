@@ -81,3 +81,55 @@ const cases=[
 let failures=0;
 for(const [name,run] of cases){try{run();console.log('PASS',name);}catch(error){failures++;console.error('FAIL',name,error.message);}}
 console.log(`SOCKET_REGRESSIONS=${cases.length} FAILURES=${failures}`);process.exitCode=failures?1:0;
+
+
+async function testKitchenAlertRendererUsesTextNodes() {
+  const start = source.indexOf('  async function loadKitchenAlerts(){');
+  const end = source.indexOf('  const ktReload', start);
+  assert.ok(start >= 0 && end > start, 'Actual production kitchen alert renderer must exist');
+
+  class FakeNode {
+    constructor(tag) { this.tagName = tag; this.children = []; this.className = ''; this._text = ''; this.attributes = {}; }
+    set textContent(value) { this._text = String(value); this.children = []; }
+    get textContent() { return this._text; }
+    append(...nodes) { this.children.push(...nodes); }
+    replaceChildren(...nodes) { this.children = [...nodes]; }
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+  }
+
+  let now = 10000;
+  class FakeDate extends Date { static now() { return now; } }
+  const list = new FakeNode('div');
+  const malicious = '<img src=x onerror=alert(1)>';
+  let alerts = [{action: malicious, timestamp: '2026-11-23 10:00:00'}];
+  const ctx = {
+    document: {
+      getElementById: id => id === 'kt-alert-list' ? list : null,
+      createElement: tag => new FakeNode(tag)
+    },
+    Date: FakeDate,
+    fetch: async () => ({json: async () => ({alerts})}),
+    fmtT: value => value || '--'
+  };
+  vm.createContext(ctx);
+  vm.runInContext(source.slice(start, end), ctx);
+  await ctx.loadKitchenAlerts();
+
+  assert.equal(list.children.length, 1);
+  const action = list.children[0].children[1].children[0];
+  assert.equal(action.textContent, malicious, 'Untrusted action must be rendered as literal text');
+  assert.equal(list.children[0].children[1].children.length, 2);
+
+  now += 1500;
+  alerts = [];
+  await ctx.loadKitchenAlerts();
+  assert.equal(list.children.length, 1);
+  assert.equal(list.children[0].className, 'empty');
+  assert.equal(list.children[0].textContent, 'Chưa có cảnh báo nào.');
+  console.log('PASS: kitchen alert renderer uses safe text nodes');
+}
+
+testKitchenAlertRendererUsesTextNodes().catch(error => {
+  console.error('FAIL: kitchen alert renderer', error);
+  process.exitCode = 1;
+});
