@@ -74,7 +74,10 @@ from config import (
     YOLO_INTERVAL_SEC,
     YOLO_TARGET_TTL_SEC,
     YOLO_INPUT_SIZE,
-    FALL_ASPECT,
+    FALL_HIP_SPEED,
+    FALL_MOTION_WINDOW_SEC,
+    FALL_VISIBILITY,
+    FALL_MAX_GAP_SEC,
     FALL_HOLD_SEC,
     FALL_TORSO_DEG,
     GAS_HIGH_THRESHOLD,
@@ -2155,33 +2158,110 @@ def _apply_gesture(gesture_key):
 _fall_since = 0.0
 
 
-def detect_fall(landmarks, w, h):
-    """Heuristic: góc thân so phương đứng + tỉ lệ bbox. Trả về True/False (nghi ngờ)."""
+def _fall_pose(landmarks, w, h):
+    """Return validated shoulder/hip centres and torso length in image pixels."""
     try:
-        ls, rs = landmarks[11], landmarks[12]    # shoulders
-        lh, rh = landmarks[23], landmarks[24]    # hips
-        sx = (ls.x + rs.x) / 2 * w
-        sy = (ls.y + rs.y) / 2 * h
-        hx = (lh.x + rh.x) / 2 * w
-        hy = (lh.y + rh.y) / 2 * h
+        points = [landmarks[i] for i in (11, 12, 23, 24)]
+        if not all(math.isfinite(p.x) and math.isfinite(p.y)
+                   and math.isfinite(p.visibility) and p.visibility >= FALL_VISIBILITY
+                   and 0 <= p.x <= 1 and 0 <= p.y <= 1 for p in points):
+            return None
+        ls, rs, lh, rh = points
+        sx, sy = (ls.x + rs.x) * w / 2, (ls.y + rs.y) * h / 2
+        hx, hy = (lh.x + rh.x) * w / 2, (lh.y + rh.y) * h / 2
+        length = math.hypot(hx - sx, hy - sy)
+        if length < max(4., .03 * min(w, h)):
+            return None
+        return sx, sy, hx, hy, length
+    except (AttributeError, IndexError, TypeError, ValueError):
+        return None
 
-        import math
-        dx, dy = hx - sx, hy - sy
-        # góc so với phương thẳng đứng (0 = đứng thẳng)
-        angle = abs(math.degrees(math.atan2(abs(dx), abs(dy) + 1e-6)))
 
-        xs = [p.x for p in landmarks]
-        ys = [p.y for p in landmarks]
-        bw = (max(xs) - min(xs)) * w
-        bh = (max(ys) - min(ys)) * h
-        aspect = bw / (bh + 1e-6)
+def detect_fall(landmarks, w, h):
+    """Geometric posture predicate only; not a fall event by itself."""
+    sample = _fall_pose(landmarks, w, h)
+    if sample is None:
+        return False
+    sx, sy, hx, hy, _ = sample
+    angle = math.degrees(math.atan2(abs(hx - sx), abs(hy - sy) + 1e-6))
+    return angle > FALL_TORSO_DEG
 
-        return angle > FALL_TORSO_DEG or aspect > FALL_ASPECT
-    except Exception:
+
+class FallEventFSM:
+    """Session-local temporal detector. True is suspicion/alert, None is unknown.
+
+    A recent upright sample and downward hip motion must precede or accompany
+    a horizontal posture. No bounding-box aspect ratio or immobility rule.
+    """
+    def __init__(self, alerted=False):
+        self.state = "alerted" if alerted else "normal"
+        self.history = deque()
+        self.motion_at = None
+        self.suspect_at = None
+        self.last_valid = None
+        self.confirmed = alerted
+
+    def _clear(self):
+        self.history.clear()
+        self.motion_at = self.suspect_at = self.last_valid = None
+        self.confirmed = False
+        self.state = "normal"
+
+    def unknown(self):
+        # Missing data cannot establish recovery or complete a confirmation.
+        if self.state == "alerted":
+            return None
+        self._clear()
+        return False
+
+    def update(self, landmarks, w, h, ts, tilted, camera_moving=False):
+        if camera_moving or not math.isfinite(ts):
+            return self.unknown()
+        sample = _fall_pose(landmarks, w, h)
+        if sample is None:
+            return self.unknown()
+        if self.last_valid is not None and (
+                ts <= self.last_valid or ts - self.last_valid > FALL_MAX_GAP_SEC):
+            if self.state == "alerted":
+                self.last_valid = ts
+                return None
+            self._clear()
+        self.last_valid = ts
+        if self.state == "alerted":
+            if tilted:
+                return True
+            self._clear()
+            # The next event must have its own fresh upright history.
+            return False
+        if self.state == "suspected":
+            if not tilted:
+                self._clear()
+            else:
+                if ts - self.suspect_at >= FALL_HOLD_SEC:
+                    self.state = "alerted"
+                    self.confirmed = True
+                return True
+        _, _, _, hip_y, length = sample
+        while self.history and ts - self.history[0][0] > FALL_MOTION_WINDOW_SEC:
+            self.history.popleft()
+        for old_ts, old_y, old_length in self.history:
+            dt = ts - old_ts
+            if dt >= .10 and (hip_y - old_y) / (old_length * dt) >= FALL_HIP_SPEED:
+                self.motion_at = ts
+                break
+        if self.motion_at is not None and ts - self.motion_at > FALL_MOTION_WINDOW_SEC:
+            self.motion_at = None
+        if tilted and self.motion_at is not None:
+            self.state = "suspected"
+            self.suspect_at = ts
+            self.history.clear()
+            return True
+        if not tilted:
+            self.history.append((ts, hip_y, length))
         return False
 
 
-def _handle_fall(is_suspect):
+def _handle_fall(is_suspect, confirmed=None):
     global _fall_since
     global _fall_buzzer_saved, _fall_restore_target
     now = now_ts()
@@ -2191,7 +2271,7 @@ def _handle_fall(is_suspect):
         if is_suspect:
             if _fall_since == 0.0:
                 _fall_since = now
-            suspected = now - _fall_since >= FALL_HOLD_SEC
+            suspected = (now - _fall_since >= FALL_HOLD_SEC if confirmed is None else confirmed)
         else:
             _fall_since = 0.0
             suspected = False
@@ -2204,7 +2284,7 @@ def _handle_fall(is_suspect):
     if is_suspect:
         if _fall_since == 0.0:
             _fall_since = now
-        elif (now - _fall_since) >= FALL_HOLD_SEC and not AI["fall"]:
+        if (confirmed if confirmed is not None else now - _fall_since >= FALL_HOLD_SEC) and not AI["fall"]:
             if _fall_buzzer_saved is None:
                 _fall_buzzer_saved = bool((_emergency_snapshot or ROOMS)["patient"]["buzzer"])
             _fall_restore_target = None
@@ -2424,6 +2504,7 @@ def _pan_tick(session_id, pan, now):
             if angle is not None:
                 AI['angle'] = angle
         if angle is not None:
+            pan.last_moved_at = now
             uart_send_angle(angle)
 
 
@@ -2441,6 +2522,10 @@ def _start_pan_worker(session_id, pan, stopped):
 
 def _camera_ai_worker(session_id):
     pan = PanMotion()  # No startup centering or motion before fresh evidence.
+    pan.last_moved_at = float('-inf')
+    fall_fsm = FallEventFSM(alerted=bool(AI.get('fall') or AI.get('fall_suspected')))
+    global _fall_since
+    _fall_since = 0.0
     pan_stopped = threading.Event()
     _start_pan_worker(session_id, pan, pan_stopped)
     tracker = None
@@ -2571,7 +2656,13 @@ def _camera_ai_worker(session_id):
                     pose_lms = pres.pose_landmarks
                     lms = pres.pose_landmarks.landmark
                     if ENABLE_FALL:
-                        fall_event = detect_fall(lms, w, h)
+                        # Geometry remains independently testable; event decision is temporal.
+                        with _camera_session_lock:
+                            moving = source_ts <= pan.last_moved_at + .30
+                            fall_event = fall_fsm.update(lms, w, h, source_ts,
+                                detect_fall(lms, w, h), camera_moving=moving)
+                elif ENABLE_FALL:
+                    fall_event = fall_fsm.unknown()
 
             # Revalidate session
             with _camera_session_lock:
@@ -2674,7 +2765,7 @@ def _camera_ai_worker(session_id):
                     if no_person_since is None:
                         no_person_since = source_ts
                 # A skipped YOLO run is neither absence evidence nor a motion command.
-                if not fresh_tracking or AI_OBSERVE_ONLY:
+                if not fresh_tracking or AI_OBSERVE_ONLY or fall_fsm.state == 'suspected':
                     pan.clear()
                 elif fresh_tracking and not AI_OBSERVE_ONLY:
                     if tracking_cx is not None:
@@ -2686,7 +2777,7 @@ def _camera_ai_worker(session_id):
                     elif tracker.status != 'skipped':
                         pan.clear()
                 if fall_event is not None:
-                    _handle_fall(fall_event)
+                    _handle_fall(fall_event, confirmed=fall_fsm.confirmed)
                 if gesture_key is not None:
                     _apply_gesture(gesture_key)
 

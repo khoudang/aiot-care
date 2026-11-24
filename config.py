@@ -159,7 +159,11 @@ if CAMERA_IDLE_VIDEO_FPS > CAMERA_ACTIVE_VIDEO_FPS:
 # Phát hiện té ngã (heuristic từ pose)
 FALL_HOLD_SEC = float(os.getenv("FALL_HOLD_SEC", "3.5"))      # giữ tư thế bất thường bao lâu mới báo
 FALL_TORSO_DEG = float(os.getenv("FALL_TORSO_DEG", "55"))     # góc thân so với phương đứng
-FALL_ASPECT = float(os.getenv("FALL_ASPECT", "1.1"))         # tỉ lệ rộng/cao bbox
+FALL_ASPECT = float(os.getenv("FALL_ASPECT", "1.1"))         # legacy, not used by temporal detector
+FALL_HIP_SPEED = float(os.getenv("FALL_HIP_SPEED", "0.8"))
+FALL_MOTION_WINDOW_SEC = float(os.getenv("FALL_MOTION_WINDOW_SEC", "0.8"))
+FALL_VISIBILITY = float(os.getenv("FALL_VISIBILITY", "0.7"))
+FALL_MAX_GAP_SEC = float(os.getenv("FALL_MAX_GAP_SEC", "0.8"))
 
 
 # ------------------------------------------------------------------ #
