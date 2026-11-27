@@ -694,4 +694,6 @@ document.querySelectorAll('.nav [data-room], [data-goto]').forEach(el=>{
   el.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();el.click();}});
 });
 document.addEventListener('keydown',event=>{if(event.key==='Escape')closeDrawer();});
+setConn(!!socket && socket.connected);
+initFanLevels(() => !!socket && socket.connected);
 if(!socket){setConn(false);showSys('Không tải được kết nối trực tiếp. Kiểm tra mạng rồi tải lại trang.','light');}
