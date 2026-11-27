@@ -246,6 +246,13 @@
     }
     return result;
   }
+  function finishPendingControl(result,message){
+    const key=result.room+':'+result.device,target=pendingControls.get(key);
+    if(!target||!result.request_id||target.request_id!==result.request_id)return;
+    clearTimeout(target.timer);pendingControls.delete(key);
+    const status=document.getElementById(`${roomPrefix[result.room]}-${result.device}-status`);
+    if(status)status.textContent=message;
+  }
   function clearPendingControls(){for(const target of pendingControls.values())clearTimeout(target.timer);pendingControls.clear();}
 
   function bindToggle(id,tileId,onTxt,offTxt,cb){
@@ -601,10 +608,11 @@
     socket.on('command_result',result=>{
       const target=pendingControls.get(result.room+':'+result.device);
       if(target&&target.request_id===result.request_id&&result.status==='applied')target.acknowledged=true;
+      else if(result.status==='rejected'||result.status==='superseded')finishPendingControl(result,result.status==='superseded'?'Đã thay bằng lệnh mới.':'Thiết bị từ chối lệnh.');
     });
     socket.on('connect',()=>{setConn(true);socket.emit('request_initial_state');loadKitchenAlerts();});
     socket.on('disconnect',()=>{clearPendingControls();setConn(false);document.getElementById('state-chip').textContent='Mất kết nối realtime';document.getElementById('state-chip').className='chip';document.getElementById('state-desc').textContent='Trạng thái node được cập nhật qua API khi realtime gián đoạn.';document.getElementById('confirm-btn').disabled=true;});
-    socket.on('command_error',e=>{clearPendingControls();showSys(e.message||'Không gửi được lệnh.','light');socket.emit('request_initial_state');});
+    socket.on('command_error',e=>{finishPendingControl(e,'Chưa thực hiện được lệnh.');showSys(e.message||'Không gửi được lệnh.','light');socket.emit('request_initial_state');});
     socket.on('sensor_chart_update',renderSensorHistories);
     socket.on('telemetry_update',applyTelemetry);
     socket.on('bootstrap',s=>{

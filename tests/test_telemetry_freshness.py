@@ -60,7 +60,7 @@ class TelemetryFreshnessTests(unittest.TestCase):
             iot.apply_node_payload('kitchen', {
                 'gas': 500, 'smoke': False, 'mp2_do_alarm': False, 'flame': False,
             })
-        self.assertEqual(iot.telemetry_status()['kitchen']['status'], 'fresh')
+            self.assertEqual(iot.telemetry_status()['kitchen']['status'], 'fresh')
 
         iot.set_node_online('kitchen', False)
         iot.set_node_online('kitchen', True)
@@ -74,7 +74,7 @@ class TelemetryFreshnessTests(unittest.TestCase):
             iot.apply_node_payload('kitchen', {
                 'gas': 500, 'smoke': False, 'mp2_do_alarm': False, 'flame': False,
             })
-        self.assertEqual(iot.telemetry_status()['kitchen']['status'], 'fresh')
+            self.assertEqual(iot.telemetry_status()['kitchen']['status'], 'fresh')
 
     def test_partial_fields_and_invalid_samples_remain_visible(self):
         iot = load_iot()

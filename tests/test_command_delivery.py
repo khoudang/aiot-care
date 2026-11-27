@@ -144,8 +144,8 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(client.write_gatt_char.await_count, 1)  # Still 1, NOT sent!
         self.assertEqual(iot._pending_commands['living'][ident]['attempts'], 1)
 
-        # After backoff passes at t = 100.25, retry is due and sends attempt 2 with exact same ID
-        with patch.object(iot.time, 'monotonic', return_value=t0 + 0.25):
+        # Both busy backoff and the normal relay's 300 ms spacing must pass.
+        with patch.object(iot.time, 'monotonic', return_value=t0 + 0.35):
             asyncio.run(iot._send_pending('living', client, 'uuid'))
 
         self.assertEqual(client.write_gatt_char.await_count, 2)

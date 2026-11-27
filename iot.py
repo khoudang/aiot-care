@@ -263,6 +263,8 @@ _pending_commands = {room: {} for room in ROOMS}
 _command_sequence = 0
 COMMAND_ATTEMPTS = 4
 COMMAND_ACK_TIMEOUT = 2.0
+RELAY_COMMAND_INTERVAL = 0.3  # Normal light writes only; safety commands bypass it.
+_last_relay_write = {}
 COMMAND_TTL = 30.0
 ble_clients = {room: None for room in ROOMS}
 _connected_ble_devices = {room: None for room in ROOMS}
@@ -832,8 +834,9 @@ def _make_notify_handler(room):
                                     "status": payload["status"],
                                 })
                             if payload["status"] == "rejected":
+                                _last_cmd.pop((room, command.get("cmd")), None)
                                 _fail_restoration(room)
-                                _emit("command_error", {"room": room, "message": "Node rejected command"})
+                                _emit_command_error(room, command.get("cmd"), "Node rejected command", command.get("request_id"))
                             # Wake up sender loop immediately to dispatch next queued command
                             wakeup = _command_wakeups.get(room)
                             if wakeup is not None and ble_loop is not None and ble_loop.is_running():
@@ -985,6 +988,9 @@ def _calc_pending_timeout(room):
         if retry_at > now:
             return min(2.0, max(0.01, retry_at - now))
         sent = pending.get("sent")
+        relay_wait = RELAY_COMMAND_INTERVAL - (now - _last_relay_write.get(room, float('-inf')))
+        if pending.get("normal_relay") and relay_wait > 0 and (sent is None or now - sent >= COMMAND_ACK_TIMEOUT):
+            return min(2.0, max(0.01, relay_wait))
         if sent is None:
             return 0.01
         elapsed = now - sent
@@ -1097,18 +1103,23 @@ def enqueue_command(room, text):
         return True
 
 
-def _cancel_commands(room, device=None):
+def _cancel_commands(room, device=None, notify=False):
     """A new safety phase invalidates queued and retrying older commands."""
     with _delivery_lock:
         for ident, pending in list(_pending_commands[room].items()):
             cmd_dev = None
+            command = {}
             try:
-                cmd_dev = json.loads(pending["text"]).get("cmd")
+                command = json.loads(pending["text"])
+                cmd_dev = command.get("cmd")
             except Exception:
                 pass
             if device is None or cmd_dev == device:
                 del _pending_commands[room][ident]
                 timing_tracer.record_canceled(room, command_id=ident, device=cmd_dev)
+                if notify and isinstance(command, dict) and command.get("request_id"):
+                    _emit("command_result", {"room": room, "device": cmd_dev,
+                                             "request_id": command["request_id"], "status": "superseded"})
         retained = []
         while True:
             try:
@@ -1146,14 +1157,19 @@ async def _send_pending(room, client, command_uuid):
             del _pending_commands[room][ident]
             _fail_restoration(room)
             timing_tracer.record_error(room, ident, "Command acknowledgement timeout")
-            _emit("command_error", {"room": room, "message": "Command acknowledgement timeout"})
+            command = json.loads(pending["text"])
+            _emit_command_error(room, command.get("cmd"), "Command acknowledgement timeout", command.get("request_id"))
             return
         if not due:
+            return
+        if pending.get("normal_relay") and now - _last_relay_write.get(room, float('-inf')) < RELAY_COMMAND_INTERVAL:
             return
         pending["sent"] = now
         pending["attempts"] += 1
         cmd_text = pending["text"]
         attempt = pending["attempts"]
+        if json.loads(cmd_text).get("cmd") == "light":
+            _last_relay_write[room] = now
     timing_tracer.record_write_start(room, ident, attempt)
     try:
         await client.write_gatt_char(command_uuid, cmd_text.encode("utf-8"), response=True)
@@ -1181,37 +1197,45 @@ _DEVICE_LABELS = {
 }
 
 
+def _emit_command_error(room, device, message, request_id=None):
+    payload = {"room": room, "device": device, "message": message}
+    if isinstance(request_id, str) and 0 < len(request_id) <= 80:
+        payload["request_id"] = request_id
+    _emit("command_error", payload)
+
+
 def set_device(room, device, state=None, value=None, source="manual", user_id=None, silent=False, request_id=None):
     """Queue a validated command; only node telemetry confirms device state."""
     try:
         room, cmd = build_command(room, device, state, value)
     except ValueError as exc:
-        _emit("command_error", {"room": room, "device": device, "message": str(exc)})
+        _emit_command_error(room, device, str(exc), request_id)
         return
     if isinstance(request_id, str) and 0 < len(request_id) <= 80:
         cmd["request_id"] = request_id
     if source != "auto" and (_emergency_snapshot is not None or
                              room == "patient" and device == "buzzer" and
                              (AI.get("fall") or _fall_buzzer_saved is not None)):
-        _emit("command_error", {"room": room, "device": device,
-                                "message": "Điều khiển đang khóa do cảnh báo."})
+        _emit_command_error(room, device, "Điều khiển đang khóa do cảnh báo.", request_id)
         return
 
-    # chống dội lệnh trùng
-    key = (room, device)
-    sig = (state, value)
-    prev = _last_cmd.get(key)
-    now = now_ts()
-    if prev and prev[0] == sig and (now - prev[1]) < COMMAND_DEBOUNCE_SEC and source != "auto":
-        return
-    # Fan sliders can produce many values in quick succession. Keep only the
-    # newest desired speed so stale pending writes cannot fill the BLE queue.
-    if device in ("fan", "exhaust"):
-        _cancel_commands(room, device)
-    if not enqueue_command(room, json.dumps(cmd, ensure_ascii=False)):
-        _emit("command_error", {"room": room, "device": device, "message": "Command queue full"})
-        return False
-    _last_cmd[key] = (sig, now)
+    # Keep replacement and enqueue atomic across concurrent web/gesture requests.
+    with _delivery_lock:
+        key = (room, device)
+        sig = (state, value)
+        prev = _last_cmd.get(key)
+        now = now_ts()
+        if prev and prev[0] == sig and (now - prev[1]) < COMMAND_DEBOUNCE_SEC and source != "auto" and not cmd.get("request_id"):
+            return
+        normal_relay = device == "light" and source != "auto"
+        if device in ("fan", "exhaust") or normal_relay:
+            _cancel_commands(room, device, notify=True)
+        if not enqueue_command(room, json.dumps(cmd, ensure_ascii=False)):
+            _emit_command_error(room, device, "Command queue full", request_id)
+            return False
+        if normal_relay:
+            _pending_commands[room][_command_sequence]["normal_relay"] = True
+        _last_cmd[key] = (sig, now)
 
     if not silent:
         label = _DEVICE_LABELS.get(key, f"{device} {room}")
