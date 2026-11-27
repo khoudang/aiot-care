@@ -1,6 +1,6 @@
 /* Presets reuse the dashboard's correlated PWM command and telemetry path. */
 function initFanLevels(isConnected = () => true) {
-  const levels = [{label:'Nhẹ',value:50},{label:'Vừa',value:75},{label:'Mạnh',value:100}];
+  const levels = [{label:'Tắt',value:0},{label:'Nhẹ',value:50},{label:'Vừa',value:75},{label:'Mạnh',value:100}];
   for (const prefix of ['pt-fan', 'lv-fan', 'kt-exhaust']) {
     const range = document.getElementById(prefix + '-range');
     const card = range?.closest('.device-card-modern');
@@ -22,20 +22,12 @@ function initFanLevels(isConnected = () => true) {
     for (const level of levels) {
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = level.label + ' ' + level.value + '%';
+      button.textContent = level.value === 0 ? level.label : level.label + ' ' + level.value + '%';
       button.setAttribute('aria-label', button.textContent);
       button.addEventListener('click', () => selectSpeed(level.value));
       group.append(button);
     }
-    const steps = document.createElement('div');
-    steps.className = 'fan-step-controls';
-    const minus = document.createElement('button'), plus = document.createElement('button');
-    minus.type = plus.type = 'button';
-    minus.textContent = '−'; plus.textContent = '+';
-    minus.setAttribute('aria-label', 'Giảm tốc độ quạt; mức cuối là tắt');
-    plus.setAttribute('aria-label', 'Tăng tốc độ quạt');
-    minus.addEventListener('click', () => selectSpeed([100,75,50,0].find(value => value < Number(range.value)) ?? 0));
-    plus.addEventListener('click', () => selectSpeed([0,50,75,100].find(value => value > Number(range.value)) ?? 100));
+
     function sync() {
       const speed = Number(range.value);
       const disabled = range.disabled || !isConnected();
@@ -43,15 +35,13 @@ function initFanLevels(isConnected = () => true) {
         button.disabled = disabled;
         button.setAttribute('aria-pressed', String(speed === levels[index].value));
       });
-      minus.disabled = disabled || speed <= 0;
-      plus.disabled = disabled || speed >= 100;
+
     }
     new MutationObserver(sync).observe(range, {attributes:true, attributeFilter:['disabled']});
     const value = document.getElementById(prefix + '-val');
     if (value) new MutationObserver(sync).observe(value, {childList:true, characterData:true, subtree:true});
     range.addEventListener('input', sync);
-    steps.append(minus, plus);
-    card.append(group, steps);
+    card.append(group);
     sync();
   }
 }

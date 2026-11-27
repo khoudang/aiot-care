@@ -13,7 +13,7 @@ test('dashboard loads and initializes the presets after the command handlers', (
   assert.ok(presets >= 0 && presets < client, 'Preset script must load before the dashboard');
   assert.match(dashboard, /initFanLevels\(\(\) => !!socket && socket.connected\)/);
   assert.ok(dashboard.indexOf('initFanLevels(') > dashboard.indexOf('  function setConn('));
-  assert.match(template, /fan-levels-v1/);
+  assert.match(template, /fan-levels-v2/);
 });
 
 test('the first asynchronous socket connection enables presets in a real DOM', async () => {
@@ -81,8 +81,7 @@ function fixture() {
   const controls = prefix => {
     const children = get(prefix + '-tile').children;
     const group = children.find(child => child.className === 'fan-levels');
-    const steps = children.find(child => child.className === 'fan-step-controls');
-    return {buttons: group.children, minus: steps.children[0], plus: steps.children[1]};
+    return {buttons: group.children, children};
   };
   return {get, socket, sent, controls, context, sync: () => observers.forEach(callback => callback())};
 }
@@ -91,30 +90,30 @@ test('all three rooms send correlated 50/75/100 percent commands through existin
   const f = fixture();
   for (const [prefix, room, device] of [['pt-fan','patient','fan'], ['lv-fan','living','fan'], ['kt-exhaust','kitchen','exhaust']]) {
     const {buttons} = f.controls(prefix);
-    assert.deepEqual(buttons.map(button => button.getAttribute('aria-label')), ['Nhẹ 50%', 'Vừa 75%', 'Mạnh 100%']);
-    for (const [i, percent] of [50,75,100].entries()) {
+    assert.deepEqual(buttons.map(button => button.getAttribute('aria-label')), ['Tắt', 'Nhẹ 50%', 'Vừa 75%', 'Mạnh 100%']);
+    for (const [i, percent] of [[1,50],[2,75],[3,100],[0,0]]) {
       const before = f.sent.length;
       buttons[i].click();
       assert.equal(f.sent.length, before + 1, 'One click must send exactly one command');
       const {event, payload} = f.sent.at(-1);
       assert.equal(event, 'set_device');
       assert.equal(payload.room, room); assert.equal(payload.device, device);
-      assert.equal(payload.value, percent); assert.equal(payload.state, true);
+      assert.equal(payload.value, percent); assert.equal(payload.state, percent > 0);
       assert.equal(typeof payload.request_id, 'string');
       assert.match(f.get(prefix + '-status').textContent, /chờ thiết bị/);
     }
   }
-  assert.equal(new Set(f.sent.map(item => item.payload.request_id)).size, 9);
+  assert.equal(new Set(f.sent.map(item => item.payload.request_id)).size, 12);
 });
 
 test('ACK and telemetry retain ownership; automatic intermediate PWM is not rounded to a preset', () => {
   const f = fixture(), controls = f.controls('lv-fan'), range = f.get('lv-fan-range');
-  controls.buttons[1].click();
+  controls.buttons[2].click();
   f.context.applyLiving({fan_speed:50}); f.sync();
   assert.equal(Number(range.value), 75, 'Unacknowledged telemetry must not confirm a different speed');
   vm.runInContext("pendingControls.get('living:fan').acknowledged=true", f.context);
   f.context.applyLiving({fan_speed:75}); f.sync();
-  assert.equal(controls.buttons[1].getAttribute('aria-pressed'), 'true');
+  assert.equal(controls.buttons[2].getAttribute('aria-pressed'), 'true');
   assert.equal(vm.runInContext('pendingControls.size', f.context), 0);
   f.context.applyLiving({fan_speed:70}); f.sync();
   assert.equal(Number(range.value), 70);
@@ -125,30 +124,29 @@ test('ACK and telemetry retain ownership; automatic intermediate PWM is not roun
 test('offline or disabled controls cannot alter the selected speed or send a command', () => {
   const f = fixture(), range = f.get('lv-fan-range'), controls = f.controls('lv-fan');
   f.socket.connected = false;
-  controls.buttons[0].click();
+  controls.buttons[1].click();
   assert.equal(Number(range.value), 0, 'Disconnect guard must work even before MutationObserver fires');
   f.sync();
   assert.ok(controls.buttons.every(button => button.disabled));
-  assert.equal(controls.plus.disabled, true);
   f.socket.connected = true; range.disabled = true; f.sync();
-  controls.buttons[2].click(); controls.plus.click();
+  controls.buttons[3].click(); controls.buttons[0].click();
   assert.equal(f.sent.length, 0);
   range.disabled = false; f.sync();
   assert.ok(controls.buttons.every(button => !button.disabled));
-  controls.buttons[1].click();
+  controls.buttons[2].click();
   assert.equal(f.sent.at(-1).payload.value, 75);
 });
 
-test('plus and minus traverse off/50/75/100 without exceeding either boundary', () => {
+test('Off is a fourth selectable preset and no plus/minus controls remain', () => {
   const f = fixture();
   for (const prefix of ['pt-fan', 'lv-fan', 'kt-exhaust']) {
     const controls = f.controls(prefix);
-    controls.plus.click(); controls.plus.click(); controls.plus.click(); controls.plus.click();
-    controls.minus.click(); controls.minus.click(); controls.minus.click(); controls.minus.click();
-    assert.deepEqual(f.sent.splice(0).map(item => item.payload.value), [50,75,100,75,50,0]);
-    assert.equal(f.get(prefix + '-range').value, 0);
-    assert.equal(controls.minus.disabled, true);
-    assert.equal(controls.plus.disabled, false);
+    assert.equal(controls.buttons.length, 4);
+    assert.ok(!controls.children.some(child => child.className === 'fan-step-controls'));
+    controls.buttons[3].click(); controls.buttons[0].click();
+    assert.deepEqual(f.sent.splice(0).map(item => item.payload.value), [100,0]);
+    assert.equal(Number(f.get(prefix + '-range').value), 0);
+    assert.equal(controls.buttons[0].getAttribute('aria-pressed'), 'true');
     assert.equal(f.get(prefix + '-toggle').checked, false);
   }
 });

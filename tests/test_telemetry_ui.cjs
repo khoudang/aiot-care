@@ -58,22 +58,23 @@ for(const event of ['node_status','room_update','telemetry_update']){
   const line=source.split('\n').find(l=>l.includes(`socket.on('${event}',`));assert.ok(line);vm.runInContext(line,eventCtx);
 }
 const cases=[
- ['MP-2 DO disabled is not labelled safe',()=>{
-   eventCtx.nodeState.kitchen=true;
-   eventCtx.applyKitchen({gas:500,smoke:false,mp2_do_enabled:false,mp2_do_alarm:false,flame:false});
-   assert.match(eventElements['kt-smoke-status'].textContent,/Chưa kích hoạt/);
-   assert.equal(eventElements['ov-kitchen-smoke'].textContent,'Chưa kích hoạt');
+ ['MP-2 uses AO only; no DO widgets remain',()=>{
+   const html=fs.readFileSync(path.join(__dirname,'../templates/index.html'),'utf8');
+   assert.doesNotMatch(html,/id="(?:kt-smoke-tile|kt-smoke-status|ov-kitchen-smoke)"/);
+   assert.match(html,/id="kt-gas"/);
+   assert.match(html,/id="kt-flame-status"/);
  }],
- ['MP-2 DO active displays comparator alarm',()=>{
+ ['legacy DO telemetry is ignored by the AO-only dashboard',()=>{
    eventCtx.nodeState.kitchen=true;
    eventCtx.applyKitchen({gas:500,smoke:true,mp2_do_enabled:true,mp2_do_alarm:true,flame:false});
-   assert.match(eventElements['kt-smoke-status'].textContent,/CẢNH BÁO NGƯỠNG/);
-   assert.equal(eventElements['ov-kitchen-smoke'].textContent,'Cảnh báo');
+   assert.equal(eventElements['kt-smoke-status'],undefined);
+   assert.equal(eventElements['ov-kitchen-smoke'],undefined);
+   assert.equal(eventElements['kt-gas'].textContent,500);
  }],
- ['MP-2 DO cleared shows normal only when enabled',()=>{
-   eventCtx.nodeState.kitchen=true;
-   eventCtx.applyKitchen({gas:500,smoke:false,mp2_do_enabled:true,mp2_do_alarm:false,flame:false});
-   assert.equal(eventElements['ov-kitchen-smoke'].textContent,'Bình thường');
+ ['AO gas warning and flame display still render',()=>{
+   eventCtx.applyKitchen({gas:1800,flame:true});
+   assert.match(eventElements['kt-gas-state'].innerHTML,/Tăng cao/);
+   assert.ok(eventElements['kt-flame-tile'].classList.contains('alarm'));
  }],
 
  ['cached fresh versus disconnect',()=>{
@@ -160,6 +161,6 @@ testKitchenAlertRendererUsesTextNodes().catch(error => {
 
 const templateSource = fs.readFileSync(path.join(__dirname, '..', 'templates/index.html'), 'utf8');
 assert.match(templateSource, /Cảm biến khí MP-2/);
-assert.match(templateSource, /Ngõ cảnh báo DO \(MP-2\)/);
+assert.doesNotMatch(templateSource, /Ngõ cảnh báo DO|MP-2 DO/);
 assert.doesNotMatch(templateSource, /Gas \(MQ-2\)/);
 console.log('PASS: MP-2 dashboard terminology');

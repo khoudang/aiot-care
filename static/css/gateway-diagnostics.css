@@ -3,18 +3,17 @@
 .device-card-modern .device-slider-control[hidden],
 .device-card-modern .ha-range-control[hidden],
 .device-card-modern .sw[hidden] { display:none !important; }
-.device-card-modern .fan-levels, .device-card-modern .fan-step-controls { grid-column:1/-1; width:100%; }
-.fan-levels { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-top:12px; }
-.fan-step-controls { display:flex; gap:8px; margin-top:8px; }
-.fan-levels button, .fan-step-controls button {
+.device-card-modern .fan-levels { grid-column:1/-1; width:100%; }
+.fan-levels { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; margin-top:12px; }
+.fan-levels button {
   min-height:44px; min-width:0; padding:6px; border:1px solid var(--border,#d0d7de);
   border-radius:8px; background:var(--surface,#fff); color:var(--text,#182230);
   font:inherit; font-size:12px; font-weight:600; cursor:pointer;
 }
-.fan-step-controls button { flex:1; font-size:20px; }
+
 .fan-levels button[aria-pressed="true"] { background:#176c4b; color:#fff; border-color:#176c4b; }
-.fan-levels button:disabled, .fan-step-controls button:disabled { opacity:.5; cursor:not-allowed; }
-.fan-levels button:focus-visible, .fan-step-controls button:focus-visible { outline:3px solid #4285f4; outline-offset:2px; }
+.fan-levels button:disabled { opacity:.5; cursor:not-allowed; }
+.fan-levels button:focus-visible { outline:3px solid #4285f4; outline-offset:2px; }
 .cam-stat-pill { flex-wrap:wrap; }
 .cam-stat-pill[hidden] { display:none !important; }
 

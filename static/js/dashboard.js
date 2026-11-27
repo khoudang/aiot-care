@@ -340,25 +340,14 @@
       else if(d.gas>=1500){st.className='badge warn';st.innerHTML='<i class="fas fa-circle-exclamation"></i> Tăng cao';card.classList.remove('alarm');}
       else{st.className='badge ok';st.innerHTML='<i class="fas fa-circle-check"></i> An toàn';card.classList.remove('alarm');}
     }
-    // "smoke" is a backwards-compatible alias for the MP-2 DO comparator,
-    // never an independent smoke detector. No DO wiring confirmation = not monitored.
-    const mp2DoEnabled=d.mp2_do_enabled===true;
-    const mp2DoActive=d.smoke===true||(mp2DoEnabled&&d.mp2_do_alarm===true);
-    const mp2DoStatus=mp2DoActive?'CẢNH BÁO NGƯỠNG'
-      :!kitchenConnected?'Chưa có dữ liệu'
-      :mp2DoEnabled?'Không kích hoạt cảnh báo':'Chưa kích hoạt đo DO';
-    document.getElementById('kt-smoke-status').textContent=mp2DoStatus;
-    document.getElementById('kt-smoke-tile').classList.toggle('alarm',mp2DoActive);
-    document.getElementById('ov-kitchen-smoke').textContent=mp2DoActive?'Cảnh báo'
-      :!kitchenConnected?'Chưa có dữ liệu'
-      :mp2DoEnabled?'Bình thường':'Chưa kích hoạt';
+    // This installation uses MP-2 AO only; DO has no dashboard widget.
     if(d.flame!=null&&(kitchenConnected||d.flame)){document.getElementById('kt-flame-status').textContent=d.flame?'PHÁT HIỆN LỬA':'Không phát hiện';document.getElementById('kt-flame-tile').classList.toggle('alarm',!!d.flame);document.getElementById('ov-kitchen-flame').textContent=d.flame?'Có':'Không';}
     if(d.window!=null)setToggle('kt-window-toggle','kt-window-tile',d.window,'Đang mở','Đang đóng');
     if(d.exhaust_speed!=null){const r=document.getElementById('kt-exhaust-range'),v=document.getElementById('kt-exhaust-val');if(r.dataset.userEditing&&Math.abs(+d.exhaust_speed-(+r.dataset.desiredValue))<=1){clearTimeout(r._userEditTimeout);delete r.dataset.userEditing;delete r.dataset.desiredValue;}if(!r.dataset.userEditing){r.value=d.exhaust_speed;v.textContent=d.exhaust_speed;}}
     if(d.exhaust!=null)setToggle('kt-exhaust-toggle','kt-exhaust-tile',d.exhaust,'Đang hút','Đang tắt');
     if(d.light!=null)setToggle('kt-light-toggle','kt-light-tile',d.light,'Đang bật','Đang tắt');
     if(d.buzzer!=null)setToggle('kt-buzzer-toggle','kt-buzzer-tile',d.buzzer,'Đang kêu','Im lặng');
-    const danger=d.flame||mp2DoActive||(d.gas!=null&&d.gas>=2500),warn=(d.gas!=null&&d.gas>=1500);
+    const danger=d.flame||(d.gas!=null&&d.gas>=2500),warn=(d.gas!=null&&d.gas>=1500);
     badge(document.getElementById('ov-kitchen-badge'),danger?'bad':(warn?'warn':(kitchenConnected?'ok':'')),danger?'Nguy hiểm':(warn?'Cảnh báo':(kitchenConnected?'An toàn':'Chưa kết nối')));
     if(danger||warn||kitchenConnected)markRoomAttention('kitchen',danger?'Cần kiểm tra phòng bếp':warn?'Kiểm tra khí gas':'',danger?'danger':'warn');
     touch();
